@@ -1,0 +1,7 @@
+ALTER TABLE empresas ADD COLUMN IF NOT EXISTS solicitou_exclusao BOOLEAN DEFAULT false;
+ALTER TABLE empresas ADD COLUMN IF NOT EXISTS solicitou_exclusao_em TIMESTAMP;
+ALTER TABLE empresas ADD COLUMN IF NOT EXISTS excluido_em TIMESTAMP;
+
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS solicitou_exclusao BOOLEAN DEFAULT false;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS solicitou_exclusao_em TIMESTAMP;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS excluido_em TIMESTAMP;

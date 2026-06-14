@@ -1,0 +1,89 @@
+# ══════════════════════════════════════════════
+# SEGREDOS E AMBIENTE - NUNCA SUBIR
+# ══════════════════════════════════════════════
+.env
+.env.local
+.env.prod
+.env.production
+.env.development
+.env.staging
+*.env
+
+# ══════════════════════════════════════════════
+# IA / OPENCODE - ARQUIVOS INTERNOS
+# ══════════════════════════════════════════════
+ANOTACOES-IA.md
+CLAUDE.md
+guia-agenda-pagamentos.md
+application-local.yml
+application-prod.yml
+application-secrets.yml
+secrets.yml
+
+# ══════════════════════════════════════════════
+# BACKEND - JAVA / SPRING BOOT / MAVEN
+# ══════════════════════════════════════════════
+backend/target/
+backend/.mvn/wrapper/maven-wrapper.jar
+!backend/.mvn/wrapper/maven-wrapper.properties
+backend/*.jar
+backend/*.war
+backend/*.ear
+backend/hs_err_pid*
+backend/replay_pid*
+
+# ══════════════════════════════════════════════
+# FRONTEND - NODE / REACT / VITE
+# ══════════════════════════════════════════════
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.vite/
+frontend/*.local
+frontend/tsconfig.tsbuildinfo
+
+# ══════════════════════════════════════════════
+# IDE - INTELLIJ / VSCODE
+# ══════════════════════════════════════════════
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+*.swp
+*.swo
+*~
+
+# ══════════════════════════════════════════════
+# DOCKER
+# ══════════════════════════════════════════════
+postgres_data/
+docker-volumes/
+
+# ══════════════════════════════════════════════
+# SISTEMA OPERACIONAL
+# ══════════════════════════════════════════════
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ══════════════════════════════════════════════
+# LOGS
+# ══════════════════════════════════════════════
+*.log
+logs/
+log/
+backend/logs/
+frontend/logs/
+
+# ══════════════════════════════════════════════
+# UPLOADS LOCAIS (arquivos de teste)
+# ══════════════════════════════════════════════
+uploads/
+temp/
+tmp/

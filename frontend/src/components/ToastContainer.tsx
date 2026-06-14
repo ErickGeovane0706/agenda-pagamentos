@@ -1,0 +1,48 @@
+import { useToastStore, ToastType } from '../store/toastStore';
+import { X, CheckCircle, AlertCircle, Info } from 'lucide-react';
+import { clsx } from 'clsx';
+
+const icons: Record<ToastType, typeof CheckCircle> = {
+  success: CheckCircle,
+  error: AlertCircle,
+  info: Info,
+};
+
+const styles: Record<ToastType, string> = {
+  success: 'bg-emerald-50 border-emerald-200 text-emerald-800',
+  error: 'bg-red-50 border-red-200 text-red-800',
+  info: 'bg-[#e0f2fe] border-blue-200 text-blue-800',
+};
+
+export function ToastContainer() {
+  const { toasts, removeToast } = useToastStore();
+
+  if (toasts.length === 0) return null;
+
+  return (
+    <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 max-w-sm w-full pointer-events-none">
+      {toasts.map((toast) => {
+        const Icon = icons[toast.type];
+        return (
+          <div
+            key={toast.id}
+            className={clsx(
+              'pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl border shadow-lg',
+              'animate-slide-in',
+              styles[toast.type]
+            )}
+          >
+            <Icon className="w-5 h-5 flex-shrink-0" />
+            <p className="text-sm font-medium flex-1">{toast.message}</p>
+            <button
+              onClick={() => removeToast(toast.id)}
+              className="p-1 rounded-md hover:bg-black/5 transition-colors flex-shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
