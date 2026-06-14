@@ -12,5 +12,3 @@ COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/templates/default.conf.template
 
 # REMOVIDO: O "EXPOSE 80" foi retirado porque a porta agora é dinâmica
-
-CMD ["nginx", "-g", "daemon off;"]
