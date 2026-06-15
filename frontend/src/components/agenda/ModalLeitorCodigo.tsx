@@ -206,7 +206,9 @@ export function ModalLeitorCodigo({
         },
       });
 
-      log('Permissão concedida. Atribuindo stream ao video...');
+      log('Permissão concedida. Tornando video visível antes de atribuir stream...');
+      setCameraStarted(true);
+      await new Promise(r => setTimeout(r, 100));
       videoRef.current.srcObject = stream;
       try {
         await videoRef.current.play();
@@ -214,7 +216,6 @@ export function ModalLeitorCodigo({
         log(`Aviso play(): ${playErr?.name || 'Unknown'}`);
         console.warn('Erro ao reproduzir vídeo, mas continuando:', playErr);
       }
-      setCameraStarted(true);
       log('Câmera iniciada com sucesso');
 
       const reader = criarLeitor();
@@ -479,7 +480,7 @@ export function ModalLeitorCodigo({
                     </button>
                   </div>
                 )}
-                <video ref={videoRef} className={clsx('w-full rounded-xl bg-slate-900', !cameraStarted && 'hidden')} autoPlay muted playsInline />
+                <video ref={videoRef} className={clsx('w-full rounded-xl bg-slate-900', !cameraStarted && 'invisible h-0')} autoPlay muted playsInline />
                 {cameraStarted && lendo && (
                   <div className="flex items-center justify-center gap-2 mt-2 text-sm text-slate-500">
                     <Loader2 className="w-4 h-4 animate-spin" />
