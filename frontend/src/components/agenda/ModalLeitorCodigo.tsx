@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { BrowserMultiFormatReader, BrowserMultiFormatOneDReader } from '@zxing/browser';
+import { BrowserMultiFormatOneDReader } from '@zxing/browser';
 import { BarcodeFormat, DecodeHintType } from '@zxing/library';
 import * as pdfjsLib from 'pdfjs-dist';
 import Tesseract from 'tesseract.js';
@@ -130,6 +130,10 @@ export function ModalLeitorCodigo({
     controlsRef.current?.stop();
     controlsRef.current = null;
     setCameraStarted(false);
+    if (videoRef.current?.srcObject instanceof MediaStream) {
+      videoRef.current.srcObject.getTracks().forEach(t => t.stop());
+      videoRef.current.srcObject = null;
+    }
   }, []);
 
   useEffect(() => {
@@ -194,29 +198,23 @@ export function ModalLeitorCodigo({
     log('Solicitando permissão da câmera...');
 
     try {
-      const devices = await BrowserMultiFormatReader.listVideoInputDevices();
-      log(`Dispositivos encontrados: ${devices.length}`);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'environment',
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+      });
 
-      const backCamera =
-        devices.find(
-          (d) =>
-            d.label.toLowerCase().includes('back') ||
-            d.label.toLowerCase().includes('traseira') ||
-            d.label.toLowerCase().includes('rear')
-        ) || devices[devices.length - 1];
-
-      if (!backCamera) {
-        log('Nenhuma câmera encontrada');
-        addToast('error', 'Nenhuma câmera encontrada');
-        setLendo(false);
-        return;
-      }
-
-      log(`Câmera: ${backCamera.label || backCamera.deviceId}`);
+      log('Permissão concedida. Atribuindo stream ao video...');
+      videoRef.current.srcObject = stream;
+      await videoRef.current.play();
+      setCameraStarted(true);
+      log('Câmera iniciada com sucesso');
 
       const reader = criarLeitor();
-      controlsRef.current = await reader.decodeFromVideoDevice(
-        backCamera.deviceId,
+      const controls = await reader.decodeFromStream(
+        stream,
         videoRef.current,
         (result) => {
           if (result && !resultadoRef.current) {
@@ -227,17 +225,21 @@ export function ModalLeitorCodigo({
             pararCamera();
             handleCodigo(codigo);
           }
-        }
+        },
       );
-      setCameraStarted(true);
-      log('Câmera iniciada com sucesso');
+      controlsRef.current = controls;
     } catch (err: any) {
-      log(`ERRO: ${err?.name} - ${err?.message}`);
+      log(`ERRO câmera: ${err?.name} - ${err?.message}`);
       console.error('Erro ao acessar câmera:', err);
+
       if (err?.name === 'NotAllowedError') {
-        addToast('error', 'Permissão de câmera negada. Use a opção de imagem ou PDF.');
+        addToast('error', 'Permissão de câmera negada. Vá em Configurações do navegador e permita o acesso à câmera.');
+      } else if (err?.name === 'NotFoundError') {
+        addToast('error', 'Nenhuma câmera encontrada no dispositivo.');
+      } else if (err?.name === 'NotReadableError') {
+        addToast('error', 'Câmera em uso por outro aplicativo. Feche outros apps e tente novamente.');
       } else {
-        addToast('error', 'Erro ao acessar a câmera');
+        addToast('error', `Erro ao acessar câmera: ${err?.message || 'desconhecido'}`);
       }
     } finally {
       setLendo(false);
