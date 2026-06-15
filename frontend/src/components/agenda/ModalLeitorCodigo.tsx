@@ -208,7 +208,7 @@ export function ModalLeitorCodigo({
 
       log('Permissão concedida. Tornando video visível antes de atribuir stream...');
       setCameraStarted(true);
-      await new Promise(r => setTimeout(r, 100));
+      await new Promise(r => setTimeout(r, 150));
       videoRef.current.srcObject = stream;
       try {
         await videoRef.current.play();
@@ -480,7 +480,12 @@ export function ModalLeitorCodigo({
                     </button>
                   </div>
                 )}
-                <video ref={videoRef} className={clsx('w-full rounded-xl bg-slate-900', !cameraStarted && 'invisible h-0')} autoPlay muted playsInline />
+                <video
+  ref={videoRef}
+  className={clsx('w-full rounded-xl bg-slate-900', !cameraStarted ? 'opacity-0 absolute top-0 left-0' : 'relative')}
+  style={{ minHeight: cameraStarted ? 220 : 1, minWidth: cameraStarted ? undefined : 1 }}
+  autoPlay muted playsInline
+/>
                 {cameraStarted && lendo && (
                   <div className="flex items-center justify-center gap-2 mt-2 text-sm text-slate-500">
                     <Loader2 className="w-4 h-4 animate-spin" />
