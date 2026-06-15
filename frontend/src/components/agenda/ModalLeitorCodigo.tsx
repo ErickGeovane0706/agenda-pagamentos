@@ -208,7 +208,12 @@ export function ModalLeitorCodigo({
 
       log('Permissão concedida. Atribuindo stream ao video...');
       videoRef.current.srcObject = stream;
-      await videoRef.current.play();
+      try {
+        await videoRef.current.play();
+      } catch (playErr: any) {
+        log(`Aviso play(): ${playErr?.name || 'Unknown'}`);
+        console.warn('Erro ao reproduzir vídeo, mas continuando:', playErr);
+      }
       setCameraStarted(true);
       log('Câmera iniciada com sucesso');
 
