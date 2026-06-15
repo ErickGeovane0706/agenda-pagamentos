@@ -23,11 +23,17 @@ const FORMATOS_BOLETO = [
   BarcodeFormat.UPC_E,
 ];
 
+const TINY_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
 function criarLeitor() {
   const hints = new Map();
   hints.set(DecodeHintType.POSSIBLE_FORMATS, FORMATOS_BOLETO);
   hints.set(DecodeHintType.TRY_HARDER, true);
-  return new BrowserMultiFormatOneDReader(hints, { delayBetweenScanSuccess: 500 });
+  const isMobileDevice = /Android|iPhone|iPad/i.test(navigator.userAgent);
+  return new BrowserMultiFormatOneDReader(hints, {
+    delayBetweenScanSuccess: 500,
+    tryPlayVideoTimeout: isMobileDevice ? 15000 : 5000,
+  });
 }
 
 function extrairCodigoDigitavel(texto: string): string | null {
@@ -113,6 +119,7 @@ export function ModalLeitorCodigo({
   const controlsRef = useRef<{ stop: () => void } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const tesseractReady = useRef(false);
+  const cameraReadyRef = useRef(false);
   const ocrTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function log(msg: string) {
@@ -122,6 +129,7 @@ export function ModalLeitorCodigo({
   const pararCamera = useCallback(() => {
     controlsRef.current?.stop();
     controlsRef.current = null;
+    cameraReadyRef.current = false;
   }, []);
 
   useEffect(() => {
@@ -142,7 +150,7 @@ export function ModalLeitorCodigo({
 
       if (!tesseractReady.current) {
         setPreparandoOCR(true);
-        Tesseract.recognize('/404.png', 'por').catch(() => {});
+        Tesseract.recognize(TINY_PNG, 'por').catch(() => {});
         ocrTimeoutRef.current = setTimeout(() => {
           tesseractReady.current = true;
           setPreparandoOCR(false);
@@ -215,6 +223,7 @@ export function ModalLeitorCodigo({
           }
         }
       );
+      cameraReadyRef.current = true;
     } catch (err: any) {
       if (err?.name === 'NotAllowedError') {
         addToast('error', 'Permissão de câmera negada. Use a opção de imagem ou PDF.');
@@ -433,8 +442,14 @@ export function ModalLeitorCodigo({
         <div className="p-4">
           {aba === 'camera' && (
             <div>
-              <div style={{ position: 'relative', width: '100%', maxWidth: 400, margin: '0 auto' }}>
-                <video ref={videoRef} className="w-full rounded-xl" autoPlay muted playsInline />
+              <div style={{ position: 'relative', width: '100%', maxWidth: 400, margin: '0 auto', minHeight: 220 }}>
+                {!cameraReadyRef.current && !lendo && !resultadoRef.current && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300 z-10 pointer-events-none">
+                    <Camera className="w-10 h-10 mb-2" />
+                    <p className="text-sm">Iniciando câmera...</p>
+                  </div>
+                )}
+                <video ref={videoRef} className="w-full rounded-xl bg-slate-900" autoPlay muted playsInline />
                 {lendo && (
                   <div className="flex items-center justify-center gap-2 mt-2 text-sm text-slate-500">
                     <Loader2 className="w-4 h-4 animate-spin" />
