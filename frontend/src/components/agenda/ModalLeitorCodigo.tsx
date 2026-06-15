@@ -115,6 +115,7 @@ export function ModalLeitorCodigo({
   const [paginaCarregando, setPaginaCarregando] = useState<number | null>(null);
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [cameraStarted, setCameraStarted] = useState(false);
+  const [streamAtivo, setStreamAtivo] = useState<MediaStream | null>(null);
   const resultadoRef = useRef<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlsRef = useRef<{ stop: () => void } | null>(null);
@@ -130,6 +131,7 @@ export function ModalLeitorCodigo({
     controlsRef.current?.stop();
     controlsRef.current = null;
     setCameraStarted(false);
+    setStreamAtivo(null);
     if (videoRef.current?.srcObject instanceof MediaStream) {
       videoRef.current.srcObject.getTracks().forEach(t => t.stop());
       videoRef.current.srcObject = null;
@@ -170,6 +172,39 @@ export function ModalLeitorCodigo({
     return pararCamera;
   }, [aberto, aba]);
 
+  useEffect(() => {
+    if (!streamAtivo || !videoRef.current || !cameraStarted) return;
+
+    let cancelled = false;
+    const video = videoRef.current;
+
+    async function iniciarZXing() {
+      await new Promise(r => setTimeout(r, 200));
+      if (cancelled || !video) return;
+
+      video.srcObject = streamAtivo;
+      await video.play().catch(() => {});
+      log('Câmera iniciada com sucesso');
+
+      const reader = criarLeitor();
+      const controls = await reader.decodeFromStream(streamAtivo!, video, (result) => {
+        if (result && !resultadoRef.current) {
+          if (!ehFormatoBoleto(result.getBarcodeFormat())) return;
+          const codigo = result.getText();
+          log(`Código lido: ${codigo}`);
+          setResultadoRef(codigo);
+          pararCamera();
+          handleCodigo(codigo);
+        }
+      });
+      if (!cancelled) controlsRef.current = controls;
+    }
+
+    iniciarZXing();
+
+    return () => { cancelled = true; };
+  }, [streamAtivo, cameraStarted]);
+
   function setResultadoRef(v: string | null) {
     resultadoRef.current = v;
   }
@@ -190,10 +225,8 @@ export function ModalLeitorCodigo({
   }
 
   async function iniciarCamera() {
-    if (!videoRef.current) return;
     pararCamera();
     setLendo(true);
-    setCameraStarted(false);
 
     log('Solicitando permissão da câmera...');
 
@@ -206,34 +239,9 @@ export function ModalLeitorCodigo({
         },
       });
 
-      log('Permissão concedida. Tornando video visível antes de atribuir stream...');
+      log('Stream obtido. Aguardando video montar...');
       setCameraStarted(true);
-      await new Promise(r => setTimeout(r, 150));
-      videoRef.current.srcObject = stream;
-      try {
-        await videoRef.current.play();
-      } catch (playErr: any) {
-        log(`Aviso play(): ${playErr?.name || 'Unknown'}`);
-        console.warn('Erro ao reproduzir vídeo, mas continuando:', playErr);
-      }
-      log('Câmera iniciada com sucesso');
-
-      const reader = criarLeitor();
-      const controls = await reader.decodeFromStream(
-        stream,
-        videoRef.current,
-        (result) => {
-          if (result && !resultadoRef.current) {
-            if (!ehFormatoBoleto(result.getBarcodeFormat())) return;
-            const codigo = result.getText();
-            log(`Código lido: ${codigo}`);
-            setResultadoRef(codigo);
-            pararCamera();
-            handleCodigo(codigo);
-          }
-        },
-      );
-      controlsRef.current = controls;
+      setStreamAtivo(stream);
     } catch (err: any) {
       log(`ERRO câmera: ${err?.name} - ${err?.message}`);
       console.error('Erro ao acessar câmera:', err);
@@ -482,8 +490,8 @@ export function ModalLeitorCodigo({
                 )}
                 <video
   ref={videoRef}
-  className={clsx('w-full rounded-xl bg-slate-900', !cameraStarted ? 'opacity-0 absolute top-0 left-0' : 'relative')}
-  style={{ minHeight: cameraStarted ? 220 : 1, minWidth: cameraStarted ? undefined : 1 }}
+  className={clsx('w-full rounded-xl bg-slate-900', !cameraStarted && 'opacity-0 absolute')}
+  style={{ minHeight: cameraStarted ? 220 : 1 }}
   autoPlay muted playsInline
 />
                 {cameraStarted && lendo && (
