@@ -114,12 +114,12 @@ export function ModalLeitorCodigo({
   const [pdfRef, setPdfRef] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [paginaCarregando, setPaginaCarregando] = useState<number | null>(null);
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  const [cameraStarted, setCameraStarted] = useState(false);
   const resultadoRef = useRef<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlsRef = useRef<{ stop: () => void } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const tesseractReady = useRef(false);
-  const cameraReadyRef = useRef(false);
   const ocrTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function log(msg: string) {
@@ -129,7 +129,7 @@ export function ModalLeitorCodigo({
   const pararCamera = useCallback(() => {
     controlsRef.current?.stop();
     controlsRef.current = null;
-    cameraReadyRef.current = false;
+    setCameraStarted(false);
   }, []);
 
   useEffect(() => {
@@ -160,9 +160,7 @@ export function ModalLeitorCodigo({
   }, [aberto, isMobile, pararCamera]);
 
   useEffect(() => {
-    if (aberto && aba === 'camera') {
-      iniciarCamera();
-    } else {
+    if (!aberto || aba !== 'camera') {
       pararCamera();
     }
     return pararCamera;
@@ -191,10 +189,13 @@ export function ModalLeitorCodigo({
     if (!videoRef.current) return;
     pararCamera();
     setLendo(true);
+    setCameraStarted(false);
+
+    log('Solicitando permissão da câmera...');
 
     try {
-      const reader = criarLeitor();
       const devices = await BrowserMultiFormatReader.listVideoInputDevices();
+      log(`Dispositivos encontrados: ${devices.length}`);
 
       const backCamera =
         devices.find(
@@ -205,11 +206,15 @@ export function ModalLeitorCodigo({
         ) || devices[devices.length - 1];
 
       if (!backCamera) {
+        log('Nenhuma câmera encontrada');
         addToast('error', 'Nenhuma câmera encontrada');
         setLendo(false);
         return;
       }
 
+      log(`Câmera: ${backCamera.label || backCamera.deviceId}`);
+
+      const reader = criarLeitor();
       controlsRef.current = await reader.decodeFromVideoDevice(
         backCamera.deviceId,
         videoRef.current,
@@ -217,14 +222,18 @@ export function ModalLeitorCodigo({
           if (result && !resultadoRef.current) {
             if (!ehFormatoBoleto(result.getBarcodeFormat())) return;
             const codigo = result.getText();
+            log(`Código lido: ${codigo}`);
             setResultadoRef(codigo);
             pararCamera();
             handleCodigo(codigo);
           }
         }
       );
-      cameraReadyRef.current = true;
+      setCameraStarted(true);
+      log('Câmera iniciada com sucesso');
     } catch (err: any) {
+      log(`ERRO: ${err?.name} - ${err?.message}`);
+      console.error('Erro ao acessar câmera:', err);
       if (err?.name === 'NotAllowedError') {
         addToast('error', 'Permissão de câmera negada. Use a opção de imagem ou PDF.');
       } else {
@@ -443,14 +452,28 @@ export function ModalLeitorCodigo({
           {aba === 'camera' && (
             <div>
               <div style={{ position: 'relative', width: '100%', maxWidth: 400, margin: '0 auto', minHeight: 220 }}>
-                {!cameraReadyRef.current && !lendo && !resultadoRef.current && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300 z-10 pointer-events-none">
-                    <Camera className="w-10 h-10 mb-2" />
-                    <p className="text-sm">Iniciando câmera...</p>
+                {!cameraStarted && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
+                    <Camera className="w-12 h-12 mb-3 text-slate-300" />
+                    <p className="text-sm text-slate-400 mb-4">Toque no botão para ligar a câmera</p>
+                    <button
+                      onClick={iniciarCamera}
+                      disabled={lendo}
+                      className="px-6 py-3 bg-[#0c4a6e] text-white rounded-xl text-sm font-medium disabled:opacity-50"
+                    >
+                      {lendo ? (
+                        <span className="flex items-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Aguardando permissão...
+                        </span>
+                      ) : (
+                        'Ligar câmera'
+                      )}
+                    </button>
                   </div>
                 )}
-                <video ref={videoRef} className="w-full rounded-xl bg-slate-900" autoPlay muted playsInline />
-                {lendo && (
+                <video ref={videoRef} className={clsx('w-full rounded-xl bg-slate-900', !cameraStarted && 'hidden')} autoPlay muted playsInline />
+                {cameraStarted && lendo && (
                   <div className="flex items-center justify-center gap-2 mt-2 text-sm text-slate-500">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     Aguardando código...
