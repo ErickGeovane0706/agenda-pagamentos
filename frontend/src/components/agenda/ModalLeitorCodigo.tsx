@@ -454,7 +454,7 @@ export function ModalLeitorCodigo({
   id="quagga-scanner"
   style={{
     width: '100%',
-    minHeight: 360,
+    minHeight: 220,
     borderRadius: 12,
   }}
 />
