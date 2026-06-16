@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { BrowserMultiFormatOneDReader } from '@zxing/browser';
-import { BarcodeFormat, DecodeHintType } from '@zxing/library';
 import * as pdfjsLib from 'pdfjs-dist';
 import Tesseract from 'tesseract.js';
+import Quagga from '@ericblade/quagga2';
 import { X, Camera, Image, FileText, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useIsMobile } from '../../hooks/useIsMobile';
@@ -10,18 +9,6 @@ import { useToastStore } from '../../store/toastStore';
 
 const PDFJS_VERSION = (pdfjsLib as any).version || '4.0.379';
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.mjs`;
-
-const FORMATOS_BOLETO = [
-  BarcodeFormat.CODE_128,
-  BarcodeFormat.ITF,
-  BarcodeFormat.CODE_39,
-  BarcodeFormat.CODABAR,
-  BarcodeFormat.EAN_13,
-  BarcodeFormat.EAN_8,
-  BarcodeFormat.CODE_93,
-  BarcodeFormat.UPC_A,
-  BarcodeFormat.UPC_E,
-];
 
 const TINY_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
@@ -73,15 +60,6 @@ function validarCodigoBoleto(codigo: string): boolean {
   return /^\d{44,48}$/.test(limpo);
 }
 
-function ehFormatoBoleto(format: any): boolean {
-  return format !== undefined &&
-    format !== BarcodeFormat.QR_CODE &&
-    format !== BarcodeFormat.AZTEC &&
-    format !== BarcodeFormat.DATA_MATRIX &&
-    format !== BarcodeFormat.PDF_417 &&
-    format !== BarcodeFormat.MAXICODE;
-}
-
 type Aba = 'camera' | 'imagem' | 'pdf';
 
 export function ModalLeitorCodigo({
@@ -105,8 +83,7 @@ export function ModalLeitorCodigo({
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [cameraStarted, setCameraStarted] = useState(false);
   const resultadoRef = useRef<string | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const controlsRef = useRef<{ stop: () => void } | null>(null);
+  const scannerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const tesseractReady = useRef(false);
   const ocrTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -116,8 +93,7 @@ export function ModalLeitorCodigo({
   }
 
   const pararCamera = useCallback(() => {
-    controlsRef.current?.stop();
-    controlsRef.current = null;
+    try { Quagga.stop(); } catch (_) {}
     setCameraStarted(false);
   }, []);
 
@@ -175,46 +151,59 @@ export function ModalLeitorCodigo({
   }
 
   async function iniciarCamera() {
-    if (!videoRef.current) return;
+    if (!scannerRef.current) return;
     pararCamera();
     setLendo(true);
     log('Iniciando câmera...');
-
     try {
-      const hints = new Map();
-      hints.set(DecodeHintType.POSSIBLE_FORMATS, FORMATOS_BOLETO);
-      hints.set(DecodeHintType.TRY_HARDER, true);
-      const isMobileDevice = /Android|iPhone|iPad/i.test(navigator.userAgent);
-      const reader = new BrowserMultiFormatOneDReader(hints, {
-        delayBetweenScanSuccess: 500,
-        tryPlayVideoTimeout: isMobileDevice ? 15000 : 5000,
+      await new Promise<void>((resolve, reject) => {
+        Quagga.init({
+          inputStream: {
+            type: 'LiveStream',
+            target: scannerRef.current!,
+            constraints: {
+              facingMode: 'environment',
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+          },
+          decoder: {
+            readers: [
+              'code_128_reader',
+              'i2of5_reader',
+              'codabar_reader',
+              'code_39_reader',
+              'ean_reader',
+              'ean_8_reader',
+              'code_93_reader',
+              'upc_reader',
+              'upc_e_reader',
+            ],
+          },
+          locate: true,
+          numOfWorkers: 0,
+        }, (err) => {
+          if (err) { reject(err); return; }
+          resolve();
+        });
       });
 
+      Quagga.start();
       setCameraStarted(true);
-
-      const controls = await reader.decodeFromVideoDevice(
-        undefined,
-        videoRef.current,
-        (result, err) => {
-          if (result && !resultadoRef.current) {
-            if (!ehFormatoBoleto(result.getBarcodeFormat())) return;
-            const codigo = result.getText();
-            log(`Código lido: ${codigo}`);
-            setResultadoRef(codigo);
-            controls.stop();
-            setCameraStarted(false);
-            handleCodigo(codigo);
-          }
-        }
-      );
-
-      controlsRef.current = controls;
       log('Câmera iniciada com sucesso');
-    } catch (err: any) {
-      setCameraStarted(false);
-      log(`ERRO câmera: ${err?.name} - ${err?.message}`);
-      console.error('Erro ao acessar câmera:', err);
 
+      Quagga.onDetected((result) => {
+        const codigo = result?.codeResult?.code;
+        if (codigo && !resultadoRef.current) {
+          log(`Código lido: ${codigo}`);
+          setResultadoRef(codigo);
+          pararCamera();
+          handleCodigo(codigo);
+        }
+      });
+    } catch (err: any) {
+      log(`ERRO câmera: ${err?.name} - ${err?.message}`);
+      setCameraStarted(false);
       if (err?.name === 'NotAllowedError') {
         addToast('error', 'Permissão de câmera negada. Vá em Configurações do navegador e permita o acesso à câmera.');
       } else if (err?.name === 'NotFoundError') {
@@ -457,11 +446,15 @@ export function ModalLeitorCodigo({
                     </button>
                   </div>
                 )}
-                <video
-  ref={videoRef}
-  className={clsx('w-full rounded-xl bg-slate-900', !cameraStarted && 'opacity-0 absolute')}
-  style={{ minHeight: cameraStarted ? 220 : 1 }}
-  autoPlay muted playsInline
+                <div
+  ref={scannerRef}
+  style={{
+    width: '100%',
+    minHeight: 220,
+    borderRadius: 12,
+    overflow: 'hidden',
+    display: cameraStarted ? 'block' : 'none',
+  }}
 />
                 {cameraStarted && lendo && (
                   <div className="flex items-center justify-center gap-2 mt-2 text-sm text-slate-500">
