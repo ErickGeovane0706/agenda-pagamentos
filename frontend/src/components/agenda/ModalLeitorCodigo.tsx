@@ -163,32 +163,20 @@ export function ModalLeitorCodigo({
             target: scannerRef.current!,
             constraints: {
               facingMode: 'environment',
-              width: 1280,
-              height: 720,
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
               focusMode: 'continuous',
-              zoom: { ideal: 1 },
             } as any,
             area: { top: '35%', bottom: '35%', left: '5%', right: '5%' },
           },
           decoder: {
             readers: [
-              'code_128_reader',
               'i2of5_reader',
-              'codabar_reader',
-              'code_39_reader',
-              'ean_reader',
-              'ean_8_reader',
-              'code_93_reader',
-              'upc_reader',
-              'upc_e_reader',
+              'code_128_reader',
             ],
           },
-          locate: true,
-          locator: {
-            patchSize: 'large',
-            halfSample: true,
-          },
-          numOfWorkers: 0,
+          locate: false,
+          numOfWorkers: 2,
         }, (err) => {
           if (err) { reject(err); return; }
           resolve();
