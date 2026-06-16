@@ -163,9 +163,11 @@ export function ModalLeitorCodigo({
             target: scannerRef.current!,
             constraints: {
               facingMode: 'environment',
-              width: { ideal: 1280, min: 640 },
-              height: { ideal: 720, min: 480 },
-            },
+              width: 1280,
+              height: 720,
+              focusMode: 'continuous',
+              zoom: { ideal: 1 },
+            } as any,
             area: { top: '35%', bottom: '35%', left: '5%', right: '5%' },
           },
           decoder: {
@@ -181,7 +183,11 @@ export function ModalLeitorCodigo({
               'upc_e_reader',
             ],
           },
-          locate: false,
+          locate: true,
+          locator: {
+            patchSize: 'large',
+            halfSample: true,
+          },
           numOfWorkers: 0,
         }, (err) => {
           if (err) { reject(err); return; }
