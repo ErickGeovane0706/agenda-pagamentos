@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import Tesseract from 'tesseract.js';
-import { BrowserMultiFormatReader, HTMLCanvasElementLuminanceSource } from '@zxing/browser';
-import { BinaryBitmap, BarcodeFormat, DecodeHintType, HybridBinarizer } from '@zxing/library';
+import { BrowserMultiFormatReader, IScannerControls } from '@zxing/browser';
+import { BarcodeFormat, DecodeHintType } from '@zxing/library';
 import { X, Camera, Image, FileText, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useIsMobile } from '../../hooks/useIsMobile';
@@ -92,8 +92,7 @@ export function ModalLeitorCodigo({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const tesseractReady = useRef(false);
   const ocrTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-  const decodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scannerControlsRef = useRef<IScannerControls | null>(null);
   const cameraRunningRef = useRef(false);
 
   function log(msg: string) {
@@ -102,13 +101,9 @@ export function ModalLeitorCodigo({
 
   const pararCamera = useCallback(() => {
     cameraRunningRef.current = false;
-    if (decodeTimerRef.current) {
-      clearTimeout(decodeTimerRef.current);
-      decodeTimerRef.current = null;
-    }
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach(t => t.stop());
-      mediaStreamRef.current = null;
+    if (scannerControlsRef.current) {
+      scannerControlsRef.current.stop();
+      scannerControlsRef.current = null;
     }
     if (scannerRef.current) {
       scannerRef.current.innerHTML = '';
@@ -176,22 +171,16 @@ export function ModalLeitorCodigo({
     setLendo(true);
     log('Iniciando câmera...');
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'environment',
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          focusMode: 'continuous',
-        } as any,
-        audio: false,
+      const hints = new Map();
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.ITF, BarcodeFormat.CODE_128]);
+      hints.set(DecodeHintType.TRY_HARDER, true);
+      hints.set(DecodeHintType.ALLOWED_LENGTHS, [44, 47, 48]);
+      const reader = new BrowserMultiFormatReader(hints, {
+        delayBetweenScanAttempts: 200,
+        delayBetweenScanSuccess: 200,
       });
-      mediaStreamRef.current = stream;
 
       const video = document.createElement('video');
-      video.srcObject = stream;
-      video.setAttribute('autoplay', 'true');
-      video.setAttribute('muted', 'true');
-      video.setAttribute('playsinline', 'true');
       video.style.width = '100%';
       video.style.height = '100%';
       video.style.objectFit = 'cover';
@@ -200,52 +189,36 @@ export function ModalLeitorCodigo({
       container.innerHTML = '';
       container.appendChild(video);
 
-      await new Promise<void>((resolve) => {
-        video.onplaying = () => resolve();
-        video.play();
-      });
-
+      const controls = await reader.decodeFromConstraints(
+        {
+          video: {
+            facingMode: 'environment',
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            focusMode: 'continuous',
+          } as any,
+          audio: false,
+        },
+        video,
+        (result) => {
+          if (!result || resultadoRef.current || !cameraRunningRef.current) return;
+          const codigo = result.getText();
+          if (!codigo) return;
+          const apenasDigitos = codigo.replace(/\D/g, '');
+          if ([44, 47, 48].includes(apenasDigitos.length)) {
+            log(`Código lido: ${apenasDigitos}`);
+            setResultadoRef(apenasDigitos);
+            scannerControlsRef.current?.stop();
+            pararCamera();
+            handleCodigo(apenasDigitos);
+          }
+        }
+      );
+      scannerControlsRef.current = controls;
       setCameraStarted(true);
       cameraRunningRef.current = true;
       try { await (screen.orientation as any).lock('landscape'); } catch (_) {}
       log('Câmera iniciada com sucesso');
-
-      const hints = new Map();
-      hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.ITF, BarcodeFormat.CODE_128]);
-      hints.set(DecodeHintType.TRY_HARDER, true);
-      const reader = new BrowserMultiFormatReader(hints);
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d')!;
-
-      async function decodeLoop() {
-        if (resultadoRef.current || !cameraRunningRef.current) return;
-        try {
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          ctx.drawImage(video, 0, 0);
-          const luminance = new HTMLCanvasElementLuminanceSource(canvas);
-          const binarizer = new HybridBinarizer(luminance);
-          const bitmap = new BinaryBitmap(binarizer);
-          const result = reader.decodeBitmap(bitmap);
-          const codigo = result.getText();
-          if (codigo && !resultadoRef.current) {
-            const apenasDigitos = codigo.replace(/\D/g, '');
-            if ([44, 47, 48].includes(apenasDigitos.length)) {
-              log(`Código lido: ${apenasDigitos}`);
-              setResultadoRef(apenasDigitos);
-              pararCamera();
-              handleCodigo(apenasDigitos);
-              return;
-            }
-          }
-        } catch {
-          // no code found this frame
-        }
-        if (cameraRunningRef.current) {
-          decodeTimerRef.current = setTimeout(decodeLoop, 200);
-        }
-      }
-      decodeLoop();
     } catch (err: any) {
       log(`ERRO câmera: ${err?.name} - ${err?.message}`);
       setCameraStarted(false);
