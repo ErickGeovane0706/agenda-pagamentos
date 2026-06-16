@@ -94,6 +94,7 @@ export function ModalLeitorCodigo({
 
   const pararCamera = useCallback(() => {
     try { Quagga.stop(); } catch (_) {}
+    try { (screen.orientation as any).unlock(); } catch (_) {}
     setCameraStarted(false);
   }, []);
 
@@ -167,7 +168,7 @@ export function ModalLeitorCodigo({
               height: { ideal: 720 },
               focusMode: 'continuous',
             } as any,
-            area: { top: '35%', bottom: '35%', left: '5%', right: '5%' },
+            area: { top: '49.5%', bottom: '49.5%', left: '0%', right: '0%' },
           },
           decoder: {
             readers: [
@@ -185,6 +186,7 @@ export function ModalLeitorCodigo({
 
       Quagga.start();
       setCameraStarted(true);
+      try { await (screen.orientation as any).lock('landscape'); } catch (_) {}
       log('Câmera iniciada com sucesso');
 
       Quagga.onDetected((result) => {
@@ -609,7 +611,7 @@ export function ModalLeitorCodigo({
         </button>
 
         <div className="absolute top-0 left-0 right-0 px-4 py-3 bg-gradient-to-b from-black/60 to-transparent pointer-events-auto">
-          <span className="text-white text-sm">Posicione o código na área verde</span>
+          <span className="text-white text-sm">Alinhe o código na linha vermelha</span>
         </div>
 
         <div className="absolute inset-0">
@@ -618,6 +620,7 @@ export function ModalLeitorCodigo({
           <div style={{ position: 'absolute', top: '35%', left: 0, width: '5%', height: '30%', background: 'rgba(0,0,0,0.55)' }} />
           <div style={{ position: 'absolute', top: '35%', right: 0, width: '5%', height: '30%', background: 'rgba(0,0,0,0.55)' }} />
           <div style={{ position: 'absolute', top: '35%', left: '5%', width: '90%', height: '30%', border: '2px solid #22c55e', borderRadius: 6, boxSizing: 'border-box' }} />
+          <div style={{ position: 'absolute', top: '50%', left: '5%', width: '90%', height: '2px', background: '#ef4444', zIndex: 10 }} />
         </div>
 
         {lendo && (
