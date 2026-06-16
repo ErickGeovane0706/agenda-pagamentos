@@ -395,7 +395,8 @@ export function ModalLeitorCodigo({
   abas.push({ id: 'pdf', label: 'PDF', icon: FileText });
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40" onClick={onFechar}>
+    <>
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40" onClick={onFechar} style={{ display: cameraStarted ? 'none' : 'flex' }}>
       <div
         className="bg-white w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl animate-slide-in max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
@@ -428,52 +429,30 @@ export function ModalLeitorCodigo({
         <div className="p-4">
           {aba === 'camera' && (
             <div>
-              <div style={{ position: 'relative', width: '100%', maxWidth: 400, margin: '0 auto', aspectRatio: '3/4' }}>
-                {!cameraStarted && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
-                    <Camera className="w-12 h-12 mb-3 text-slate-300" />
-                    <p className="text-sm text-slate-400 mb-4">Toque no botão para ligar a câmera</p>
-                    <button
-                      onClick={iniciarCamera}
-                      disabled={lendo}
-                      className="px-6 py-3 bg-[#0c4a6e] text-white rounded-xl text-sm font-medium disabled:opacity-50"
-                    >
-                      {lendo ? (
-                        <span className="flex items-center gap-2">
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Aguardando permissão...
-                        </span>
-                      ) : (
-                        'Ligar câmera'
-                      )}
-                    </button>
-                  </div>
-                )}
-                <div style={{ position: 'relative', display: cameraStarted ? 'block' : 'none' }}>
-                  <div
-  ref={scannerRef}
-  id="quagga-scanner"
-  style={{
-    width: '100%',
-    minHeight: 220,
-    borderRadius: 12,
-  }}
-/>
-                  <div style={{ position: 'absolute', inset: 0, borderRadius: 12, overflow: 'hidden', pointerEvents: 'none' }}>
-                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '35%', background: 'rgba(0,0,0,0.55)' }} />
-                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '35%', background: 'rgba(0,0,0,0.55)' }} />
-                    <div style={{ position: 'absolute', top: '35%', left: 0, width: '5%', height: '30%', background: 'rgba(0,0,0,0.55)' }} />
-                    <div style={{ position: 'absolute', top: '35%', right: 0, width: '5%', height: '30%', background: 'rgba(0,0,0,0.55)' }} />
-                    <div style={{ position: 'absolute', top: '35%', left: '5%', width: '90%', height: '30%', border: '2px solid #22c55e', borderRadius: 6, boxSizing: 'border-box' }} />
-                  </div>
+              {!cameraStarted ? (
+                <div className="flex flex-col items-center justify-center py-16">
+                  <Camera className="w-12 h-12 mb-3 text-slate-300" />
+                  <p className="text-sm text-slate-400 mb-4">Toque no botão para ligar a câmera</p>
+                  <button
+                    onClick={iniciarCamera}
+                    disabled={lendo}
+                    className="px-6 py-3 bg-[#0c4a6e] text-white rounded-xl text-sm font-medium disabled:opacity-50"
+                  >
+                    {lendo ? (
+                      <span className="flex items-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Aguardando permissão...
+                      </span>
+                    ) : (
+                      'Ligar câmera'
+                    )}
+                  </button>
                 </div>
-                {cameraStarted && lendo && (
-                  <div className="flex items-center justify-center gap-2 mt-2 text-sm text-slate-500">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Aguardando código...
-                  </div>
-                )}
-              </div>
+              ) : (
+                <div className="flex items-center justify-center py-8">
+                  <p className="text-sm text-slate-400">Câmera ativa em tela cheia</p>
+                </div>
+              )}
               {resultadoRef.current && !validarCodigoBoleto(resultadoRef.current) && (
                 <div className="mt-4">
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-3">
@@ -612,5 +591,49 @@ export function ModalLeitorCodigo({
         />
       </div>
     </div>
+
+    <div
+      ref={scannerRef}
+      id="quagga-scanner"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: cameraStarted ? 70 : -1,
+        opacity: cameraStarted ? 1 : 0,
+        visibility: cameraStarted ? 'visible' : 'hidden',
+        background: '#000',
+      }}
+    />
+
+    {cameraStarted && (
+      <div className="fixed inset-0 z-[71]" style={{ pointerEvents: 'none' }}>
+        <button
+          onClick={pararCamera}
+          className="absolute top-4 right-4 z-10 pointer-events-auto p-2 rounded-full bg-black/50 text-white"
+        >
+          <X className="w-6 h-6" />
+        </button>
+
+        <div className="absolute top-0 left-0 right-0 px-4 py-3 bg-gradient-to-b from-black/60 to-transparent pointer-events-auto">
+          <span className="text-white text-sm">Posicione o código na área verde</span>
+        </div>
+
+        <div className="absolute inset-0">
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '35%', background: 'rgba(0,0,0,0.55)' }} />
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '35%', background: 'rgba(0,0,0,0.55)' }} />
+          <div style={{ position: 'absolute', top: '35%', left: 0, width: '5%', height: '30%', background: 'rgba(0,0,0,0.55)' }} />
+          <div style={{ position: 'absolute', top: '35%', right: 0, width: '5%', height: '30%', background: 'rgba(0,0,0,0.55)' }} />
+          <div style={{ position: 'absolute', top: '35%', left: '5%', width: '90%', height: '30%', border: '2px solid #22c55e', borderRadius: 6, boxSizing: 'border-box' }} />
+        </div>
+
+        {lendo && (
+          <div className="absolute bottom-16 left-0 right-0 flex items-center justify-center gap-2 text-white text-sm">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Aguardando código...
+          </div>
+        )}
+      </div>
+    )}
+    </>
   );
 }
