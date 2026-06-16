@@ -163,6 +163,8 @@ export function ModalLeitorCodigo({
             target: scannerRef.current!,
             constraints: {
               facingMode: 'environment',
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
             },
           },
           decoder: {
@@ -193,10 +195,12 @@ export function ModalLeitorCodigo({
       Quagga.onDetected((result) => {
         const codigo = result?.codeResult?.code;
         if (codigo && !resultadoRef.current) {
-          log(`Código lido: ${codigo}`);
-          setResultadoRef(codigo);
+          const apenasDigitos = codigo.replace(/\D/g, '');
+          if (apenasDigitos.length < 44) return;
+          log(`Código lido: ${apenasDigitos}`);
+          setResultadoRef(apenasDigitos);
           pararCamera();
-          handleCodigo(codigo);
+          handleCodigo(apenasDigitos);
         }
       });
     } catch (err: any) {
@@ -444,17 +448,24 @@ export function ModalLeitorCodigo({
                     </button>
                   </div>
                 )}
-                <div
+                <div style={{ position: 'relative', display: cameraStarted ? 'block' : 'none' }}>
+                  <div
   ref={scannerRef}
   id="quagga-scanner"
   style={{
     width: '100%',
     minHeight: 220,
     borderRadius: 12,
-    position: 'relative',
-    display: cameraStarted ? 'block' : 'none',
   }}
 />
+                  <div style={{ position: 'absolute', inset: 0, borderRadius: 12, overflow: 'hidden', pointerEvents: 'none' }}>
+                    <div style={{ position: 'absolute', inset: 0, border: '2px solid #22c55e', borderRadius: 12, zIndex: 1 }} />
+                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '35%', background: 'rgba(0,0,0,0.5)' }} />
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '35%', background: 'rgba(0,0,0,0.5)' }} />
+                    <div style={{ position: 'absolute', top: '35%', left: 0, width: '10%', height: '30%', background: 'rgba(0,0,0,0.5)' }} />
+                    <div style={{ position: 'absolute', top: '35%', right: 0, width: '10%', height: '30%', background: 'rgba(0,0,0,0.5)' }} />
+                  </div>
+                </div>
                 {cameraStarted && lendo && (
                   <div className="flex items-center justify-center gap-2 mt-2 text-sm text-slate-500">
                     <Loader2 className="w-4 h-4 animate-spin" />
