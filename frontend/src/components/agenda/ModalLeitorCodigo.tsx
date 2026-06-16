@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import Tesseract from 'tesseract.js';
-import Quagga from '@ericblade/quagga2';
+import { BrowserMultiFormatReader } from '@zxing/browser';
+import { BarcodeFormat, DecodeHintType } from '@zxing/library';
 import { X, Camera, Image, FileText, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useIsMobile } from '../../hooks/useIsMobile';
@@ -87,13 +88,27 @@ export function ModalLeitorCodigo({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const tesseractReady = useRef(false);
   const ocrTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const decodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cameraRunningRef = useRef(false);
 
   function log(msg: string) {
     setDebugLogs(prev => [...prev.slice(-6), `${new Date().toLocaleTimeString()} ${msg}`]);
   }
 
   const pararCamera = useCallback(() => {
-    try { Quagga.stop(); } catch (_) {}
+    cameraRunningRef.current = false;
+    if (decodeTimerRef.current) {
+      clearTimeout(decodeTimerRef.current);
+      decodeTimerRef.current = null;
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(t => t.stop());
+      mediaStreamRef.current = null;
+    }
+    if (scannerRef.current) {
+      scannerRef.current.innerHTML = '';
+    }
     try { (screen.orientation as any).unlock(); } catch (_) {}
     setCameraStarted(false);
   }, []);
@@ -157,49 +172,68 @@ export function ModalLeitorCodigo({
     setLendo(true);
     log('Iniciando câmera...');
     try {
-      await new Promise<void>((resolve, reject) => {
-        Quagga.init({
-          inputStream: {
-            type: 'LiveStream',
-            target: scannerRef.current!,
-            constraints: {
-              facingMode: 'environment',
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
-              focusMode: 'continuous',
-            } as any,
-            area: { top: '49.5%', bottom: '49.5%', left: '0%', right: '0%' },
-          },
-          decoder: {
-            readers: [
-              'i2of5_reader',
-              'code_128_reader',
-            ],
-          },
-          locate: false,
-          numOfWorkers: 2,
-        }, (err) => {
-          if (err) { reject(err); return; }
-          resolve();
-        });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'environment',
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          focusMode: 'continuous',
+        } as any,
+        audio: false,
+      });
+      mediaStreamRef.current = stream;
+
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      video.setAttribute('autoplay', 'true');
+      video.setAttribute('muted', 'true');
+      video.setAttribute('playsinline', 'true');
+      video.style.width = '100%';
+      video.style.height = '100%';
+      video.style.objectFit = 'cover';
+
+      const container = scannerRef.current;
+      container.innerHTML = '';
+      container.appendChild(video);
+
+      await new Promise<void>((resolve) => {
+        video.onplaying = () => resolve();
+        video.play();
       });
 
-      Quagga.start();
       setCameraStarted(true);
+      cameraRunningRef.current = true;
       try { await (screen.orientation as any).lock('landscape'); } catch (_) {}
       log('Câmera iniciada com sucesso');
 
-      Quagga.onDetected((result) => {
-        const codigo = result?.codeResult?.code;
-        if (codigo && !resultadoRef.current) {
-          const apenasDigitos = codigo.replace(/\D/g, '');
-          if (apenasDigitos.length < 44) return;
-          log(`Código lido: ${apenasDigitos}`);
-          setResultadoRef(apenasDigitos);
-          pararCamera();
-          handleCodigo(apenasDigitos);
+      const hints = new Map();
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.ITF, BarcodeFormat.CODE_128]);
+      hints.set(DecodeHintType.TRY_HARDER, true);
+      const reader = new BrowserMultiFormatReader(hints);
+
+      async function decodeLoop() {
+        if (resultadoRef.current || !cameraRunningRef.current) return;
+        try {
+          const result = await reader.decodeOnceFromVideoElement(video);
+          const codigo = result.getText();
+          if (codigo && !resultadoRef.current) {
+            const apenasDigitos = codigo.replace(/\D/g, '');
+            if (apenasDigitos.length >= 47) {
+              log(`Código lido: ${apenasDigitos}`);
+              setResultadoRef(apenasDigitos);
+              pararCamera();
+              handleCodigo(apenasDigitos);
+              return;
+            }
+          }
+        } catch {
+          // no code found this frame
         }
-      });
+        if (cameraRunningRef.current) {
+          decodeTimerRef.current = setTimeout(decodeLoop, 200);
+        }
+      }
+      decodeLoop();
     } catch (err: any) {
       log(`ERRO câmera: ${err?.name} - ${err?.message}`);
       setCameraStarted(false);
@@ -590,7 +624,7 @@ export function ModalLeitorCodigo({
 
     <div
       ref={scannerRef}
-      id="quagga-scanner"
+      id="scanner-container"
       style={{
         position: 'fixed',
         inset: 0,
