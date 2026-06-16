@@ -116,6 +116,7 @@ export function ModalLeitorCodigo({
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [cameraStarted, setCameraStarted] = useState(false);
   const [streamAtivo, setStreamAtivo] = useState<MediaStream | null>(null);
+  const iniciandoRef = useRef(false);
   const resultadoRef = useRef<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlsRef = useRef<{ stop: () => void } | null>(null);
@@ -167,9 +168,15 @@ export function ModalLeitorCodigo({
 
   useEffect(() => {
     if (!aberto || aba !== 'camera') {
-      pararCamera();
+      if (!iniciandoRef.current) {
+        pararCamera();
+      }
     }
-    return pararCamera;
+    return () => {
+      if (!iniciandoRef.current) {
+        pararCamera();
+      }
+    };
   }, [aberto, aba]);
 
   useEffect(() => {
@@ -181,6 +188,7 @@ export function ModalLeitorCodigo({
     async function iniciarZXing() {
       await new Promise(r => setTimeout(r, 200));
       if (cancelled || !video) return;
+      iniciandoRef.current = false;
 
       video.srcObject = streamAtivo;
       await video.play().catch(() => {});
@@ -226,6 +234,7 @@ export function ModalLeitorCodigo({
 
   async function iniciarCamera() {
     pararCamera();
+    iniciandoRef.current = true;
     setLendo(true);
 
     log('Solicitando permissão da câmera...');
@@ -243,6 +252,7 @@ export function ModalLeitorCodigo({
       setCameraStarted(true);
       setStreamAtivo(stream);
     } catch (err: any) {
+      iniciandoRef.current = false;
       log(`ERRO câmera: ${err?.name} - ${err?.message}`);
       console.error('Erro ao acessar câmera:', err);
 
