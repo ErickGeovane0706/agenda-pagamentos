@@ -41,6 +41,10 @@ function extrairCodigoDigitavel(texto: string): string | null {
 function identificarTipoDocumento(codigo: string): { tipo: string; valido: boolean } {
   const limpo = codigo.replace(/[\s.\-]/g, '');
 
+  if (limpo.length === 44) {
+    return { tipo: 'Código de Barras', valido: true };
+  }
+
   if (limpo.length === 47 || limpo.length === 48) {
     if (limpo.startsWith('8')) {
       const banco = limpo.substring(1, 4);
@@ -226,7 +230,7 @@ export function ModalLeitorCodigo({
           const codigo = result.getText();
           if (codigo && !resultadoRef.current) {
             const apenasDigitos = codigo.replace(/\D/g, '');
-            if (apenasDigitos.length >= 47) {
+            if ([44, 47, 48].includes(apenasDigitos.length)) {
               log(`Código lido: ${apenasDigitos}`);
               setResultadoRef(apenasDigitos);
               pararCamera();
