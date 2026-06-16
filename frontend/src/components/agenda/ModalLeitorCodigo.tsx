@@ -163,9 +163,9 @@ export function ModalLeitorCodigo({
             target: scannerRef.current!,
             constraints: {
               facingMode: 'environment',
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
+              aspectRatio: { min: 1, max: 1.777 },
             },
+            area: { top: '35%', bottom: '35%', left: '5%', right: '5%' },
           },
           decoder: {
             readers: [
@@ -180,7 +180,7 @@ export function ModalLeitorCodigo({
               'upc_e_reader',
             ],
           },
-          locate: true,
+          locate: false,
           numOfWorkers: 0,
         }, (err) => {
           if (err) { reject(err); return; }
@@ -459,11 +459,11 @@ export function ModalLeitorCodigo({
   }}
 />
                   <div style={{ position: 'absolute', inset: 0, borderRadius: 12, overflow: 'hidden', pointerEvents: 'none' }}>
-                    <div style={{ position: 'absolute', inset: 0, border: '2px solid #22c55e', borderRadius: 12, zIndex: 1 }} />
-                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '35%', background: 'rgba(0,0,0,0.5)' }} />
-                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '35%', background: 'rgba(0,0,0,0.5)' }} />
-                    <div style={{ position: 'absolute', top: '35%', left: 0, width: '10%', height: '30%', background: 'rgba(0,0,0,0.5)' }} />
-                    <div style={{ position: 'absolute', top: '35%', right: 0, width: '10%', height: '30%', background: 'rgba(0,0,0,0.5)' }} />
+                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '35%', background: 'rgba(0,0,0,0.55)' }} />
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '35%', background: 'rgba(0,0,0,0.55)' }} />
+                    <div style={{ position: 'absolute', top: '35%', left: 0, width: '5%', height: '30%', background: 'rgba(0,0,0,0.55)' }} />
+                    <div style={{ position: 'absolute', top: '35%', right: 0, width: '5%', height: '30%', background: 'rgba(0,0,0,0.55)' }} />
+                    <div style={{ position: 'absolute', top: '35%', left: '5%', width: '90%', height: '30%', border: '2px solid #22c55e', borderRadius: 6, boxSizing: 'border-box' }} />
                   </div>
                 </div>
                 {cameraStarted && lendo && (
