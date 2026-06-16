@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -67,6 +67,11 @@ export function ModalBoleto({
     onSuccess: onSalvo,
   });
 
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
+
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40" onClick={onFechar}>
@@ -79,7 +84,7 @@ export function ModalBoleto({
           </div>
 
           <form onSubmit={handleSubmit(d => mutation.mutate(d))} className="flex flex-col flex-1 min-h-0">
-            <div className="flex-1 overflow-y-auto space-y-4">
+            <div className="flex-1 overflow-y-auto overscroll-contain space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Fornecedor</label>
                 <input {...register('fornecedor')} placeholder="Nome do fornecedor"
