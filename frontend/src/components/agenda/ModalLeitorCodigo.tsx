@@ -25,17 +25,6 @@ const FORMATOS_BOLETO = [
 
 const TINY_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
-function criarLeitor() {
-  const hints = new Map();
-  hints.set(DecodeHintType.POSSIBLE_FORMATS, FORMATOS_BOLETO);
-  hints.set(DecodeHintType.TRY_HARDER, true);
-  const isMobileDevice = /Android|iPhone|iPad/i.test(navigator.userAgent);
-  return new BrowserMultiFormatOneDReader(hints, {
-    delayBetweenScanSuccess: 500,
-    tryPlayVideoTimeout: isMobileDevice ? 15000 : 5000,
-  });
-}
-
 function extrairCodigoDigitavel(texto: string): string | null {
   const t = texto.replace(/\r?\n/g, ' ').replace(/\s{2,}/g, ' ');
 
@@ -115,8 +104,6 @@ export function ModalLeitorCodigo({
   const [paginaCarregando, setPaginaCarregando] = useState<number | null>(null);
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [cameraStarted, setCameraStarted] = useState(false);
-  const [streamAtivo, setStreamAtivo] = useState<MediaStream | null>(null);
-  const iniciandoRef = useRef(false);
   const resultadoRef = useRef<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlsRef = useRef<{ stop: () => void } | null>(null);
@@ -132,11 +119,6 @@ export function ModalLeitorCodigo({
     controlsRef.current?.stop();
     controlsRef.current = null;
     setCameraStarted(false);
-    setStreamAtivo(null);
-    if (videoRef.current?.srcObject instanceof MediaStream) {
-      videoRef.current.srcObject.getTracks().forEach(t => t.stop());
-      videoRef.current.srcObject = null;
-    }
   }, []);
 
   useEffect(() => {
@@ -168,50 +150,10 @@ export function ModalLeitorCodigo({
 
   useEffect(() => {
     if (!aberto || aba !== 'camera') {
-      if (!iniciandoRef.current) {
-        pararCamera();
-      }
+      pararCamera();
     }
-    return () => {
-      if (!iniciandoRef.current) {
-        pararCamera();
-      }
-    };
+    return pararCamera;
   }, [aberto, aba]);
-
-  useEffect(() => {
-    if (!streamAtivo || !videoRef.current || !cameraStarted) return;
-
-    let cancelled = false;
-    const video = videoRef.current;
-
-    async function iniciarZXing() {
-      await new Promise(r => setTimeout(r, 200));
-      if (cancelled || !video) return;
-      iniciandoRef.current = false;
-
-      video.srcObject = streamAtivo;
-      await video.play().catch(() => {});
-      log('Câmera iniciada com sucesso');
-
-      const reader = criarLeitor();
-      const controls = await reader.decodeFromStream(streamAtivo!, video, (result) => {
-        if (result && !resultadoRef.current) {
-          if (!ehFormatoBoleto(result.getBarcodeFormat())) return;
-          const codigo = result.getText();
-          log(`Código lido: ${codigo}`);
-          setResultadoRef(codigo);
-          pararCamera();
-          handleCodigo(codigo);
-        }
-      });
-      if (!cancelled) controlsRef.current = controls;
-    }
-
-    iniciarZXing();
-
-    return () => { cancelled = true; };
-  }, [streamAtivo, cameraStarted]);
 
   function setResultadoRef(v: string | null) {
     resultadoRef.current = v;
@@ -233,26 +175,43 @@ export function ModalLeitorCodigo({
   }
 
   async function iniciarCamera() {
+    if (!videoRef.current) return;
     pararCamera();
-    iniciandoRef.current = true;
     setLendo(true);
-
-    log('Solicitando permissão da câmera...');
+    log('Iniciando câmera...');
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'environment',
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
+      const hints = new Map();
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, FORMATOS_BOLETO);
+      hints.set(DecodeHintType.TRY_HARDER, true);
+      const isMobileDevice = /Android|iPhone|iPad/i.test(navigator.userAgent);
+      const reader = new BrowserMultiFormatOneDReader(hints, {
+        delayBetweenScanSuccess: 500,
+        tryPlayVideoTimeout: isMobileDevice ? 15000 : 5000,
       });
 
-      log('Stream obtido. Aguardando video montar...');
       setCameraStarted(true);
-      setStreamAtivo(stream);
+
+      const controls = await reader.decodeFromVideoDevice(
+        undefined,
+        videoRef.current,
+        (result, err) => {
+          if (result && !resultadoRef.current) {
+            if (!ehFormatoBoleto(result.getBarcodeFormat())) return;
+            const codigo = result.getText();
+            log(`Código lido: ${codigo}`);
+            setResultadoRef(codigo);
+            controls.stop();
+            setCameraStarted(false);
+            handleCodigo(codigo);
+          }
+        }
+      );
+
+      controlsRef.current = controls;
+      log('Câmera iniciada com sucesso');
     } catch (err: any) {
-      iniciandoRef.current = false;
+      setCameraStarted(false);
       log(`ERRO câmera: ${err?.name} - ${err?.message}`);
       console.error('Erro ao acessar câmera:', err);
 
