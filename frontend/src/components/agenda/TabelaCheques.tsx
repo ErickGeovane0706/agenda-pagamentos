@@ -133,17 +133,26 @@ export function TabelaCheques({
               </button>
             </div>
           ) : (
-            cheques.map((cheque: Cheque) => (
-              <CardCheque
-                key={cheque.id}
-                cheque={cheque}
-                onEditar={() => { setChequeEditando(cheque); setModalAberto(true); }}
-                onExcluir={() => excluirMutation.mutate(cheque.id)}
-                onUpload={() => handleUpload(cheque.id)}
-                onDeletarArquivo={() => deletarArquivoMutation.mutate(cheque.id)}
-                onMudarStatus={(status) => mudarStatusMutation.mutate({ id: cheque.id, status })}
+            <>
+              {cheques.map((cheque: Cheque) => (
+                <CardCheque
+                  key={cheque.id}
+                  cheque={cheque}
+                  onEditar={() => { setChequeEditando(cheque); setModalAberto(true); }}
+                  onExcluir={() => excluirMutation.mutate(cheque.id)}
+                  onUpload={() => handleUpload(cheque.id)}
+                  onDeletarArquivo={() => deletarArquivoMutation.mutate(cheque.id)}
+                  onMudarStatus={(status) => mudarStatusMutation.mutate({ id: cheque.id, status })}
+                />
+              ))}
+              <Pagination
+                page={page}
+                totalPages={pageData?.totalPages ?? 1}
+                total={pageData?.totalElements ?? cheques.length}
+                pageSize={pageSize}
+                onChange={(p) => { setPage(p); }}
               />
-            ))
+            </>
           )}
         </div>
       ) : (

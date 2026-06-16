@@ -140,19 +140,28 @@ export function TabelaPix({
               </button>
             </div>
           ) : (
-            pixList.map((pix: PagamentoPix) => (
-              <CardPix
-                key={pix.id}
-                pix={pix}
-                onCopiar={copiarChave}
-                onEditar={() => { setPixEditando(pix); setModalAberto(true); }}
-                onExcluir={() => excluirMutation.mutate(pix.id)}
-                onUpload={() => handleUpload(pix.id)}
-                onDeletarArquivo={() => deletarArquivoMutation.mutate(pix.id)}
-                onMudarStatus={(status) => mudarStatusMutation.mutate({ id: pix.id, status })}
-                copiado={copiado}
+            <>
+              {pixList.map((pix: PagamentoPix) => (
+                <CardPix
+                  key={pix.id}
+                  pix={pix}
+                  onCopiar={copiarChave}
+                  onEditar={() => { setPixEditando(pix); setModalAberto(true); }}
+                  onExcluir={() => excluirMutation.mutate(pix.id)}
+                  onUpload={() => handleUpload(pix.id)}
+                  onDeletarArquivo={() => deletarArquivoMutation.mutate(pix.id)}
+                  onMudarStatus={(status) => mudarStatusMutation.mutate({ id: pix.id, status })}
+                  copiado={copiado}
+                />
+              ))}
+              <Pagination
+                page={page}
+                totalPages={pageData?.totalPages ?? 1}
+                total={pageData?.totalElements ?? pixList.length}
+                pageSize={pageSize}
+                onChange={(p) => { setPage(p); }}
               />
-            ))
+            </>
           )}
         </div>
       ) : (
