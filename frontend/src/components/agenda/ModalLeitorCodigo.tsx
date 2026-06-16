@@ -163,7 +163,8 @@ export function ModalLeitorCodigo({
             target: scannerRef.current!,
             constraints: {
               facingMode: 'environment',
-              aspectRatio: { min: 1, max: 1.777 },
+              width: { ideal: 1280, min: 640 },
+              height: { ideal: 720, min: 480 },
             },
             area: { top: '35%', bottom: '35%', left: '5%', right: '5%' },
           },
@@ -427,7 +428,7 @@ export function ModalLeitorCodigo({
         <div className="p-4">
           {aba === 'camera' && (
             <div>
-              <div style={{ position: 'relative', width: '100%', maxWidth: 400, margin: '0 auto', minHeight: 220 }}>
+              <div style={{ position: 'relative', width: '100%', maxWidth: 400, margin: '0 auto', aspectRatio: '3/4' }}>
                 {!cameraStarted && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
                     <Camera className="w-12 h-12 mb-3 text-slate-300" />
