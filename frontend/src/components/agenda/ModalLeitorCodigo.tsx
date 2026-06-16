@@ -163,8 +163,6 @@ export function ModalLeitorCodigo({
             target: scannerRef.current!,
             constraints: {
               facingMode: 'environment',
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
             },
           },
           decoder: {
@@ -448,11 +446,12 @@ export function ModalLeitorCodigo({
                 )}
                 <div
   ref={scannerRef}
+  id="quagga-scanner"
   style={{
     width: '100%',
     minHeight: 220,
     borderRadius: 12,
-    overflow: 'hidden',
+    position: 'relative',
     display: cameraStarted ? 'block' : 'none',
   }}
 />
