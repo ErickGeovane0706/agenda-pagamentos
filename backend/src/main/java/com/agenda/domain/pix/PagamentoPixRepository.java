@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.UUID;
 
 public interface PagamentoPixRepository extends JpaRepository<PagamentoPix, UUID> {
+    List<PagamentoPix> findByEmpresa_Id(UUID empresaId);
 
     @Query("""
         SELECT p FROM PagamentoPix p WHERE p.empresa.id = :empresaId

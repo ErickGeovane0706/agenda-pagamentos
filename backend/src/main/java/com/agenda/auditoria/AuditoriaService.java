@@ -7,6 +7,8 @@ import lombok.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -59,6 +61,11 @@ public class AuditoriaService {
     public void registrar(String acao, String entidade, UUID entidadeId, String detalhes) {
         var empresaId = TenantContext.getEmpresaId();
         if (empresaId == null) return;
+
+        var request = ((ServletRequestAttributes)
+            RequestContextHolder.getRequestAttributes());
+        var ip = request != null ? request.getRequest().getRemoteAddr() : null;
+
         var registro = Auditoria.builder()
             .empresaId(empresaId)
             .usuarioId(UserContext.getUsuarioId())
@@ -67,6 +74,7 @@ public class AuditoriaService {
             .entidade(entidade)
             .entidadeId(entidadeId)
             .detalhes(detalhes)
+            .ip(ip)
             .build();
         auditoriaRepository.save(registro);
     }

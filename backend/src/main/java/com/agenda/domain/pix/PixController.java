@@ -46,6 +46,7 @@ public class PixController {
     }
 
     @PatchMapping("/{id}/status")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERADOR')")
     public ResponseEntity<PixDTO> mudarStatus(@PathVariable UUID id,
                                                @RequestBody @Valid MudarStatusPixRequest req) {
         return ResponseEntity.ok(pixService.mudarStatus(id, req.status()));

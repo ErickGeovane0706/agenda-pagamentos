@@ -36,7 +36,12 @@ public class RateLimitFilter implements Filter {
             return;
         }
 
-        var ip = httpRequest.getRemoteAddr();
+        var ip = httpRequest.getHeader("X-Forwarded-For");
+        if (ip == null || ip.isEmpty()) {
+            ip = httpRequest.getRemoteAddr();
+        } else {
+            ip = ip.split(",")[0].trim();
+        }
         var bucket = buckets.computeIfAbsent(ip, k -> createBucket());
 
         if (bucket.tryConsume(1)) {

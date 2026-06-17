@@ -46,6 +46,7 @@ public class BoletoController {
     }
 
     @PatchMapping("/{id}/status")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERADOR')")
     public ResponseEntity<BoletoDTO> mudarStatus(@PathVariable UUID id,
                                                    @RequestBody @Valid MudarStatusRequest req) {
         return ResponseEntity.ok(boletoService.mudarStatus(id, req.status()));

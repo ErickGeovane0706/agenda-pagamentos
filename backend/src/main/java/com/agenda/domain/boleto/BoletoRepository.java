@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.UUID;
 
 public interface BoletoRepository extends JpaRepository<Boleto, UUID> {
+    List<Boleto> findByEmpresa_Id(UUID empresaId);
 
     @Query("""
         SELECT b FROM Boleto b WHERE b.empresa.id = :empresaId

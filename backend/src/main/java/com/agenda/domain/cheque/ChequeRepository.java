@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.UUID;
 
 public interface ChequeRepository extends JpaRepository<Cheque, UUID> {
+    List<Cheque> findByEmpresa_Id(UUID empresaId);
 
     @Query("""
         SELECT c FROM Cheque c WHERE c.empresa.id = :empresaId

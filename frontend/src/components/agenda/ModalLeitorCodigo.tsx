@@ -8,8 +8,8 @@ import { clsx } from 'clsx';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useToastStore } from '../../store/toastStore';
 
-const PDFJS_VERSION = (pdfjsLib as any).version || '4.0.379';
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.mjs`;
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 const TINY_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
@@ -200,7 +200,7 @@ export function ModalLeitorCodigo({
           audio: false,
         },
         video,
-        (result) => {
+        (result, _err, controls) => {
           if (!result || resultadoRef.current || !cameraRunningRef.current) return;
           const codigo = result.getText();
           if (!codigo) return;
@@ -208,7 +208,7 @@ export function ModalLeitorCodigo({
           if ([44, 47, 48].includes(apenasDigitos.length)) {
             log(`Código lido: ${apenasDigitos}`);
             setResultadoRef(apenasDigitos);
-            scannerControlsRef.current?.stop();
+            controls.stop();
             pararCamera();
             handleCodigo(apenasDigitos);
           }

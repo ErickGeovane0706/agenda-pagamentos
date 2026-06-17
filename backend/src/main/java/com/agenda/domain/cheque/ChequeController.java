@@ -46,6 +46,7 @@ public class ChequeController {
     }
 
     @PatchMapping("/{id}/status")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERADOR')")
     public ResponseEntity<ChequeDTO> mudarStatus(@PathVariable UUID id,
                                                   @RequestBody @Valid MudarStatusChequeRequest req) {
         return ResponseEntity.ok(chequeService.mudarStatus(id, req.status()));
