@@ -54,7 +54,20 @@ export function TabelaBoletos({
   const mudarStatusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: StatusBoleto }) =>
       api.patch(`/boletos/${id}/status`, { status }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['boletos', lojaId] }),
+    onSuccess: (_, variables) => {
+      queryClient.setQueryData(
+        ['boletos', lojaId, somentePendentes, page, pageSize],
+        (old: any) => {
+          if (!old?.content) return old;
+          return {
+            ...old,
+            content: old.content.map((b: Boleto) =>
+              b.id === variables.id ? { ...b, status: variables.status } : b
+            ),
+          };
+        }
+      );
+    },
   });
 
   const excluirMutation = useMutation({
