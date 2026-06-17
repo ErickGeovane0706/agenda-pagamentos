@@ -70,7 +70,7 @@ export function ModalBoleto({
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
-    const atualizarAltura = () => setMaxHeight(`${Math.round(window.innerHeight * 0.9)}px`);
+    const atualizarAltura = () => setMaxHeight(`${window.innerHeight - 20}px`);
     atualizarAltura();
     window.addEventListener('resize', atualizarAltura);
     return () => {
