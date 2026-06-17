@@ -81,15 +81,15 @@ export function ModalBoleto({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40" onClick={onFechar}>
-        <div className="bg-white w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl animate-slide-in flex flex-col" style={{ maxHeight }} onClick={e => e.stopPropagation()}>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onFechar}>
+        <div className="bg-white w-full sm:max-w-lg rounded-2xl animate-slide-in flex flex-col" style={{ maxHeight }} onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between px-6 pt-6 pb-0 shrink-0">
             <h2 className="text-lg font-bold text-slate-900">{boleto ? 'Editar boleto' : 'Novo boleto'}</h2>
             <button onClick={onFechar} className="p-2 rounded-lg hover:bg-slate-100 text-slate-400">
               <X className="w-5 h-5" />
             </button>
           </div>
-
+          
           <div className="flex-1 overflow-y-auto overscroll-contain px-6 min-h-0">
             <form id="boleto-form" onSubmit={handleSubmit(d => mutation.mutate(d))} className="space-y-4 py-4">
               <div>
