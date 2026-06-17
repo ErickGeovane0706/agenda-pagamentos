@@ -11,10 +11,8 @@ type StatusFiltro = 'TODOS' | 'PAGO' | 'PENDENTE';
 
 export default function RelatoriosPage() {
   const { usuario } = useAuthStore();
-  const hoje = new Date().toISOString().split('T')[0];
-  const mesPassado = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-  const [de, setDe] = useState(mesPassado);
-  const [ate, setAte] = useState(hoje);
+  const [de, setDe] = useState('');
+  const [ate, setAte] = useState('');
   const [tipo, setTipo] = useState('TODOS');
   const [lojaId, setLojaId] = useState('');
   const [status, setStatus] = useState<StatusFiltro>('TODOS');
