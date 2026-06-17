@@ -18,12 +18,14 @@ import { SkeletonTable } from '../Skeleton';
 import { clsx } from 'clsx';
 import { copiarTexto } from '../../utils/clipboard';
 
+import type { FiltrosAgenda } from '../../types';
+
 export function TabelaBoletos({
   lojaId,
-  somentePendentes
+  filtros
 }: {
   lojaId: string;
-  somentePendentes: boolean;
+  filtros: FiltrosAgenda;
 }) {
   const isMobile = useIsMobile();
   const queryClient = useQueryClient();
@@ -35,14 +37,17 @@ export function TabelaBoletos({
   const [page, setPage] = useState(0);
   const pageSize = 15;
 
-  useEffect(() => { setPage(0); }, [lojaId, somentePendentes]);
+  useEffect(() => { setPage(0); }, [lojaId, filtros]);
 
   const { data: pageData, isLoading } = useQuery({
-    queryKey: ['boletos', lojaId, somentePendentes, page, pageSize],
+    queryKey: ['boletos', lojaId, filtros, page, pageSize],
     queryFn: () => api.get('/boletos', {
       params: {
         lojaId,
-        status: somentePendentes ? 'PENDENTE' : undefined,
+        status: filtros.status || undefined,
+        de: filtros.de || undefined,
+        ate: filtros.ate || undefined,
+        fornecedor: filtros.nome || undefined,
         page,
         size: pageSize,
       }
@@ -56,7 +61,7 @@ export function TabelaBoletos({
       api.patch(`/boletos/${id}/status`, { status }),
     onSuccess: (_, variables) => {
       queryClient.setQueryData(
-        ['boletos', lojaId, somentePendentes, page, pageSize],
+        ['boletos', lojaId, filtros, page, pageSize],
         (old: any) => {
           if (!old?.content) return old;
           return {

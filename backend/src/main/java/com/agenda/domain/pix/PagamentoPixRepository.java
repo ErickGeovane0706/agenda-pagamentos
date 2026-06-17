@@ -19,6 +19,7 @@ public interface PagamentoPixRepository extends JpaRepository<PagamentoPix, UUID
         AND (:status IS NULL OR p.status = :status)
         AND (:de IS NULL OR p.vencimento >= :de)
         AND (:ate IS NULL OR p.vencimento <= :ate)
+        AND (:fornecedor IS NULL OR LOWER(p.fornecedor) LIKE LOWER(CONCAT('%', :fornecedor, '%')))
         ORDER BY p.vencimento ASC
     """)
     Page<PagamentoPix> listar(
@@ -27,6 +28,7 @@ public interface PagamentoPixRepository extends JpaRepository<PagamentoPix, UUID
         @Param("status") StatusPix status,
         @Param("de") LocalDate de,
         @Param("ate") LocalDate ate,
+        @Param("fornecedor") String fornecedor,
         Pageable pageable
     );
 

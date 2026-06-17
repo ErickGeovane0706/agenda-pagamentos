@@ -17,12 +17,14 @@ import { Pagination } from '../Pagination';
 import { SkeletonTable } from '../Skeleton';
 import { clsx } from 'clsx';
 
+import type { FiltrosAgenda } from '../../types';
+
 export function TabelaCheques({
   lojaId,
-  somentePendentes
+  filtros
 }: {
   lojaId: string;
-  somentePendentes: boolean;
+  filtros: FiltrosAgenda;
 }) {
   const isMobile = useIsMobile();
   const queryClient = useQueryClient();
@@ -33,14 +35,17 @@ export function TabelaCheques({
   const [page, setPage] = useState(0);
   const pageSize = 15;
 
-  useEffect(() => { setPage(0); }, [lojaId, somentePendentes]);
+  useEffect(() => { setPage(0); }, [lojaId, filtros]);
 
   const { data: pageData, isLoading } = useQuery({
-    queryKey: ['cheques', lojaId, somentePendentes, page, pageSize],
+    queryKey: ['cheques', lojaId, filtros, page, pageSize],
     queryFn: () => api.get('/cheques', {
       params: {
         lojaId,
-        status: somentePendentes ? 'PENDENTE' : undefined,
+        status: filtros.status || undefined,
+        de: filtros.de || undefined,
+        ate: filtros.ate || undefined,
+        fornecedor: filtros.nome || undefined,
         page,
         size: pageSize,
       }

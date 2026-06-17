@@ -10,6 +10,8 @@ import { useAuthStore } from '../store/authStore';
 import { TabelaBoletos } from '../components/agenda/TabelaBoletos';
 import { TabelaPix } from '../components/agenda/TabelaPix';
 import { TabelaCheques } from '../components/agenda/TabelaCheques';
+import { ModalFiltros } from '../components/agenda/ModalFiltros';
+import type { FiltrosAgenda } from '../types';
 
 type Aba = 'boletos' | 'pix' | 'cheques';
 
@@ -17,7 +19,9 @@ export default function AgendaPage() {
   const navigate = useNavigate();
   const { lojaAtiva } = useAuthStore();
   const [abaAtiva, setAbaAtiva] = useState<Aba>('boletos');
-  const [mostrarSoPendentes, setMostrarSoPendentes] = useState(false);
+  const [filtros, setFiltros] = useState<FiltrosAgenda>({});
+  const [modalFiltrosAberto, setModalFiltrosAberto] = useState(false);
+  const temFiltros = !!filtros.de || !!filtros.ate || !!filtros.status || !!filtros.nome;
 
   const { data: loja } = useQuery({
     queryKey: ['loja', lojaAtiva],
@@ -61,15 +65,15 @@ export default function AgendaPage() {
           </div>
 
           <button
-            onClick={() => setMostrarSoPendentes(!mostrarSoPendentes)}
+            onClick={() => setModalFiltrosAberto(true)}
             className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
-              mostrarSoPendentes
+              temFiltros
                 ? 'bg-amber-50 border-amber-300 text-amber-700'
                 : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
             }`}
           >
             <Filter className="w-3 h-3" />
-            Pendentes
+            {temFiltros ? 'Filtros ativos' : 'Filtros'}
           </button>
         </div>
 
@@ -95,14 +99,21 @@ export default function AgendaPage() {
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-6">
         {abaAtiva === 'boletos' && (
-          <TabelaBoletos lojaId={lojaAtiva} somentePendentes={mostrarSoPendentes} />
+          <TabelaBoletos lojaId={lojaAtiva} filtros={filtros} />
         )}
         {abaAtiva === 'pix' && (
-          <TabelaPix lojaId={lojaAtiva} somentePendentes={mostrarSoPendentes} />
+          <TabelaPix lojaId={lojaAtiva} filtros={filtros} />
         )}
         {abaAtiva === 'cheques' && (
-          <TabelaCheques lojaId={lojaAtiva} somentePendentes={mostrarSoPendentes} />
+          <TabelaCheques lojaId={lojaAtiva} filtros={filtros} />
         )}
+
+        <ModalFiltros
+          abertos={modalFiltrosAberto}
+          filtros={filtros}
+          onFechar={() => setModalFiltrosAberto(false)}
+          onAplicar={(f) => setFiltros(f)}
+        />
       </main>
     </div>
   );

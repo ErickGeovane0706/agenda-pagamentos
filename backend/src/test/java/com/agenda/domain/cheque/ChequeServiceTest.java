@@ -117,10 +117,10 @@ class ChequeServiceTest {
     @Test
     void listar_DeveFiltrarPorEmpresa() {
         var pageable = PageRequest.of(0, 10);
-        when(chequeRepository.listar(empresa.getId(), null, null, null, null, pageable))
+        when(chequeRepository.listar(empresa.getId(), null, null, null, null, null, pageable))
             .thenReturn(Page.empty());
 
-        var result = chequeService.listar(null, null, null, null, pageable);
+        var result = chequeService.listar(null, null, null, null, null, pageable);
 
         assertNotNull(result);
         assertTrue(result.isEmpty());

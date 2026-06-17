@@ -115,10 +115,10 @@ class PixServiceTest {
     @Test
     void listar_DeveFiltrarPorEmpresa() {
         var pageable = PageRequest.of(0, 10);
-        when(pixRepository.listar(empresa.getId(), null, null, null, null, pageable))
+        when(pixRepository.listar(empresa.getId(), null, null, null, null, null, pageable))
             .thenReturn(Page.empty());
 
-        var result = pixService.listar(null, null, null, null, pageable);
+        var result = pixService.listar(null, null, null, null, null, pageable);
 
         assertNotNull(result);
         assertTrue(result.isEmpty());

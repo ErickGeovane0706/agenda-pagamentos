@@ -29,9 +29,9 @@ public class BoletoService {
     private final AuditoriaService auditoriaService;
 
     @Transactional(readOnly = true)
-    public Page<BoletoDTO> listar(UUID lojaId, StatusBoleto status, LocalDate de, LocalDate ate, Pageable pageable) {
+    public Page<BoletoDTO> listar(UUID lojaId, StatusBoleto status, LocalDate de, LocalDate ate, String fornecedor, Pageable pageable) {
         UUID empresaId = TenantContext.getEmpresaId();
-        return boletoRepository.listar(empresaId, lojaId, status, de, ate, pageable)
+        return boletoRepository.listar(empresaId, lojaId, status, de, ate, fornecedor, pageable)
             .map(BoletoDTO::from);
     }
 

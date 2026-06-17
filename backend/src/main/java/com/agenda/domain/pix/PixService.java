@@ -29,9 +29,9 @@ public class PixService {
     private final AuditoriaService auditoriaService;
 
     @Transactional(readOnly = true)
-    public Page<PixDTO> listar(UUID lojaId, StatusPix status, LocalDate de, LocalDate ate, Pageable pageable) {
+    public Page<PixDTO> listar(UUID lojaId, StatusPix status, LocalDate de, LocalDate ate, String fornecedor, Pageable pageable) {
         UUID empresaId = TenantContext.getEmpresaId();
-        return pixRepository.listar(empresaId, lojaId, status, de, ate, pageable)
+        return pixRepository.listar(empresaId, lojaId, status, de, ate, fornecedor, pageable)
             .map(PixDTO::from);
     }
 

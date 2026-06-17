@@ -54,7 +54,7 @@ class BoletoControllerTest {
             null, null, null, null, null, null, null);
         var page = new PageImpl<>(List.of(dto), PageRequest.of(0, 10), 1);
 
-        when(boletoService.listar(any(), any(), any(), any(), any())).thenReturn(page);
+        when(boletoService.listar(any(), any(), any(), any(), any(), any())).thenReturn(page);
 
         mockMvc.perform(get("/api/boletos")
                 .with(user("admin@teste.com").roles("ADMIN")))

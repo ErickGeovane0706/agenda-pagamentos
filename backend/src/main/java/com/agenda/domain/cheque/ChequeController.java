@@ -28,8 +28,9 @@ public class ChequeController {
             @RequestParam(required = false) StatusCheque status,
             @RequestParam(required = false) LocalDate de,
             @RequestParam(required = false) LocalDate ate,
+            @RequestParam(required = false) String fornecedor,
             Pageable pageable) {
-        return ResponseEntity.ok(chequeService.listar(lojaId, status, de, ate, pageable));
+        return ResponseEntity.ok(chequeService.listar(lojaId, status, de, ate, fornecedor, pageable));
     }
 
     @PostMapping

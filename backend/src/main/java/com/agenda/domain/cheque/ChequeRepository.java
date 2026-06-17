@@ -19,6 +19,7 @@ public interface ChequeRepository extends JpaRepository<Cheque, UUID> {
         AND (:status IS NULL OR c.status = :status)
         AND (:de IS NULL OR c.vencimento >= :de)
         AND (:ate IS NULL OR c.vencimento <= :ate)
+        AND (:fornecedor IS NULL OR LOWER(c.fornecedor) LIKE LOWER(CONCAT('%', :fornecedor, '%')))
         ORDER BY c.vencimento ASC
     """)
     Page<Cheque> listar(
@@ -27,6 +28,7 @@ public interface ChequeRepository extends JpaRepository<Cheque, UUID> {
         @Param("status") StatusCheque status,
         @Param("de") LocalDate de,
         @Param("ate") LocalDate ate,
+        @Param("fornecedor") String fornecedor,
         Pageable pageable
     );
 

@@ -31,9 +31,9 @@ public class ChequeService {
     private final AuditoriaService auditoriaService;
 
     @Transactional(readOnly = true)
-    public Page<ChequeDTO> listar(UUID lojaId, StatusCheque status, LocalDate de, LocalDate ate, Pageable pageable) {
+    public Page<ChequeDTO> listar(UUID lojaId, StatusCheque status, LocalDate de, LocalDate ate, String fornecedor, Pageable pageable) {
         UUID empresaId = TenantContext.getEmpresaId();
-        return chequeRepository.listar(empresaId, lojaId, status, de, ate, pageable)
+        return chequeRepository.listar(empresaId, lojaId, status, de, ate, fornecedor, pageable)
             .map(ChequeDTO::from);
     }
 

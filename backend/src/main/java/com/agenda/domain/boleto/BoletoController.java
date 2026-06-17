@@ -28,8 +28,9 @@ public class BoletoController {
             @RequestParam(required = false) StatusBoleto status,
             @RequestParam(required = false) LocalDate de,
             @RequestParam(required = false) LocalDate ate,
+            @RequestParam(required = false) String fornecedor,
             Pageable pageable) {
-        return ResponseEntity.ok(boletoService.listar(lojaId, status, de, ate, pageable));
+        return ResponseEntity.ok(boletoService.listar(lojaId, status, de, ate, fornecedor, pageable));
     }
 
     @PostMapping

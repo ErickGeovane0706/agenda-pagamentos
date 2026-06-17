@@ -130,10 +130,10 @@ class BoletoServiceTest {
     @Test
     void listar_DeveFiltrarPorEmpresa() {
         var pageable = PageRequest.of(0, 10);
-        when(boletoRepository.listar(empresa.getId(), null, null, null, null, pageable))
+        when(boletoRepository.listar(empresa.getId(), null, null, null, null, null, pageable))
             .thenReturn(Page.empty());
 
-        var result = boletoService.listar(null, null, null, null, pageable);
+        var result = boletoService.listar(null, null, null, null, null, pageable);
 
         assertNotNull(result);
         assertTrue(result.isEmpty());

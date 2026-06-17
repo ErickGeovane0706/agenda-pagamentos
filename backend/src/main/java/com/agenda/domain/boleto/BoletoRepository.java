@@ -19,6 +19,7 @@ public interface BoletoRepository extends JpaRepository<Boleto, UUID> {
         AND (:status IS NULL OR b.status = :status)
         AND (:de IS NULL OR b.vencimento >= :de)
         AND (:ate IS NULL OR b.vencimento <= :ate)
+        AND (:fornecedor IS NULL OR LOWER(b.fornecedor) LIKE LOWER(CONCAT('%', :fornecedor, '%')))
         ORDER BY b.vencimento ASC
     """)
     Page<Boleto> listar(
@@ -27,6 +28,7 @@ public interface BoletoRepository extends JpaRepository<Boleto, UUID> {
         @Param("status") StatusBoleto status,
         @Param("de") LocalDate de,
         @Param("ate") LocalDate ate,
+        @Param("fornecedor") String fornecedor,
         Pageable pageable
     );
 

@@ -85,6 +85,13 @@ export interface Banco {
   ativo: boolean;
 }
 
+export interface FiltrosAgenda {
+  de?: string;
+  ate?: string;
+  status?: string;
+  nome?: string;
+}
+
 export interface FiltrosRelatorio {
   de: string;
   ate: string;
