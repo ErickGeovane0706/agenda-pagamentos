@@ -19,7 +19,7 @@ public interface PagamentoPixRepository extends JpaRepository<PagamentoPix, UUID
         AND (:status IS NULL OR p.status = :status)
         AND (:de IS NULL OR p.vencimento >= :de)
         AND (:ate IS NULL OR p.vencimento <= :ate)
-        AND (:fornecedor IS NULL OR LOWER(p.fornecedor) LIKE LOWER(CONCAT('%', :fornecedor, '%')))
+        AND (:fornecedor IS NULL OR LOWER(p.fornecedor) LIKE LOWER(CONCAT(CONCAT('%', :fornecedor), '%')))
         ORDER BY p.vencimento ASC
     """)
     Page<PagamentoPix> listar(
