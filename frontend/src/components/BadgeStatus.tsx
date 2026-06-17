@@ -2,7 +2,7 @@ import { clsx } from 'clsx';
 
 const configs: Record<string, { label: string; classes: string }> = {
   PENDENTE:     { label: 'Pendente',     classes: 'bg-[#ffedd5] text-[#9a3412] border-[#ffedd5]' },
-  PAGO:         { label: 'Pago',         classes: 'bg-[#e0f2fe] text-[#0c4a6e] border-[#e0f2fe]' },
+  PAGO:         { label: 'Pago',         classes: 'bg-green-100 text-green-700 border-green-100' },
   VENCIDO:      { label: 'Vencido',      classes: 'bg-[#fee2e2] text-[#991b1b] border-[#fee2e2]' },
   CANCELADO:    { label: 'Cancelado',    classes: 'bg-slate-100 text-slate-600 border-slate-200' },
   COMPENSADO:   { label: 'Compensado',   classes: 'bg-[#e0f2fe] text-[#0c4a6e] border-[#e0f2fe]' },
