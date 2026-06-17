@@ -19,7 +19,7 @@ public interface ChequeRepository extends JpaRepository<Cheque, UUID> {
         AND (:status IS NULL OR c.status = :status)
         AND (:de IS NULL OR c.vencimento >= :de)
         AND (:ate IS NULL OR c.vencimento <= :ate)
-        AND (:fornecedor IS NULL OR LOWER(c.fornecedor) LIKE LOWER(CONCAT(CONCAT('%', :fornecedor), '%')))
+        AND (:fornecedor IS NULL OR LOWER(c.fornecedor) LIKE :fornecedor)
         ORDER BY c.vencimento ASC
     """)
     Page<Cheque> listar(

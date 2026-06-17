@@ -31,7 +31,8 @@ public class PixService {
     @Transactional(readOnly = true)
     public Page<PixDTO> listar(UUID lojaId, StatusPix status, LocalDate de, LocalDate ate, String fornecedor, Pageable pageable) {
         UUID empresaId = TenantContext.getEmpresaId();
-        return pixRepository.listar(empresaId, lojaId, status, de, ate, fornecedor, pageable)
+        String padrao = fornecedor != null ? "%" + fornecedor.toLowerCase() + "%" : null;
+        return pixRepository.listar(empresaId, lojaId, status, de, ate, padrao, pageable)
             .map(PixDTO::from);
     }
 

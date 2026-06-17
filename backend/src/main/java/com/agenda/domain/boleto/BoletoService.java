@@ -31,7 +31,8 @@ public class BoletoService {
     @Transactional(readOnly = true)
     public Page<BoletoDTO> listar(UUID lojaId, StatusBoleto status, LocalDate de, LocalDate ate, String fornecedor, Pageable pageable) {
         UUID empresaId = TenantContext.getEmpresaId();
-        return boletoRepository.listar(empresaId, lojaId, status, de, ate, fornecedor, pageable)
+        String padrao = fornecedor != null ? "%" + fornecedor.toLowerCase() + "%" : null;
+        return boletoRepository.listar(empresaId, lojaId, status, de, ate, padrao, pageable)
             .map(BoletoDTO::from);
     }
 
