@@ -1,7 +1,10 @@
 package com.agenda.job;
 
+import com.agenda.domain.boleto.BoletoRepository;
+import com.agenda.domain.cheque.ChequeRepository;
 import com.agenda.domain.empresa.Empresa;
 import com.agenda.domain.empresa.EmpresaRepository;
+import com.agenda.domain.pix.PagamentoPixRepository;
 import com.agenda.domain.usuario.Usuario;
 import com.agenda.domain.usuario.UsuarioRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,6 +26,9 @@ class SchedulerServiceTest {
 
     @Mock private UsuarioRepository usuarioRepository;
     @Mock private EmpresaRepository empresaRepository;
+    @Mock private BoletoRepository boletoRepository;
+    @Mock private PagamentoPixRepository pagamentoPixRepository;
+    @Mock private ChequeRepository chequeRepository;
 
     private SchedulerService schedulerService;
     private UUID empresaId;
@@ -30,7 +36,7 @@ class SchedulerServiceTest {
 
     @BeforeEach
     void setUp() {
-        schedulerService = new SchedulerService(usuarioRepository, empresaRepository);
+        schedulerService = new SchedulerService(usuarioRepository, empresaRepository, boletoRepository, pagamentoPixRepository, chequeRepository);
         empresaId = UUID.randomUUID();
         empresa = Empresa.builder().id(empresaId).nome("Empresa Teste").build();
     }
@@ -45,6 +51,9 @@ class SchedulerServiceTest {
         when(empresaRepository.findBySolicitouExclusaoTrueAndExcluidoEmIsNull())
             .thenReturn(List.of(empresa));
         when(usuarioRepository.findByEmpresaId(empresaId)).thenReturn(List.of(usuario));
+        when(boletoRepository.findByEmpresa_Id(empresaId)).thenReturn(List.of());
+        when(pagamentoPixRepository.findByEmpresa_Id(empresaId)).thenReturn(List.of());
+        when(chequeRepository.findByEmpresa_Id(empresaId)).thenReturn(List.of());
 
         schedulerService.processarExclusoes();
 

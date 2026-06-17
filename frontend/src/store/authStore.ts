@@ -3,10 +3,9 @@ import { persist } from 'zustand/middleware';
 import { Usuario } from '../types';
 
 interface AuthState {
-  token: string | null;
   usuario: Usuario | null;
   lojaAtiva: string | null;
-  setAuth: (token: string, usuario: Usuario) => void;
+  setAuth: (usuario: Usuario) => void;
   setLojaAtiva: (lojaId: string) => void;
   logout: () => void;
 }
@@ -14,22 +13,14 @@ interface AuthState {
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
-      token: null,
       usuario: null,
       lojaAtiva: null,
 
-      setAuth: (token, usuario) => {
-        localStorage.setItem('token', token);
-        set({ token, usuario });
-      },
+      setAuth: (usuario) => set({ usuario }),
 
       setLojaAtiva: (lojaId) => set({ lojaAtiva: lojaId }),
 
-      logout: () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('usuario');
-        set({ token: null, usuario: null, lojaAtiva: null });
-      },
+      logout: () => set({ usuario: null, lojaAtiva: null }),
     }),
     { name: 'agenda-auth' }
   )

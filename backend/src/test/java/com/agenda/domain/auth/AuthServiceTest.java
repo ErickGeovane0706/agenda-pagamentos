@@ -5,6 +5,8 @@ import com.agenda.domain.usuario.PerfilUsuario;
 import com.agenda.domain.usuario.Usuario;
 import com.agenda.domain.usuario.UsuarioRepository;
 import com.agenda.security.JwtService;
+import com.agenda.security.RefreshTokenService;
+import com.agenda.security.TokenBlacklistService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,6 +26,8 @@ class AuthServiceTest {
 
     @Mock private UsuarioRepository usuarioRepository;
     @Mock private JwtService jwtService;
+    @Mock private RefreshTokenService refreshTokenService;
+    @Mock private TokenBlacklistService tokenBlacklistService;
     @Mock private AuthenticationManager authenticationManager;
     @Mock private AuditoriaService auditoriaService;
 
@@ -31,7 +35,7 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(usuarioRepository, jwtService, authenticationManager, auditoriaService);
+        authService = new AuthService(usuarioRepository, jwtService, refreshTokenService, tokenBlacklistService, authenticationManager, auditoriaService);
     }
 
     @Test
@@ -46,10 +50,13 @@ class AuthServiceTest {
         when(usuarioRepository.findByEmail("joao@test.com")).thenReturn(Optional.of(usuario));
         when(jwtService.generateToken(usuario)).thenReturn("token");
 
+        when(refreshTokenService.create(usuario)).thenReturn(
+            com.agenda.domain.auth.RefreshToken.builder().token("rt").build());
+
         var result = authService.login(dto);
 
         assertNotNull(result);
-        assertEquals("token", result.token());
+        assertEquals("token", result.accessToken());
         verify(authenticationManager).authenticate(any());
     }
 

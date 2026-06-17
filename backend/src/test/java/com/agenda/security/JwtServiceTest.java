@@ -19,6 +19,8 @@ import static org.junit.jupiter.api.Assertions.*;
 @ExtendWith(MockitoExtension.class)
 class JwtServiceTest {
 
+    @Mock private TokenBlacklistService tokenBlacklistService;
+
     private JwtService jwtService;
     private JwtConfig jwtConfig;
     private Usuario usuario;
@@ -28,7 +30,7 @@ class JwtServiceTest {
         jwtConfig = new JwtConfig();
         jwtConfig.setSecret("dGhpcy1pcy1hLXNlY3JldC1rZXktZm9yLXRlc3RpbmctcHVycG9zZXMtYW5kLWl0LWlzLWxvbmctZW5vdWdo");
         jwtConfig.setExpiration(86400000L);
-        jwtService = new JwtService(jwtConfig);
+        jwtService = new JwtService(jwtConfig, tokenBlacklistService);
         var empresa = Empresa.builder().id(UUID.randomUUID()).build();
         usuario = Usuario.builder()
             .id(UUID.randomUUID()).empresa(empresa)

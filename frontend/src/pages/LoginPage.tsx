@@ -26,7 +26,7 @@ export default function LoginPage() {
     mutationFn: (data: FormData) =>
       api.post('/auth/login', { email: data.email, senha: data.senha }),
     onSuccess: (res) => {
-      setAuth(res.data.token, res.data.usuario);
+      setAuth(res.data.usuario);
       navigate('/lojas');
     },
   });

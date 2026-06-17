@@ -11,6 +11,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
+import java.time.Duration;
 import java.util.Date;
 import java.util.UUID;
 
@@ -19,6 +20,7 @@ import java.util.UUID;
 public class JwtService {
 
     private final JwtConfig jwtConfig;
+    private final TokenBlacklistService tokenBlacklistService;
 
     public String extractEmail(String token) {
         return extractAllClaims(token).getSubject();
@@ -39,7 +41,9 @@ public class JwtService {
 
     public boolean isValid(String token, UserDetails user) {
         var email = extractEmail(token);
-        return email.equals(user.getUsername()) && !isExpired(token);
+        if (!email.equals(user.getUsername()) || isExpired(token)) return false;
+        var jti = extractJti(token);
+        return jti == null || !tokenBlacklistService.isBlacklisted(jti);
     }
 
     public UUID extractUsuarioId(String token) {
@@ -47,11 +51,25 @@ public class JwtService {
         return UUID.fromString(usuarioId);
     }
 
+    public String extractJti(String token) {
+        return extractAllClaims(token).getId();
+    }
+
+    public Date extractExpiration(String token) {
+        return extractAllClaims(token).getExpiration();
+    }
+
     public String generateToken(Usuario usuario) {
+        var jti = UUID.randomUUID().toString();
+        return generateToken(usuario, jti);
+    }
+
+    public String generateToken(Usuario usuario, String jti) {
         var now = new Date();
         var expiration = new Date(now.getTime() + jwtConfig.getExpiration());
 
         return Jwts.builder()
+            .id(jti)
             .subject(usuario.getEmail())
             .claim("usuarioId", usuario.getId().toString())
             .claim("empresaId", usuario.getEmpresa().getId().toString())
@@ -63,7 +81,7 @@ public class JwtService {
             .compact();
     }
 
-    private boolean isExpired(String token) {
+    public boolean isExpired(String token) {
         return extractAllClaims(token).getExpiration().before(new Date());
     }
 

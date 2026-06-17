@@ -56,6 +56,7 @@ public class UsuarioController {
     }
 
     @PostMapping("/minha-conta/solicitar-exclusao")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MASTER')")
     public ResponseEntity<Void> solicitarExclusao() {
         usuarioService.solicitarExclusao();
         return ResponseEntity.accepted().build();
