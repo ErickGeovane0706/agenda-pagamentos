@@ -1,0 +1,22 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/agenda_pagamentos
+    username: postgres
+    password: postgres
+  jpa:
+    show-sql: true
+
+jwt:
+  secret: chave-local-dev-qualquer-coisa-longa-aqui-nao-usar-em-producao
+  expiration: 86400000
+
+r2:
+  account-id: seu_account_id
+  access-key: sua_access_key
+  secret-key: sua_secret_key
+  bucket: agenda-pagamentos-arquivos
+
+logging:
+  level:
+    com.agenda: DEBUG
+    org.hibernate.SQL: DEBUG
