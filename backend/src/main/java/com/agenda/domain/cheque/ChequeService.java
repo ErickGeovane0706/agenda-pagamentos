@@ -40,26 +40,29 @@ public class ChequeService {
 
     @Transactional(readOnly = true)
     public Cheque buscarPorId(UUID id) {
-        return chequeRepository.findById(id)
-            .orElseThrow(() -> new NotFoundException("Cheque não encontrado"));
+        UUID empresaId = TenantContext.getEmpresaId();
+        var cheque = chequeRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Cheque não encontrado"));
+        if (!cheque.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
+        return cheque;
     }
 
     @Transactional
     public ChequeDTO criar(CriarChequeRequest req) {
         UUID empresaId = TenantContext.getEmpresaId();
         var loja = lojaRepository.findById(req.lojaId())
-            .orElseThrow(() -> new NotFoundException("Loja não encontrada"));
+                .orElseThrow(() -> new NotFoundException("Loja não encontrada"));
         if (!loja.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
 
         var banco = req.bancoId() != null
-            ? bancoRepository.findById(req.bancoId()).orElse(null)
-            : null;
+                ? bancoRepository.findById(req.bancoId()).orElse(null)
+                : null;
 
         var cheque = Cheque.builder()
-            .empresa(loja.getEmpresa()).loja(loja).banco(banco)
-            .fornecedor(req.fornecedor()).valor(req.valor())
-            .vencimento(req.vencimento()).numeroCheque(req.numeroCheque())
-            .observacoes(req.observacoes()).build();
+                .empresa(loja.getEmpresa()).loja(loja).banco(banco)
+                .fornecedor(req.fornecedor()).valor(req.valor())
+                .vencimento(req.vencimento()).numeroCheque(req.numeroCheque())
+                .observacoes(req.observacoes()).build();
         cheque = chequeRepository.save(cheque);
         auditoriaService.registrar("CRIAR", "CHEQUE", cheque.getId(), "Fornecedor: " + req.fornecedor());
         return ChequeDTO.from(cheque);
@@ -69,14 +72,14 @@ public class ChequeService {
     public ChequeDTO editar(UUID id, EditarChequeRequest req) {
         UUID empresaId = TenantContext.getEmpresaId();
         var cheque = chequeRepository.findById(id)
-            .orElseThrow(() -> new NotFoundException("Cheque não encontrado"));
+                .orElseThrow(() -> new NotFoundException("Cheque não encontrado"));
         if (!cheque.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
 
         var loja = lojaRepository.findById(req.lojaId())
-            .orElseThrow(() -> new NotFoundException("Loja não encontrada"));
+                .orElseThrow(() -> new NotFoundException("Loja não encontrada"));
         var banco = req.bancoId() != null
-            ? bancoRepository.findById(req.bancoId()).orElse(null)
-            : null;
+                ? bancoRepository.findById(req.bancoId()).orElse(null)
+                : null;
 
         cheque.setLoja(loja);
         cheque.setBanco(banco);
@@ -94,7 +97,7 @@ public class ChequeService {
     public ChequeDTO mudarStatus(UUID id, StatusCheque novoStatus) {
         UUID empresaId = TenantContext.getEmpresaId();
         var cheque = chequeRepository.findById(id)
-            .orElseThrow(() -> new NotFoundException("Cheque não encontrado"));
+                .orElseThrow(() -> new NotFoundException("Cheque não encontrado"));
         if (!cheque.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
 
         cheque.setStatus(novoStatus);
@@ -112,7 +115,7 @@ public class ChequeService {
     public void excluir(UUID id) {
         UUID empresaId = TenantContext.getEmpresaId();
         var cheque = chequeRepository.findById(id)
-            .orElseThrow(() -> new NotFoundException("Cheque não encontrado"));
+                .orElseThrow(() -> new NotFoundException("Cheque não encontrado"));
         if (!cheque.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
         if (cheque.getArquivoKey() != null) {
             arquivoService.deletar(cheque.getArquivoKey());
@@ -125,7 +128,7 @@ public class ChequeService {
     public ChequeDTO uploadArquivo(UUID id, MultipartFile arquivo) {
         UUID empresaId = TenantContext.getEmpresaId();
         var cheque = chequeRepository.findById(id)
-            .orElseThrow(() -> new NotFoundException("Cheque não encontrado"));
+                .orElseThrow(() -> new NotFoundException("Cheque não encontrado"));
         if (!cheque.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
 
         try {
@@ -147,7 +150,7 @@ public class ChequeService {
     public void removerArquivoKey(UUID id) {
         UUID empresaId = TenantContext.getEmpresaId();
         var cheque = chequeRepository.findById(id)
-            .orElseThrow(() -> new NotFoundException("Cheque não encontrado"));
+                .orElseThrow(() -> new NotFoundException("Cheque não encontrado"));
         if (!cheque.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
         cheque.setArquivoKey(null);
         chequeRepository.save(cheque);

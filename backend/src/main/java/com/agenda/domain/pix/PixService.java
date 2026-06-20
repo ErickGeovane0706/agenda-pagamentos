@@ -38,23 +38,26 @@ public class PixService {
 
     @Transactional(readOnly = true)
     public PagamentoPix buscarPorId(UUID id) {
-        return pixRepository.findById(id)
-            .orElseThrow(() -> new NotFoundException("PIX não encontrado"));
+        UUID empresaId = TenantContext.getEmpresaId();
+        var pix = pixRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("PIX não encontrado"));
+        if (!pix.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
+        return pix;
     }
 
     @Transactional
     public PixDTO criar(CriarPixRequest req) {
         UUID empresaId = TenantContext.getEmpresaId();
         var loja = lojaRepository.findById(req.lojaId())
-            .orElseThrow(() -> new NotFoundException("Loja não encontrada"));
+                .orElseThrow(() -> new NotFoundException("Loja não encontrada"));
         if (!loja.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
 
         var pix = PagamentoPix.builder()
-            .empresa(loja.getEmpresa()).loja(loja)
-            .fornecedor(req.fornecedor()).valor(req.valor())
-            .vencimento(req.vencimento()).chavePix(req.chavePix())
-            .tipoChave(req.tipoChave()).observacoes(req.observacoes())
-            .build();
+                .empresa(loja.getEmpresa()).loja(loja)
+                .fornecedor(req.fornecedor()).valor(req.valor())
+                .vencimento(req.vencimento()).chavePix(req.chavePix())
+                .tipoChave(req.tipoChave()).observacoes(req.observacoes())
+                .build();
         pix = pixRepository.save(pix);
         auditoriaService.registrar("CRIAR", "PIX", pix.getId(), "Fornecedor: " + req.fornecedor());
         return PixDTO.from(pix);
@@ -64,11 +67,11 @@ public class PixService {
     public PixDTO editar(UUID id, EditarPixRequest req) {
         UUID empresaId = TenantContext.getEmpresaId();
         var pix = pixRepository.findById(id)
-            .orElseThrow(() -> new NotFoundException("PIX não encontrado"));
+                .orElseThrow(() -> new NotFoundException("PIX não encontrado"));
         if (!pix.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
 
         var loja = lojaRepository.findById(req.lojaId())
-            .orElseThrow(() -> new NotFoundException("Loja não encontrada"));
+                .orElseThrow(() -> new NotFoundException("Loja não encontrada"));
 
         pix.setLoja(loja);
         pix.setFornecedor(req.fornecedor());
@@ -86,7 +89,7 @@ public class PixService {
     public PixDTO mudarStatus(UUID id, StatusPix novoStatus) {
         UUID empresaId = TenantContext.getEmpresaId();
         var pix = pixRepository.findById(id)
-            .orElseThrow(() -> new NotFoundException("PIX não encontrado"));
+                .orElseThrow(() -> new NotFoundException("PIX não encontrado"));
         if (!pix.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
 
         pix.setStatus(novoStatus);
@@ -104,7 +107,7 @@ public class PixService {
     public void excluir(UUID id) {
         UUID empresaId = TenantContext.getEmpresaId();
         var pix = pixRepository.findById(id)
-            .orElseThrow(() -> new NotFoundException("PIX não encontrado"));
+                .orElseThrow(() -> new NotFoundException("PIX não encontrado"));
         if (!pix.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
         if (pix.getArquivoKey() != null) {
             arquivoService.deletar(pix.getArquivoKey());
@@ -117,7 +120,7 @@ public class PixService {
     public PixDTO uploadArquivo(UUID id, MultipartFile arquivo) {
         UUID empresaId = TenantContext.getEmpresaId();
         var pix = pixRepository.findById(id)
-            .orElseThrow(() -> new NotFoundException("PIX não encontrado"));
+                .orElseThrow(() -> new NotFoundException("PIX não encontrado"));
         if (!pix.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
 
         try {
@@ -139,7 +142,7 @@ public class PixService {
     public void removerArquivoKey(UUID id) {
         UUID empresaId = TenantContext.getEmpresaId();
         var pix = pixRepository.findById(id)
-            .orElseThrow(() -> new NotFoundException("PIX não encontrado"));
+                .orElseThrow(() -> new NotFoundException("PIX não encontrado"));
         if (!pix.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
         pix.setArquivoKey(null);
         pixRepository.save(pix);
