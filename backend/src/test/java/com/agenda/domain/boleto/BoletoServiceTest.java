@@ -14,6 +14,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -130,8 +132,10 @@ class BoletoServiceTest {
     @Test
     void listar_DeveFiltrarPorEmpresa() {
         var pageable = PageRequest.of(0, 10);
-        when(boletoRepository.listar(empresa.getId(), null, null, null, null, null, pageable))
-            .thenReturn(Page.empty());
+        when(boletoRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(
+                        Boleto.builder().id(UUID.randomUUID()).empresa(empresa).loja(loja).fornecedor("Teste").valor(new BigDecimal("100")).vencimento(LocalDate.now()).build()
+                ), pageable, 1));
 
         var result = boletoService.listar(null, null, null, null, null, pageable);
 
