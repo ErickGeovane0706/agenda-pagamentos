@@ -67,12 +67,14 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private String extractToken(HttpServletRequest request) {
         String authHeader = request.getHeader("Authorization");
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            return authHeader.substring(7);
+            String token = authHeader.substring(7);
+            return (token.isBlank() || "null".equals(token)) ? null : token;
         }
         if (request.getCookies() != null) {
             for (var cookie : request.getCookies()) {
                 if ("jwt".equals(cookie.getName())) {
-                    return cookie.getValue();
+                    String value = cookie.getValue();
+                    return (value == null || value.isBlank() || "null".equals(value)) ? null : value;
                 }
             }
         }
