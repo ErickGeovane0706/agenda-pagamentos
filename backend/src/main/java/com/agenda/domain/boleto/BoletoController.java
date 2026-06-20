@@ -9,6 +9,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.data.domain.Sort;
 
 import java.time.LocalDate;
 import java.util.Map;
@@ -29,7 +31,7 @@ public class BoletoController {
             @RequestParam(required = false) LocalDate de,
             @RequestParam(required = false) LocalDate ate,
             @RequestParam(required = false) String fornecedor,
-            Pageable pageable) {
+            @PageableDefault(sort = "vencimento", direction = Sort.Direction.ASC) Pageable pageable) {
         return ResponseEntity.ok(boletoService.listar(lojaId, status, de, ate, fornecedor, pageable));
     }
 

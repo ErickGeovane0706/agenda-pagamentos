@@ -5,6 +5,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -29,7 +31,7 @@ public class PixController {
             @RequestParam(required = false) LocalDate de,
             @RequestParam(required = false) LocalDate ate,
             @RequestParam(required = false) String fornecedor,
-            Pageable pageable) {
+            @PageableDefault(sort = "vencimento", direction = Sort.Direction.ASC) Pageable pageable) {
         return ResponseEntity.ok(pixService.listar(lojaId, status, de, ate, fornecedor, pageable));
     }
 
