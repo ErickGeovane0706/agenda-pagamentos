@@ -33,9 +33,9 @@ public class ChequeService {
     @Transactional(readOnly = true)
     public Page<ChequeDTO> listar(UUID lojaId, StatusCheque status, LocalDate de, LocalDate ate, String fornecedor, Pageable pageable) {
         UUID empresaId = TenantContext.getEmpresaId();
-        String padrao = fornecedor != null ? "%" + fornecedor.toLowerCase() + "%" : null;
-        return chequeRepository.listar(empresaId, lojaId, status, de, ate, padrao, pageable)
-            .map(ChequeDTO::from);
+        var spec = ChequeSpecification.comFiltros(empresaId, lojaId, status, de, ate, fornecedor);
+        return chequeRepository.findAll(spec, pageable)
+                .map(ChequeDTO::from);
     }
 
     @Transactional(readOnly = true)

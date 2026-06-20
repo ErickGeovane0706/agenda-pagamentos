@@ -31,9 +31,9 @@ public class PixService {
     @Transactional(readOnly = true)
     public Page<PixDTO> listar(UUID lojaId, StatusPix status, LocalDate de, LocalDate ate, String fornecedor, Pageable pageable) {
         UUID empresaId = TenantContext.getEmpresaId();
-        String padrao = fornecedor != null ? "%" + fornecedor.toLowerCase() + "%" : null;
-        return pixRepository.listar(empresaId, lojaId, status, de, ate, padrao, pageable)
-            .map(PixDTO::from);
+        var spec = PagamentoPixSpecification.comFiltros(empresaId, lojaId, status, de, ate, fornecedor);
+        return pixRepository.findAll(spec, pageable)
+                .map(PixDTO::from);
     }
 
     @Transactional(readOnly = true)

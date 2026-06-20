@@ -11,11 +11,16 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.boot.autoconfigure.data.web.SpringDataWebProperties;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -115,8 +120,12 @@ class PixServiceTest {
     @Test
     void listar_DeveFiltrarPorEmpresa() {
         var pageable = PageRequest.of(0, 10);
-        when(pixRepository.listar(empresa.getId(), null, null, null, null, null, pageable))
-            .thenReturn(Page.empty());
+        when(pixRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(
+                        PagamentoPix.builder().id(UUID.randomUUID()).empresa(empresa).loja(loja)
+                                .fornecedor("Teste").valor(new BigDecimal("100"))
+                                .vencimento(LocalDate.now()).chavePix("chave-teste").build()
+                ), pageable, 1));
 
         var result = pixService.listar(null, null, null, null, null, pageable);
 

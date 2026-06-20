@@ -14,6 +14,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -117,7 +118,7 @@ class ChequeServiceTest {
     @Test
     void listar_DeveFiltrarPorEmpresa() {
         var pageable = PageRequest.of(0, 10);
-        when(chequeRepository.listar(empresa.getId(), null, null, null, null, null, pageable))
+        when(chequeRepository.findAll(any(Specification.class), eq(pageable)))
             .thenReturn(Page.empty());
 
         var result = chequeService.listar(null, null, null, null, null, pageable);

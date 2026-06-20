@@ -3,6 +3,7 @@ package com.agenda.domain.pix;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.math.BigDecimal;
@@ -10,27 +11,11 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
-public interface PagamentoPixRepository extends JpaRepository<PagamentoPix, UUID> {
+public interface PagamentoPixRepository extends JpaRepository<PagamentoPix, UUID>, JpaSpecificationExecutor<PagamentoPix> {
+
     List<PagamentoPix> findByEmpresa_Id(UUID empresaId);
 
-    @Query("""
-        SELECT p FROM PagamentoPix p WHERE p.empresa.id = :empresaId
-        AND (:lojaId IS NULL OR p.loja.id = :lojaId)
-        AND (:status IS NULL OR p.status = :status)
-        AND (:de IS NULL OR p.vencimento >= :de)
-        AND (:ate IS NULL OR p.vencimento <= :ate)
-        AND (:fornecedor IS NULL OR LOWER(p.fornecedor) LIKE :fornecedor)
-        ORDER BY p.vencimento ASC
-    """)
-    Page<PagamentoPix> listar(
-        @Param("empresaId") UUID empresaId,
-        @Param("lojaId") UUID lojaId,
-        @Param("status") StatusPix status,
-        @Param("de") LocalDate de,
-        @Param("ate") LocalDate ate,
-        @Param("fornecedor") String fornecedor,
-        Pageable pageable
-    );
+    // método "listar" antigo REMOVIDO — agora via Specification no Service
 
     @Query("""
         SELECT p.status, COUNT(p), SUM(p.valor) FROM PagamentoPix p
@@ -40,10 +25,10 @@ public interface PagamentoPixRepository extends JpaRepository<PagamentoPix, UUID
         GROUP BY p.status
     """)
     List<Object[]> resumo(
-        @Param("empresaId") UUID empresaId,
-        @Param("lojaId") UUID lojaId,
-        @Param("de") LocalDate de,
-        @Param("ate") LocalDate ate
+            @Param("empresaId") UUID empresaId,
+            @Param("lojaId") UUID lojaId,
+            @Param("de") LocalDate de,
+            @Param("ate") LocalDate ate
     );
 
     @Query("SELECT p FROM PagamentoPix p WHERE p.empresa.id = :empresaId AND p.status = 'PENDENTE' AND p.vencimento = :data")
@@ -57,9 +42,9 @@ public interface PagamentoPixRepository extends JpaRepository<PagamentoPix, UUID
         ORDER BY p.vencimento ASC
     """)
     List<Object[]> listarParaCsv(
-        @Param("empresaId") UUID empresaId,
-        @Param("lojaId") UUID lojaId,
-        @Param("de") LocalDate de,
-        @Param("ate") LocalDate ate
+            @Param("empresaId") UUID empresaId,
+            @Param("lojaId") UUID lojaId,
+            @Param("de") LocalDate de,
+            @Param("ate") LocalDate ate
     );
 }
