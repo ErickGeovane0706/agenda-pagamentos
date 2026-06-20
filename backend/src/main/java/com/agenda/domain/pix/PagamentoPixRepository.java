@@ -34,6 +34,12 @@ public interface PagamentoPixRepository extends JpaRepository<PagamentoPix, UUID
     @Query("SELECT p FROM PagamentoPix p WHERE p.empresa.id = :empresaId AND p.status = 'PENDENTE' AND p.vencimento = :data")
     List<PagamentoPix> findPendentesVencendoEm(@Param("empresaId") UUID empresaId, @Param("data") LocalDate data);
 
+    @Query("SELECT p FROM PagamentoPix p WHERE p.empresa.id = :empresaId AND p.status = 'PENDENTE' AND p.vencimento < :hoje ORDER BY p.vencimento ASC")
+    List<PagamentoPix> findVencidos(@Param("empresaId") UUID empresaId, @Param("hoje") LocalDate hoje);
+
+    @Query("SELECT p FROM PagamentoPix p WHERE p.empresa.id = :empresaId AND p.status = 'PENDENTE' AND p.vencimento BETWEEN :de AND :ate ORDER BY p.vencimento ASC")
+    List<PagamentoPix> findPendentesEntre(@Param("empresaId") UUID empresaId, @Param("de") LocalDate de, @Param("ate") LocalDate ate);
+
     @Query("""
         SELECT p.fornecedor, p.valor, p.vencimento, p.status FROM PagamentoPix p
         WHERE p.empresa.id = :empresaId
