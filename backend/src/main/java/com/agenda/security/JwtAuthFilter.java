@@ -49,12 +49,14 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                         UserContext.set(usuarioId, nome, perfil);
 
                         var auth = new UsernamePasswordAuthenticationToken(
-                            userDetails, null, userDetails.getAuthorities());
+                                userDetails, null, userDetails.getAuthorities());
                         SecurityContextHolder.getContext().setAuthentication(auth);
                     }
                 }
             } catch (ExpiredJwtException e) {
                 log.debug("Token expirado ignorado: {}", e.getMessage());
+            } catch (io.jsonwebtoken.JwtException | IllegalArgumentException e) {
+                log.debug("Token inválido ignorado: {}", e.getMessage());
             }
 
             filterChain.doFilter(request, response);
