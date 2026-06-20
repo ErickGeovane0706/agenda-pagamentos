@@ -17,19 +17,19 @@ public interface BoletoRepository extends JpaRepository<Boleto, UUID> {
         SELECT b FROM Boleto b WHERE b.empresa.id = :empresaId
         AND (:lojaId IS NULL OR b.loja.id = :lojaId)
         AND (:status IS NULL OR b.status = :status)
-        AND (:de IS NULL OR b.vencimento >= :de)
-        AND (:ate IS NULL OR b.vencimento <= :ate)
+        AND (CAST(:de AS date) IS NULL OR b.vencimento >= CAST(:de AS date))
+        AND (CAST(:ate AS date) IS NULL OR b.vencimento <= CAST(:ate AS date))
         AND (:fornecedor IS NULL OR LOWER(b.fornecedor) LIKE :fornecedor)
         ORDER BY b.vencimento ASC
     """)
     Page<Boleto> listar(
-        @Param("empresaId") UUID empresaId,
-        @Param("lojaId") UUID lojaId,
-        @Param("status") StatusBoleto status,
-        @Param("de") LocalDate de,
-        @Param("ate") LocalDate ate,
-        @Param("fornecedor") String fornecedor,
-        Pageable pageable
+            @Param("empresaId") UUID empresaId,
+            @Param("lojaId") UUID lojaId,
+            @Param("status") StatusBoleto status,
+            @Param("de") LocalDate de,
+            @Param("ate") LocalDate ate,
+            @Param("fornecedor") String fornecedor,
+            Pageable pageable
     );
 
     @Query("""
@@ -40,10 +40,10 @@ public interface BoletoRepository extends JpaRepository<Boleto, UUID> {
         GROUP BY b.status
     """)
     List<Object[]> resumo(
-        @Param("empresaId") UUID empresaId,
-        @Param("lojaId") UUID lojaId,
-        @Param("de") LocalDate de,
-        @Param("ate") LocalDate ate
+            @Param("empresaId") UUID empresaId,
+            @Param("lojaId") UUID lojaId,
+            @Param("de") LocalDate de,
+            @Param("ate") LocalDate ate
     );
 
     @Query("SELECT b FROM Boleto b WHERE b.empresa.id = :empresaId AND b.status = 'PENDENTE' AND b.vencimento = :data")
@@ -57,9 +57,9 @@ public interface BoletoRepository extends JpaRepository<Boleto, UUID> {
         ORDER BY b.vencimento ASC
     """)
     List<Object[]> listarParaCsv(
-        @Param("empresaId") UUID empresaId,
-        @Param("lojaId") UUID lojaId,
-        @Param("de") LocalDate de,
-        @Param("ate") LocalDate ate
+            @Param("empresaId") UUID empresaId,
+            @Param("lojaId") UUID lojaId,
+            @Param("de") LocalDate de,
+            @Param("ate") LocalDate ate
     );
 }
