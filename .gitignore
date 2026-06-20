@@ -15,10 +15,13 @@
 ANOTACOES-IA.md
 CLAUDE.md
 guia-agenda-pagamentos.md
-application-local.yml
-application-prod.yml
 application-secrets.yml
 secrets.yml
+
+# ══════════════════════════════════════════════
+# ATALHOS DO WINDOWS (gerados sem querer)
+# ══════════════════════════════════════════════
+*.lnk
 
 # ══════════════════════════════════════════════
 # BACKEND - JAVA / SPRING BOOT / MAVEN
