@@ -34,6 +34,12 @@ public interface ChequeRepository extends JpaRepository<Cheque, UUID>, JpaSpecif
     @Query("SELECT c FROM Cheque c WHERE c.empresa.id = :empresaId AND c.status = 'PENDENTE' AND c.vencimento = :data")
     List<Cheque> findPendentesVencendoEm(@Param("empresaId") UUID empresaId, @Param("data") LocalDate data);
 
+    @Query("SELECT c FROM Cheque c WHERE c.empresa.id = :empresaId AND c.status = 'PENDENTE' AND c.vencimento < :hoje ORDER BY c.vencimento ASC")
+    List<Cheque> findVencidos(@Param("empresaId") UUID empresaId, @Param("hoje") LocalDate hoje);
+
+    @Query("SELECT c FROM Cheque c WHERE c.empresa.id = :empresaId AND c.status = 'PENDENTE' AND c.vencimento BETWEEN :de AND :ate ORDER BY c.vencimento ASC")
+    List<Cheque> findPendentesEntre(@Param("empresaId") UUID empresaId, @Param("de") LocalDate de, @Param("ate") LocalDate ate);
+
     @Query("""
         SELECT c.fornecedor, c.valor, c.vencimento, c.status FROM Cheque c
         WHERE c.empresa.id = :empresaId

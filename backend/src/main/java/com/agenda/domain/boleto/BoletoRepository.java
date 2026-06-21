@@ -35,6 +35,12 @@ public interface BoletoRepository extends JpaRepository<Boleto, UUID>, JpaSpecif
     @Query("SELECT b FROM Boleto b WHERE b.empresa.id = :empresaId AND b.status = 'PENDENTE' AND b.vencimento = :data")
     List<Boleto> findPendentesVencendoEm(@Param("empresaId") UUID empresaId, @Param("data") LocalDate data);
 
+    @Query("SELECT b FROM Boleto b WHERE b.empresa.id = :empresaId AND b.status = 'PENDENTE' AND b.vencimento < :hoje ORDER BY b.vencimento ASC")
+    List<Boleto> findVencidos(@Param("empresaId") UUID empresaId, @Param("hoje") LocalDate hoje);
+
+    @Query("SELECT b FROM Boleto b WHERE b.empresa.id = :empresaId AND b.status = 'PENDENTE' AND b.vencimento BETWEEN :de AND :ate ORDER BY b.vencimento ASC")
+    List<Boleto> findPendentesEntre(@Param("empresaId") UUID empresaId, @Param("de") LocalDate de, @Param("ate") LocalDate ate);
+
     @Query("""
         SELECT b.fornecedor, b.valor, b.vencimento, b.status FROM Boleto b
         WHERE b.empresa.id = :empresaId
