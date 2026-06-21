@@ -75,7 +75,7 @@ public class NotificacaoWhatsAppScheduler {
         Set<UUID> lojaIds = pref.getLojas().stream().map(Loja::getId).collect(Collectors.toSet());
 
         if (lojaIds.isEmpty()) {
-            log.debug("Usuário {} não tem lojas selecionadas para notificação, pulando.", pref.getUsuario().getId());
+            log.info("Usuário {} não tem lojas selecionadas para notificação, pulando.", pref.getUsuario().getId());
             return;
         }
 
@@ -89,7 +89,7 @@ public class NotificacaoWhatsAppScheduler {
                 .orElse(0);
 
         if (!deveEnviarNesteHorario(maiorAtraso, pref, agora)) {
-            log.debug("Horário {} pulado para usuário {} (atraso de {} dias já está em frequência reduzida)",
+            log.info("Horário {} pulado para usuário {} (atraso de {} dias já está em frequência reduzida)",
                     agora, pref.getUsuario().getId(), maiorAtraso);
             return;
         }
@@ -116,7 +116,21 @@ public class NotificacaoWhatsAppScheduler {
      */
     private boolean deveEnviarNesteHorario(long maiorAtraso, PreferenciaNotificacao pref, LocalTime agora) {
         List<LocalTime> horarios = pref.getHorariosAtivos();
-        int indice = horarios.indexOf(agora);
+
+        // Comparação por hora/minuto, não por igualdade exata do LocalTime:
+        // o valor que volta do banco pode trazer segundos/nanossegundos
+        // residuais (depende de como o driver JDBC mapeia a coluna TIME),
+        // o que faria um indexOf() por igualdade total nunca encontrar
+        // correspondência mesmo quando hora e minuto já batem.
+        int indice = -1;
+        for (int i = 0; i < horarios.size(); i++) {
+            LocalTime h = horarios.get(i);
+            if (h.getHour() == agora.getHour() && h.getMinute() == agora.getMinute()) {
+                indice = i;
+                break;
+            }
+        }
+
         if (indice == -1) {
             return false;
         }
