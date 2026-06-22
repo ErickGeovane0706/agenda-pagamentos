@@ -7,6 +7,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Construtor de consultas dinâmicas para {@link Cheque}.
+ * <p>
+ * Mesmo padrão de {@link com.agenda.domain.boleto.BoletoSpecification} e
+ * {@link com.agenda.domain.pix.PagamentoPixSpecification}: filtro
+ * obrigatório por empresa + filtros opcionais (loja, status, vencimento,
+ * fornecedor).
+ * </p>
+ */
 public class ChequeSpecification {
 
     public static Specification<Cheque> comFiltros(
@@ -15,7 +24,7 @@ public class ChequeSpecification {
 
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
-
+            // Isolamento multi-tenant
             predicates.add(cb.equal(root.get("empresa").get("id"), empresaId));
 
             if (lojaId != null) {

@@ -6,6 +6,13 @@ import org.springframework.data.jpa.repository.Query;
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * Repository para RefreshToken.
+ *
+ * findByTokenAndRevokedFalse: busca token não revogado (válido).
+ * revokeAllByUsuarioId: invalida em lote todos os tokens ativos
+ * de um usuário (usado no logout e rotação).
+ */
 public interface RefreshTokenRepository extends JpaRepository<RefreshToken, UUID> {
     Optional<RefreshToken> findByTokenAndRevokedFalse(String token);
 

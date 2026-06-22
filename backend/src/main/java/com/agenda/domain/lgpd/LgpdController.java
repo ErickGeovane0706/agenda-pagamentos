@@ -7,6 +7,14 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * Endpoints para direitos do titular previstos na LGPD:
+ * - GET /dados: direito de acesso (Art. 9º)
+ * - POST /corrigir: direito de correção (Art. 18, III)
+ * - GET /portabilidade: direito de portabilidade (Art. 18, V)
+ * A exportação inclui dados do usuário, empresa, lojas e
+ * todos os pagamentos (boletos, PIX, cheques) em JSON.
+ */
 @RestController
 @RequestMapping("/api/lgpd")
 @RequiredArgsConstructor

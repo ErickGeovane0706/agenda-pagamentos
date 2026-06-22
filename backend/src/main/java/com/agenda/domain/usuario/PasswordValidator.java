@@ -2,6 +2,10 @@ package com.agenda.domain.usuario;
 
 import org.springframework.stereotype.Component;
 
+/**
+ * Validador de senha forte: 8+ caracteres, ao menos uma
+ * maiúscula, uma minúscula e um número.
+ */
 @Component
 public class PasswordValidator {
 

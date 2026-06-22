@@ -6,6 +6,11 @@ import lombok.*;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+/**
+ * Filial / estabelecimento da empresa. Cada loja tem nome, CNPJ,
+ * uma cor para identificação visual e pode ser desativada sem
+ * perder o histórico de pagamentos associado.
+ */
 @Entity
 @Table(name = "lojas")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder

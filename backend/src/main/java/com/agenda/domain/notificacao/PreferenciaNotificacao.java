@@ -10,6 +10,13 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
+/**
+ * Preferências de notificação por WhatsApp de um usuário.
+ * <p>
+ * Cada usuário pode ter no máximo uma (relação {@code @OneToOne} com
+ * {@code usuario_id} unique). Armazena telefone, até 4 horários de
+ * disparo e o conjunto de lojas que entram na notificação.
+ */
 @Entity
 @Table(name = "preferencias_notificacao")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder

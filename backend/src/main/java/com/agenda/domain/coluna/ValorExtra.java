@@ -4,6 +4,12 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.util.UUID;
 
+/**
+ * Armazena o valor preenchido em uma coluna extra para um registro
+ * de pagamento específico. A chave lógica é (colunaId + registroId
+ * + tipoPagamento). Não há FK — os IDs são desnormalizados para
+ * simplicidade e performance.
+ */
 @Entity
 @Table(name = "valores_extras")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder

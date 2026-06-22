@@ -2,6 +2,17 @@ package com.agenda.shared;
 
 import java.util.UUID;
 
+/**
+ * Contexto do usuário autenticado na requisição atual.
+ *
+ * Armazena ID, nome e perfil do usuário em ThreadLocals para acesso
+ * rápido em camadas de serviço sem precisar propagar parâmetros
+ * manualmente. Populado pelo JwtAuthFilter e limpo no finally.
+ *
+ * Regra de negócio: o campo isMaster() permite que operações
+ * administrativas (ex.: gerenciar empresas) só sejam executadas
+ * por usuários com perfil MASTER.
+ */
 public class UserContext {
     private static final ThreadLocal<UUID> currentUserId = new ThreadLocal<>();
     private static final ThreadLocal<String> currentUserName = new ThreadLocal<>();
@@ -25,6 +36,10 @@ public class UserContext {
         return currentPerfil.get();
     }
 
+    /**
+     * Verifica se o usuário atual tem perfil MASTER (super-admin).
+     * Usado em guardas de autorização para funcionalidades globais.
+     */
     public static boolean isMaster() {
         return "MASTER".equals(currentPerfil.get());
     }

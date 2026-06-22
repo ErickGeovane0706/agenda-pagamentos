@@ -13,6 +13,22 @@ import java.util.Locale;
  */
 public class MensagemNotificacaoBuilder {
 
+    /**
+     * Monta a mensagem completa de WhatsApp a partir das pendências já
+     * separadas por categoria (vencidos, vence hoje, vence fim de semana).
+     * <p>
+     * Regra de negócio: a ordem de exibição é sempre vencidos → vence hoje
+     * → vence fim de semana, porque prioriza o que requer ação mais urgente.
+     * Se não houver nenhuma pendência, retorna uma mensagem de "tudo certo"
+     * para que o usuário tenha confirmação positiva de que o sistema está
+     * verificando.
+     *
+     * @param vencidos       pendências com vencimento anterior a hoje
+     * @param venceHoje      pendências que vencem exatamente hoje
+     * @param venceFimDeSemana pendências que vencem no sábado ou domingo (só faz sentido sexta)
+     * @param hoje           data de referência (normalmente LocalDate.now())
+     * @return texto formatado para envio via WhatsApp
+     */
     public String construir(
             List<PendenciaNotificacao> vencidos,
             List<PendenciaNotificacao> venceHoje,

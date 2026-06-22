@@ -13,10 +13,20 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Filtro de rate limiting por IP usando Bucket4j (token bucket).
+ * Limite: 30 requisições a cada 15 minutos por IP.
+ * Retorna 429 (Too Many Requests) quando o bucket esgota.
+ */
 @Component
 @Order(1)
 public class RateLimitFilter implements Filter {
 
+    /**
+     * Cache de buckets por IP. Bucket4j com algoritmo token bucket:
+     * 30 tokens, reabastecimento de 30 tokens a cada 15 minutos (greedy).
+     * Isso permite até 30 tentativas de login por IP a cada 15 minutos.
+     */
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
 
     private Bucket createBucket() {
@@ -31,11 +41,13 @@ public class RateLimitFilter implements Filter {
         var httpRequest = (HttpServletRequest) request;
         var path = httpRequest.getRequestURI();
 
+        // Rate limiting aplicado apenas ao endpoint de login
         if (!path.equals("/api/auth/login")) {
             chain.doFilter(request, response);
             return;
         }
 
+        // Extrai o IP real considerando proxy reverso (X-Forwarded-For)
         var ip = httpRequest.getHeader("X-Forwarded-For");
         if (ip == null || ip.isEmpty()) {
             ip = httpRequest.getRemoteAddr();

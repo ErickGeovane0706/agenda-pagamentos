@@ -19,6 +19,14 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+/**
+ * Serviço com a lógica de negócio de {@link Boleto}.
+ * <p>
+ * Garante isolamento multi‑tenant: toda operação verifica se o recurso
+ * pertence à empresa do usuário logado ({@link com.agenda.shared.TenantContext}).
+ * Auditoria é registrada em todas as operações de escrita.
+ * </p>
+ */
 @Service
 @RequiredArgsConstructor
 public class BoletoService {
@@ -28,6 +36,10 @@ public class BoletoService {
     private final ArquivoService arquivoService;
     private final AuditoriaService auditoriaService;
 
+    /**
+     * Lista paginada com filtros dinâmicos via {@link BoletoSpecification}.
+     * O fornecedor é convertido para lower‑case para busca case‑insensitive.
+     */
     @Transactional(readOnly = true)
     public Page<BoletoDTO> listar(UUID lojaId, StatusBoleto status, LocalDate de, LocalDate ate, String fornecedor, Pageable pageable) {
         UUID empresaId = TenantContext.getEmpresaId();
@@ -37,6 +49,10 @@ public class BoletoService {
                 .map(BoletoDTO::from);
     }
 
+    /**
+     * Busca por ID com verificação de tenant — usado internamente por outros serviços
+     * e pelo controller para operações de arquivo.
+     */
     @Transactional(readOnly = true)
     public Boleto buscarPorId(UUID id) {
         UUID empresaId = TenantContext.getEmpresaId();
@@ -46,6 +62,11 @@ public class BoletoService {
         return boleto;
     }
 
+    /**
+     * Cria um novo boleto.
+     * A loja é validada e sua empresa é usada como tenant do boleto.
+     * Status inicial é sempre PENDENTE (default do {@link Boleto#status}).
+     */
     @Transactional
     public BoletoDTO criar(CriarBoletoRequest req) {
         UUID empresaId = TenantContext.getEmpresaId();
@@ -67,6 +88,10 @@ public class BoletoService {
         return BoletoDTO.from(boleto);
     }
 
+    /**
+     * Edita todos os campos do boleto (PUT lógico). A loja pode ser alterada.
+     * O status NÃO é alterado aqui — use {@link #mudarStatus}.
+     */
     @Transactional
     public BoletoDTO editar(UUID id, EditarBoletoRequest req) {
         UUID empresaId = TenantContext.getEmpresaId();
@@ -88,6 +113,11 @@ public class BoletoService {
         return BoletoDTO.from(boleto);
     }
 
+    /**
+     * Altera o status do boleto.
+     * Quando {@code PAGO}, preenche {@code pagoEm} com o instante atual.
+     * Quando qualquer outro status, limpa {@code pagoEm} (reversão).
+     */
     @Transactional
     public BoletoDTO mudarStatus(UUID id, StatusBoleto novoStatus) {
         UUID empresaId = TenantContext.getEmpresaId();
@@ -106,6 +136,11 @@ public class BoletoService {
         return BoletoDTO.from(boleto);
     }
 
+    /**
+     * Exclui o boleto fisicamente (DELETE).
+     * Nota: o arquivo vinculado (se existir) não é removido do storage aqui;
+     * a deleção do arquivo deve ser chamada explicitamente pelo controller.
+     */
     @Transactional
     public void excluir(UUID id) {
         UUID empresaId = TenantContext.getEmpresaId();
@@ -116,6 +151,10 @@ public class BoletoService {
         auditoriaService.registrar("EXCLUIR", "BOLETO", id, "Fornecedor: " + boleto.getFornecedor());
     }
 
+    /**
+     * Faz upload do arquivo do boleto.
+     * Se já existia um arquivo anterior, ele é deletado do storage (substituição).
+     */
     @Transactional
     public BoletoDTO uploadArquivo(UUID id, MultipartFile arquivo) {
         UUID empresaId = TenantContext.getEmpresaId();
@@ -139,6 +178,10 @@ public class BoletoService {
         return BoletoDTO.from(boleto);
     }
 
+    /**
+     * Apenas limpa a referência do arquivo no boleto (não deleta do storage).
+     * Usado pelo controller após já ter deletado o arquivo no storage.
+     */
     @Transactional
     public void removerArquivoKey(UUID id) {
         UUID empresaId = TenantContext.getEmpresaId();

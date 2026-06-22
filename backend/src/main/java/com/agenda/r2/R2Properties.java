@@ -3,6 +3,11 @@ package com.agenda.r2;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
+/**
+ * Propriedades de configuração do Cloudflare R2 (compatível S3).
+ * Preenchidas via application.yml com prefixo "r2":
+ *   r2.account-id, r2.access-key, r2.secret-key, r2.bucket
+ */
 @Component
 @ConfigurationProperties(prefix = "r2")
 public class R2Properties {

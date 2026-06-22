@@ -16,6 +16,15 @@ import java.time.LocalDate;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Controller REST para operações CRUD de pagamentos PIX.
+ * <p>
+ * Estrutura idêntica a {@link com.agenda.domain.boleto.BoletoController}:
+ * endpoints para listar (com paginação/filtros), criar, editar, mudar status,
+ * excluir e gerenciar anexos. ADMIN/OPERADOR podem modificar; visualização é
+ * pública para usuários autenticados.
+ * </p>
+ */
 @RestController
 @RequestMapping("/api/pix")
 @RequiredArgsConstructor
@@ -69,6 +78,10 @@ public class PixController {
         return ResponseEntity.ok(pixService.uploadArquivo(id, arquivo));
     }
 
+    /**
+     * Gera URL temporária (assinada) para download do anexo.
+     * Retorna 404 se o PIX não tiver arquivo.
+     */
     @GetMapping("/{id}/arquivo")
     public ResponseEntity<Map<String, String>> getUrlArquivo(@PathVariable UUID id) {
         var pix = pixService.buscarPorId(id);

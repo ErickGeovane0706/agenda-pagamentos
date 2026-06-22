@@ -7,8 +7,20 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Fábrica de {@link Specification} para consultas dinâmicas de {@link Boleto}.
+ * <p>
+ * Todos os filtros são opcionais e combinados com AND.
+ * O filtro {@code empresaId} é sempre aplicado (isolamento multi‑tenant).
+ * </p>
+ */
 public class BoletoSpecification {
 
+    /**
+     * Monta predicados dinâmicos: empresa (obrigatório), loja, status,
+     * intervalo de vencimento {@code [de, ate]} e busca textual por fornecedor
+     * (case‑insensitive, LIKE %termo%).
+     */
     public static Specification<Boleto> comFiltros(
             UUID empresaId, UUID lojaId, StatusBoleto status,
             LocalDate de, LocalDate ate, String fornecedor) {

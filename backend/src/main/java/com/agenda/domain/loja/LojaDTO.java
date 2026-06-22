@@ -2,6 +2,10 @@ package com.agenda.domain.loja;
 
 import java.util.UUID;
 
+/**
+ * DTO de Loja. Exclui o relacionamento com Empresa e campos
+ * de auditoria (criadoEm).
+ */
 public record LojaDTO(
     UUID id,
     String nome,

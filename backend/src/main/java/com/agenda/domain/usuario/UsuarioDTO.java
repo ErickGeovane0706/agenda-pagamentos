@@ -3,6 +3,10 @@ package com.agenda.domain.usuario;
 import com.agenda.domain.empresa.Empresa;
 import java.util.UUID;
 
+/**
+ * DTO de usuário. Inclui id da empresa e nome para exibição
+ * em listas e combos no frontend.
+ */
 public record UsuarioDTO(
     UUID id,
     String nome,

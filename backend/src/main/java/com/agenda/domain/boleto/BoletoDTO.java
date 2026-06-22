@@ -5,6 +5,13 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+/**
+ * DTO de saída para boleto.
+ * <p>
+ * Projeta os campos da entidade {@link Boleto} + dados da loja
+ * (nome e cor) para exibição nas listas do frontend.
+ * </p>
+ */
 public record BoletoDTO(
     UUID id, UUID lojaId, String lojaNome, String lojaCor,
     String fornecedor, BigDecimal valor, LocalDate vencimento,
@@ -12,6 +19,7 @@ public record BoletoDTO(
     String nomeArquivo, String arquivoKey, String observacoes, LocalDateTime pagoEm,
     LocalDateTime criadoEm
 ) {
+    /** Converte entidade JPA em DTO — navega loja para extrair id, nome e cor. */
     public static BoletoDTO from(Boleto b) {
         return new BoletoDTO(
             b.getId(), b.getLoja().getId(), b.getLoja().getNome(), b.getLoja().getCor(),

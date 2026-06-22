@@ -10,6 +10,12 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+/**
+ * Implementação Spring Security do UserDetailsService.
+ * Carrega o usuário pelo email e constrói o objeto UserDetails
+ * com authorities baseadas no perfil (ROLE_MASTER, ROLE_ADMIN etc.)
+ * e o flag de conta ativa/inativa.
+ */
 @Service
 @RequiredArgsConstructor
 public class UserDetailsServiceImpl implements UserDetailsService {

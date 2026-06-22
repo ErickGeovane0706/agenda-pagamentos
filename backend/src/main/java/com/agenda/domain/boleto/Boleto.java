@@ -9,6 +9,22 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+/**
+ * Entidade JPA que representa um boleto a pagar no sistema.
+ * <p>
+ * Cada boleto pertence a uma {@link Empresa} (multi‑tenant) e a uma {@link Loja}.
+ * O fluxo de vida é: {@code PENDENTE} → {@code PAGO} / {@code VENCIDO} / {@code CANCELADO}.
+ * </p>
+ *
+ * <p>Regras de negócio:</p>
+ * <ul>
+ *   <li>{@code status} inicia como PENDENTE — não é informado na criação.</li>
+ *   <li>{@code pagoEm} só é preenchido quando status = PAGO (service seta).</li>
+ *   <li>{@code codigoBarras} e {@code arquivoKey} são independentes: um boleto pode
+ *       ter apenas o código de barras, apenas o arquivo, ambos, ou nenhum.</li>
+ *   <li>{@code atualizadoEm} é atualizado automaticamente pelo callback {@code @PreUpdate}.</li>
+ * </ul>
+ */
 @Entity
 @Table(name = "boletos")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
@@ -54,6 +70,7 @@ public class Boleto {
     @Column(columnDefinition = "TEXT")
     private String observacoes;
 
+    /** Seta quando status muda para PAGO; limpa quando sai de PAGO. */
     @Column(name = "pago_em")
     private LocalDateTime pagoEm;
 

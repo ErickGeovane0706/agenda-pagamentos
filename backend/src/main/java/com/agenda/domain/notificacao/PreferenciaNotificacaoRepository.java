@@ -9,8 +9,17 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * Repositório para ler/gravar preferências de notificação por WhatsApp.
+ * A query {@link #findAtivosComHorario(LocalTime)} é o coração do scheduler:
+ * precisa retornar rápido porque é executada a cada minuto.
+ */
 public interface PreferenciaNotificacaoRepository extends JpaRepository<PreferenciaNotificacao, UUID> {
 
+    /**
+     * Retorna a preferência de um usuário específico, ou vazio se ele nunca
+     * configurou. Usado no serviço para criar sob demanda se não existir.
+     */
     Optional<PreferenciaNotificacao> findByUsuarioId(UUID usuarioId);
 
     /**

@@ -10,6 +10,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Controller de colunas extras (campos customizáveis por empresa).
+ * ADMIN gerencia a definição das colunas; qualquer perfil pode
+ * listar colunas e salvar/ler valores dos registros.
+ */
 @RestController
 @RequestMapping("/api/colunas-extras")
 @RequiredArgsConstructor

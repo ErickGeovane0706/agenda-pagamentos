@@ -12,6 +12,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Service de Loja. Cada operação valida o vínculo com a empresa
+ * do tenant logado — impede que um usuário acesse lojas de outra
+ * empresa.
+ */
 @Service
 @RequiredArgsConstructor
 public class LojaService {

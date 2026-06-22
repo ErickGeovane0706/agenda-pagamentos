@@ -12,6 +12,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Service de bancos. Operações CRUD com escopo por empresa
+ * (tenant isolado via TenantContext). Cada operação de
+ * escrita gera registro de auditoria. Verifica permissão
+ * de acesso ao banco antes de qualquer operação.
+ */
 @Service
 @RequiredArgsConstructor
 public class BancoService {
@@ -20,6 +26,10 @@ public class BancoService {
     private final EmpresaRepository empresaRepository;
     private final AuditoriaService auditoriaService;
 
+    /**
+     * Lista todos os bancos da empresa logada, ordenados por nome.
+     * Cada banco é isolado por tenant (empresaId).
+     */
     @Transactional(readOnly = true)
     public List<BancoDTO> listar() {
         UUID empresaId = TenantContext.getEmpresaId();
@@ -27,6 +37,10 @@ public class BancoService {
             .stream().map(BancoDTO::from).toList();
     }
 
+    /**
+     * Cria um novo banco vinculado à empresa do tenant atual.
+     * Registra auditoria com ação "CRIAR".
+     */
     @Transactional
     public BancoDTO criar(CriarBancoRequest req) {
         UUID empresaId = TenantContext.getEmpresaId();
@@ -37,6 +51,11 @@ public class BancoService {
         return BancoDTO.from(banco);
     }
 
+    /**
+     * Edita nome e código de um banco. Valida pertinência ao tenant
+     * (AccessDeniedException se o banco não pertencer à empresa logada).
+     * Registra auditoria com ação "EDITAR".
+     */
     @Transactional
     public BancoDTO editar(UUID id, EditarBancoRequest req) {
         UUID empresaId = TenantContext.getEmpresaId();
@@ -50,6 +69,10 @@ public class BancoService {
         return BancoDTO.from(banco);
     }
 
+    /**
+     * Exclui um banco. Valida pertinência ao tenant.
+     * Registra auditoria com ação "EXCLUIR".
+     */
     @Transactional
     public void excluir(UUID id) {
         UUID empresaId = TenantContext.getEmpresaId();

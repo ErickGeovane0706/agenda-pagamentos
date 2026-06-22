@@ -9,6 +9,11 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Controller de Empresas. Restrito ao papel MASTER (super-admin).
+ * Empresas são o nível mais alto do sistema — apenas o master
+ * pode criar, editar ou excluir tenants.
+ */
 @RestController
 @RequestMapping("/api/empresas")
 @RequiredArgsConstructor

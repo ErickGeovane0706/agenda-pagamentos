@@ -12,6 +12,13 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.Duration;
 
+/**
+ * Controller de autenticação. Opera com cookies httpOnly
+ * (jwt + refresh-token) em vez de Bearer header, seguindo
+ * boas práticas para SPAs. Login devolve o usuário e um
+ * cookie JWT; switch-troca de empresa gera novo JWT com
+ * o tenant correto sem reautenticar.
+ */
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
@@ -19,6 +26,14 @@ public class AuthController {
 
     private final AuthService authService;
 
+    /**
+     * Autentica o usuário por email+senha.
+     * Em caso de sucesso, define os cookies httpOnly:
+     * - "jwt" (access token) — escopo /api, dura 24h
+     * - "refresh_token" — escopo /api/auth/refresh, dura 7 dias
+     * Retorna os dados do usuário no body.
+     * Endpoint público (SecurityConfig permite sem autenticação).
+     */
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@RequestBody @Valid AuthDTO dto,
                                                 HttpServletResponse response) {
@@ -27,6 +42,12 @@ public class AuthController {
         return ResponseEntity.ok(new LoginResponse(result.usuario()));
     }
 
+    /**
+     * Renova o access token usando o refresh token armazenado em cookie.
+     * A rota é pública pois o refresh token precisa ser enviado sem
+     * um access token válido.
+     * Se o cookie não existir, retorna 401.
+     */
     @PostMapping("/refresh")
     public ResponseEntity<Void> refresh(HttpServletRequest request,
                                          HttpServletResponse response) {
@@ -39,6 +60,10 @@ public class AuthController {
         return ResponseEntity.ok().build();
     }
 
+    /**
+     * Invalida o access token (blacklist) e revoga todos os refresh tokens
+     * do usuário. Remove os cookies do cliente.
+     */
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(HttpServletRequest request,
                                         HttpServletResponse response) {
@@ -47,6 +72,10 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
+    /**
+     * Retorna os dados do usuário autenticado (baseado no contexto
+     * populado pelo JwtAuthFilter).
+     */
     @GetMapping("/me")
     public ResponseEntity<UsuarioDTO> me() {
         return ResponseEntity.ok(authService.me());

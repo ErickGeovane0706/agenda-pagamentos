@@ -5,6 +5,11 @@ import lombok.*;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+/**
+ * Entidade raiz do sistema. Cada empresa é um tenant isolado que
+ * possui seus próprios usuários, lojas, bancos e pagamentos.
+ * O campo solicitouExclusao inicia o fluxo de exclusão soft-delete.
+ */
 @Entity
 @Table(name = "empresas")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder

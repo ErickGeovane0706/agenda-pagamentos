@@ -16,6 +16,12 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Service de Usuário. Gerencia cadastro, edição, exclusão lógica
+ * e autenticação. Inclui validação de senha e auditoria.
+ * O master vê todos os usuários; demais perfis veem apenas
+ * os do próprio tenant.
+ */
 @Service
 @RequiredArgsConstructor
 public class UsuarioService {

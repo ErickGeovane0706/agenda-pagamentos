@@ -5,6 +5,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * Repository de Usuario. findByEmail é usado pelo
+ * UserDetailsServiceImpl na autenticação; findByEmpresaId
+ * é usado pelo master para listar usuários de um tenant.
+ */
 public interface UsuarioRepository extends JpaRepository<Usuario, UUID> {
     Optional<Usuario> findByEmail(String email);
     List<Usuario> findByEmpresaId(UUID empresaId);

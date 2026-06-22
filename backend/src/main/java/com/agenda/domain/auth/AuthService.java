@@ -16,6 +16,12 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Lógica de autenticação e gerenciamento de sessão.
+ * Login gera access token (JWT) + refresh token; logout
+ * invalida o refresh e blacklista o access. Troca de empresa
+ * (switch) gera novo JWT com tenant atualizado.
+ */
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -27,6 +33,17 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final AuditoriaService auditoriaService;
 
+    /**
+     * Realiza login do usuário.
+     *
+     * Regras de negócio:
+     * 1. AuthenticationManager valida as credenciais (lança exceção se inválidas)
+     * 2. Se a autenticação falhar, registra auditoria LOGIN_FALHA (sem ID,
+     *    pois o usuário pode nem existir)
+     * 3. Usuário inativo (ativo=false) não pode logar — registra LOGIN_FALHA
+     *    com motivo "inativo"
+     * 4. Sucesso: gera access token JWT, cria refresh token, registra LOGIN
+     */
     @Transactional
     public AuthLoginResult login(AuthDTO dto) {
         var email = dto.email();
@@ -52,6 +69,11 @@ public class AuthService {
         return new AuthLoginResult(token, refreshToken.getToken(), UsuarioDTO.from(usuario));
     }
 
+    /**
+     * Renova o access token usando refresh token rotation.
+     * O refresh token antigo é revogado e um novo é emitido
+     * (rotação automática por segurança).
+     */
     @Transactional
     public AuthLoginResult refresh(String rawRefreshToken) {
         var rotated = refreshTokenService.rotate(rawRefreshToken);
@@ -62,6 +84,10 @@ public class AuthService {
         return new AuthLoginResult(token, rotated.getToken(), UsuarioDTO.from(usuario));
     }
 
+    /**
+     * Logout: adiciona o access token atual à blacklist (impede uso
+     * até expirar) e revoga todos os refresh tokens do usuário.
+     */
     @Transactional
     public void logout(HttpServletRequest request) {
         var token = extractJwtFromRequest(request);
@@ -78,6 +104,10 @@ public class AuthService {
         }
     }
 
+    /**
+     * Retorna os dados do usuário autenticado a partir do contexto
+     * da requisição.
+     */
     public UsuarioDTO me() {
         var usuarioId = UserContext.getUsuarioId();
         var usuario = usuarioRepository.findById(usuarioId)
@@ -85,6 +115,11 @@ public class AuthService {
         return UsuarioDTO.from(usuario);
     }
 
+    /**
+     * Extrai o JWT do header Authorization (Bearer) ou do cookie "jwt".
+     * O cookie é prioritário para navegadores; o header para clients
+     * como Postman/API.
+     */
     private String extractJwtFromRequest(HttpServletRequest request) {
         var authHeader = request.getHeader("Authorization");
         if (authHeader != null && authHeader.startsWith("Bearer ")) return authHeader.substring(7);

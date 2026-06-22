@@ -13,6 +13,13 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+/**
+ * Entidade JPA que persiste eventos de auditoria de todas as
+ * operações CRUD (criação, alteração, exclusão) nos domínios
+ * do sistema — banco, empresa, boleto, PIX, cheque, etc.
+ * Cada registro inclui tenant (empresaId), usuário, IP,
+ * ação, entidade afetada e descrição textual.
+ */
 @Entity
 @Table(name = "auditoria")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
@@ -52,11 +59,25 @@ class Auditoria {
 
 interface AuditoriaRepository extends org.springframework.data.jpa.repository.JpaRepository<Auditoria, UUID> {}
 
+/**
+ * Service de auditoria. Registra eventos em transação separada
+ * (REQUIRES_NEW) para garantir que a auditoria persista mesmo
+ * se a transação principal falhar. Operações sem tenant definido
+ * (como login) são ignoradas para evitar ruído.
+ */
 @Service
 @RequiredArgsConstructor
 public class AuditoriaService {
     private final AuditoriaRepository auditoriaRepository;
 
+    /**
+     * Registra um evento de auditoria em transação separada (REQUIRES_NEW)
+     * para que a auditoria persista mesmo se a transação principal falhar.
+     *
+     * Regra de negócio: se não houver tenant (empresaId) na requisição,
+     * o registro é ignorado — operações sem contexto de empresa (ex.:
+     * login antes de autenticar) não são auditadas.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void registrar(String acao, String entidade, UUID entidadeId, String detalhes) {
         var empresaId = TenantContext.getEmpresaId();

@@ -11,6 +11,12 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * Service de colunas extras e seus valores. O schema é dinâmico:
+ * cada empresa define suas próprias colunas; os valores são
+ * armazenados em tabela separada (valores_extras) com chave
+ * composta (registroId + tipoPagamento + colunaId).
+ */
 @Service
 @RequiredArgsConstructor
 public class ColunaExtraService {

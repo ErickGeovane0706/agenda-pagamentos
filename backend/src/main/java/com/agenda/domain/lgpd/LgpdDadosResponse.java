@@ -4,6 +4,11 @@ import com.agenda.domain.usuario.UsuarioDTO;
 
 import java.util.List;
 
+/**
+ * Response agregada com todos os dados pessoais do titular.
+ * Inclui registros financeiros (boletos, PIX, cheques) como
+ * exigido pelo princípio do acesso integral (Art. 9º LGPD).
+ */
 public record LgpdDadosResponse(
     UsuarioDTO usuario,
     EmpresaLgpd empresa,

@@ -22,6 +22,10 @@ public record PendenciaNotificacao(
         BOLETO, PIX, CHEQUE
     }
 
+    /**
+     * Dias corridos desde o vencimento até a data de referência.
+     * Resultado negativo significa que ainda não venceu.
+     */
     public long diasAtraso(LocalDate hoje) {
         return java.time.temporal.ChronoUnit.DAYS.between(vencimento, hoje);
     }

@@ -9,6 +9,10 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Controller CRUD de lojas. Listar e buscar são abertos a
+ * qualquer perfil autenticado; criar/editar/excluir exigem ADMIN.
+ */
 @RestController
 @RequestMapping("/api/lojas")
 @RequiredArgsConstructor

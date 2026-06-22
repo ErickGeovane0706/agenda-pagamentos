@@ -15,6 +15,13 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+/**
+ * Serviço de preferências de notificação.
+ * <p>
+ * Apenas o próprio usuário pode ver/alterar suas próprias preferências
+ * (extraído do token JWT via {@link UserContext}). Lojas de outras empresas
+ * são rejeitadas com {@link AccessDeniedException}.
+ */
 public class PreferenciaNotificacaoService {
 
     private final PreferenciaNotificacaoRepository preferenciaRepository;
@@ -36,6 +43,19 @@ public class PreferenciaNotificacaoService {
                 ));
     }
 
+    /**
+     * Cria ou substitui as preferências do usuário logado.
+     * <p>
+     * Valida que todas as lojas informadas pertencem à empresa do usuário
+     * (mesmo padrão dos services BoletoService, PixService e ChequeService).
+     * Se o usuário ainda não tinha preferência, uma nova entidade é criada
+     * via {@code builder()} antes de popular os campos.
+     *
+     * @param req dados validados do formulário de configurações
+     * @return DTO atualizado
+     * @throws NotFoundException   se o usuário ou alguma loja não existir
+     * @throws AccessDeniedException se alguma loja for de outra empresa
+     */
     @Transactional
     public PreferenciaNotificacaoDTO atualizar(AtualizarPreferenciaNotificacaoRequest req) {
         UUID usuarioId = UserContext.getUsuarioId();

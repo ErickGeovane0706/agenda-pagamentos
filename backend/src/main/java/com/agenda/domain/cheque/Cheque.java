@@ -10,6 +10,18 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+/**
+ * Entidade JPA que representa um Cheque a ser agendado/compensado.
+ * <p>
+ * Difere de boleto e PIX por ter:
+ * <ul>
+ *   <li>{@code banco} — ManyToOne opcional para {@link com.agenda.domain.banco.Banco}</li>
+ *   <li>{@code numeroCheque} — número do cheque físico para rastreamento</li>
+ *   <li>{@code compensadoEm} — data/hora da compensação (análogo a {@code pagoEm})</li>
+ *   <li>{@code status} com {@code DEVOLVIDO} (sem fundos) em vez de {@code VENCIDO}</li>
+ * </ul>
+ * </p>
+ */
 @Entity
 @Table(name = "cheques")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
@@ -26,6 +38,7 @@ public class Cheque {
     @JoinColumn(name = "loja_id", nullable = false)
     private Loja loja;
 
+    /** Banco associado (opcional). Referência para conciliação. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "banco_id")
     private Banco banco;
@@ -44,6 +57,7 @@ public class Cheque {
     @Builder.Default
     private StatusCheque status = StatusCheque.PENDENTE;
 
+    /** Número do cheque físico (opcional). Usado para conciliação bancária. */
     @Column(name = "numero_cheque", length = 50)
     private String numeroCheque;
 
@@ -53,6 +67,7 @@ public class Cheque {
     @Column(name = "arquivo_key", length = 500)
     private String arquivoKey;
 
+    /** Seta quando status muda para COMPENSADO; limpa quando sai de COMPENSADO. */
     @Column(name = "compensado_em")
     private LocalDateTime compensadoEm;
 

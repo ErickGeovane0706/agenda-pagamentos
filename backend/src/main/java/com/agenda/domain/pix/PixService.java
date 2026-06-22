@@ -19,6 +19,14 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+/**
+ * Serviço responsável pelas operações de negócio de pagamentos PIX.
+ * <p>
+ * A lógica é praticamente idêntica à de {@link com.agenda.domain.boleto.BoletoService},
+ * diferenciando-se apenas pelos campos {@code chavePix} e {@code tipoChave}.
+ * Multi-tenancy, auditoria e validação de acesso seguem o mesmo padrão.
+ * </p>
+ */
 @Service
 @RequiredArgsConstructor
 public class PixService {
@@ -28,6 +36,10 @@ public class PixService {
     private final ArquivoService arquivoService;
     private final AuditoriaService auditoriaService;
 
+    /**
+     * Lista PIX com paginação e filtros dinâmicos (Specification).
+     * Filtro de empresa é sempre aplicado (multi-tenant).
+     */
     @Transactional(readOnly = true)
     public Page<PixDTO> listar(UUID lojaId, StatusPix status, LocalDate de, LocalDate ate, String fornecedor, Pageable pageable) {
         UUID empresaId = TenantContext.getEmpresaId();
@@ -36,6 +48,10 @@ public class PixService {
                 .map(PixDTO::from);
     }
 
+    /**
+     * Busca por ID com verificação de acesso à empresa.
+     * Retorna a entidade (não DTO) para uso interno por outros métodos do service.
+     */
     @Transactional(readOnly = true)
     public PagamentoPix buscarPorId(UUID id) {
         UUID empresaId = TenantContext.getEmpresaId();
@@ -85,6 +101,10 @@ public class PixService {
         return PixDTO.from(pix);
     }
 
+    /**
+     * Altera o status e registra {@code pagoEm} (quando PAGO) ou limpa (outros status).
+     * Não valida a transição (ex: impedir CANCELADO → PAGO).
+     */
     @Transactional
     public PixDTO mudarStatus(UUID id, StatusPix novoStatus) {
         UUID empresaId = TenantContext.getEmpresaId();
@@ -93,6 +113,7 @@ public class PixService {
         if (!pix.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
 
         pix.setStatus(novoStatus);
+        // Se voltar a ser PENDENTE/CANCELADO, limpa a data de pagamento anterior
         if (novoStatus == StatusPix.PAGO) {
             pix.setPagoEm(LocalDateTime.now());
         } else {
@@ -103,6 +124,10 @@ public class PixService {
         return PixDTO.from(pix);
     }
 
+    /**
+     * Exclui logicamente um PIX do banco (DELETE físico).
+     * Remove o arquivo anexo do S3 antes se houver.
+     */
     @Transactional
     public void excluir(UUID id) {
         UUID empresaId = TenantContext.getEmpresaId();
@@ -116,6 +141,10 @@ public class PixService {
         auditoriaService.registrar("EXCLUIR", "PIX", id, "Fornecedor: " + pix.getFornecedor());
     }
 
+    /**
+     * Faz upload de um arquivo (comprovante, nota) associado ao PIX.
+     * Substitui arquivo anterior se existir (deleta o antigo no S3 antes de salvar o novo).
+     */
     @Transactional
     public PixDTO uploadArquivo(UUID id, MultipartFile arquivo) {
         UUID empresaId = TenantContext.getEmpresaId();
@@ -138,6 +167,7 @@ public class PixService {
         return PixDTO.from(pix);
     }
 
+    /** Remove apenas a referência ao arquivo (key) sem deletar do S3 — usado quando o S3 já foi limpo. */
     @Transactional
     public void removerArquivoKey(UUID id) {
         UUID empresaId = TenantContext.getEmpresaId();

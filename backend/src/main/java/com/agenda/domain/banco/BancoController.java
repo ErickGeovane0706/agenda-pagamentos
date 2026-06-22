@@ -9,6 +9,15 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Controller CRUD de bancos.
+ *
+ * Regras de acesso:
+ * - GET /api/bancos: qualquer usuário autenticado pode listar
+ * - POST e PUT: ADMIN ou OPERADOR
+ * - DELETE: apenas ADMIN
+ * Todas as operações são isoladas por tenant (empresa do usuário logado).
+ */
 @RestController
 @RequestMapping("/api/bancos")
 @RequiredArgsConstructor

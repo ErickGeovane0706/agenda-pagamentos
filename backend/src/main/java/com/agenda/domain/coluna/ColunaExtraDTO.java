@@ -2,6 +2,9 @@ package com.agenda.domain.coluna;
 
 import java.util.UUID;
 
+/**
+ * DTO de coluna extra. Exclui empresaId por segurança.
+ */
 public record ColunaExtraDTO(
     UUID id,
     TipoPagamento tipoPagamento,

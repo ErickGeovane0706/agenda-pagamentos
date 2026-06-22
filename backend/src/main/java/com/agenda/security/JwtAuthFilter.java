@@ -15,6 +15,13 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
+/**
+ * Filtro Spring Security executado a cada requisição.
+ * Extrai o token JWT do cookie "jwt", valida e monta o
+ * SecurityContext. Também define o tenant (empresaId) e
+ * usuário logado nos contexts thread-local (TenantContext,
+ * UserContext) para uso nos services.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -23,6 +30,19 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
 
+    /**
+     * Intercepta cada requisição HTTP para extrair e validar o token JWT.
+     *
+     * Fluxo: extrai o token do header Authorization (Bearer) ou cookie "jwt";
+     * se presente, extrai o email e carrega o UserDetails. Se o token for
+     * válido, configura o SecurityContext (Spring Security), o TenantContext
+     * (isolamento multi-tenant) e o UserContext (dados do usuário logado).
+     *
+     * Tokens expirados ou inválidos são ignorados silenciosamente (log debug)
+     * para não interromper o fluxo de requisições que não exigem autenticação.
+     *
+     * Ao final, limpa os ThreadLocals para evitar vazamento entre requisições.
+     */
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
@@ -66,6 +86,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
     }
 
+    /**
+     * Tenta extrair o token JWT primeiro do header Authorization (Bearer),
+     * depois do cookie "jwt". Retorna null se nenhum token válido for encontrado.
+     * Trata os valores "null" (string) que podem vir de remoção de cookie no frontend.
+     */
     private String extractToken(HttpServletRequest request) {
         String authHeader = request.getHeader("Authorization");
         if (authHeader != null && authHeader.startsWith("Bearer ")) {

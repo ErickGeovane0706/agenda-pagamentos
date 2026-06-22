@@ -15,6 +15,13 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * Service de relatórios financeiros. Gera resumo agregado (JSON)
+ * com contagens e valores por status (pago/pendente/vencido/etc.)
+ * e CSV formatado com BOM UTF-8 para Excel reconhecer acentos.
+ * Cheques têm status próprio (compensado/devolvido) diferente
+ * de boletos e PIX (pago/vencido).
+ */
 @Service
 @RequiredArgsConstructor
 public class RelatorioService {

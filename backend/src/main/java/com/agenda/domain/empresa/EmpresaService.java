@@ -12,6 +12,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Service de Empresa. A exclusão verifica se há vínculos ativos
+ * (usuários, lojas, bancos) e recusa a operação até que sejam
+ * removidos — evitando órfãos no banco.
+ */
 @Service
 @RequiredArgsConstructor
 public class EmpresaService {

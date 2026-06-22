@@ -7,6 +7,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Construtor de consultas dinâmicas para {@link PagamentoPix}.
+ * <p>
+ * Os mesmos filtros de {@link com.agenda.domain.boleto.BoletoSpecification}:
+ * empresa (obrigatório, multi-tenant), loja, status, intervalo de vencimento e
+ * fornecedor (busca case-insensitive com LIKE).
+ * </p>
+ */
 public class PagamentoPixSpecification {
 
     public static Specification<PagamentoPix> comFiltros(
@@ -15,7 +23,7 @@ public class PagamentoPixSpecification {
 
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
-
+            // Filtro obrigatório: isolamento multi-tenant por empresa
             predicates.add(cb.equal(root.get("empresa").get("id"), empresaId));
 
             if (lojaId != null) {

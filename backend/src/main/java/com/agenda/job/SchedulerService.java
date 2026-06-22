@@ -13,6 +13,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
+/**
+ * Job agendado (03:00 todos os dias) que processa exclusão lógica
+ * de empresas que solicitaram remoção. Anonimiza dados pessoais
+ * dos usuários (nome, email, hash da senha) e dados financeiros
+ * (fornecedor, observações) de boletos, PIX e cheques antes de
+ * marcar a empresa como excluída — requisito LGPD.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor

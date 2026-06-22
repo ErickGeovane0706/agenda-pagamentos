@@ -5,6 +5,12 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.util.UUID;
 
+/**
+ * Entidade que representa um banco cadastrado por uma empresa.
+ * Bancos são usados para associar contas e instruções de pagamento
+ * (boletos, PIX, cheques) a uma instituição financeira específica.
+ * O isolamento por tenant é feito via empresa_id.
+ */
 @Entity
 @Table(name = "bancos")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder

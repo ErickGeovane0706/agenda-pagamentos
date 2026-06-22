@@ -9,6 +9,11 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Controller de Usuários. Endpoints de CRUD padrão + rotas
+ * específicas do master (listarPorEmpresa, criarNaEmpresa)
+ * + solicitação de exclusão da conta.
+ */
 @RestController
 @RequestMapping("/api/usuarios")
 @RequiredArgsConstructor

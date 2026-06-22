@@ -15,26 +15,49 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Handler global de exceções (@RestControllerAdvice).
+ * Mapeia exceções conhecidas para respostas HTTP padronizadas
+ * (ErrorResponse). Inclui tratamento customizado para erros
+ * de validação (Bean Validation), autenticação (Spring Security)
+ * e exceções de negócio (NotFoundException, AccessDeniedException).
+ */
 @RestControllerAdvice
 public class RestExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(RestExceptionHandler.class);
 
+    /**
+     * Recurso não encontrado → 404 NOT_FOUND.
+     * Ex.: boleto com ID inexistente.
+     */
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(NotFoundException ex) {
         return error(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
+    /**
+     * Acesso negado por regra de negócio → 403 FORBIDDEN.
+     * Ex.: usuário tenta acessar dados de outra empresa (violação de tenant).
+     */
     @ExceptionHandler(com.agenda.shared.exception.AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccessDenied(com.agenda.shared.exception.AccessDeniedException ex) {
         return error(HttpStatus.FORBIDDEN, ex.getMessage());
     }
 
+    /**
+     * Argumento inválido → 400 BAD_REQUEST.
+     * Ex.: UUID mal formatado, parâmetro obrigatório ausente.
+     */
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
         return error(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
+    /**
+     * Erro de validação Bean Validation → 422 UNPROCESSABLE_ENTITY.
+     * Agrega todos os erros de campo em uma única string separada por ";".
+     */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
         var detalhe = ex.getBindingResult().getAllErrors().stream()
@@ -46,17 +69,29 @@ public class RestExceptionHandler {
         return error(HttpStatus.UNPROCESSABLE_ENTITY, "Erro de validação", detalhe);
     }
 
+    /**
+     * Acesso negado pelo Spring Security → 403 FORBIDDEN.
+     * Ex.: endpoint protegido sem token válido.
+     */
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleSpringAccessDenied(AccessDeniedException ex) {
         return error(HttpStatus.FORBIDDEN, "Acesso negado");
     }
 
+    /**
+     * Falha de autenticação (Spring Security) → 401 UNAUTHORIZED.
+     * Ex.: credenciais inválidas no login.
+     */
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ErrorResponse> handleAuth(AuthenticationException ex) {
         log.warn("Falha de autenticação: {}", ex.getMessage());
         return error(HttpStatus.UNAUTHORIZED, "Não autenticado");
     }
 
+    /**
+     * Qualquer exceção não tratada → 500 INTERNAL_SERVER_ERROR.
+     * Loga o stack trace completo para debug e retorna mensagem genérica.
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception ex) {
         log.error("Exceção não tratada: {}", ex.getMessage(), ex);

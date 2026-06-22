@@ -15,6 +15,12 @@ import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Upload/download/exclusão de arquivos no Cloudflare R2
+ * (compatível com S3). Usado para anexar boletos, comprovantes
+ * de PIX e imagens de cheques. Apenas imagens e PDF (máx 10 MB).
+ * Gera URLs temporárias de 1 hora para visualização segura.
+ */
 @Service
 @RequiredArgsConstructor
 public class ArquivoService {

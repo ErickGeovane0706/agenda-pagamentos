@@ -10,6 +10,11 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import java.net.URI;
 
+/**
+ * Configura client S3 e S3Presigner apontando para Cloudflare R2
+ * (compatível com S3). Endpoint no formato accountId.r2.cloudflarestorage.com,
+ * região fixa "auto". Credenciais vêm de R2Properties (application.yml).
+ */
 @Configuration
 public class R2Config {
 

@@ -19,6 +19,13 @@ import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
 
+/**
+ * Geração de relatório em Excel (.xlsx) com Apache POI.
+ * Inclui cabeçalho com período, cards de resumo geral com
+ * cores, seções por tipo de pagamento com linhas alternadas,
+ * cores por status e subtotais ao final de cada seção.
+ * Cores em XSSFColor (hex) para visual profissional.
+ */
 @Service
 @RequiredArgsConstructor
 public class RelatorioExcelService {

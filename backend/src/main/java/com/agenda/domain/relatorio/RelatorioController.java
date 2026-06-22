@@ -12,6 +12,14 @@ import java.time.LocalDate;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Controller de relatórios. Três formatos de saída:
+ * - JSON agregado (GET /api/relatorios) para consumo da UI
+ * - CSV (GET /api/relatorios/download) para planilhas
+ * - XLSX (GET /api/relatorios/exportar) via Apache POI com
+ *   formatação visual (cores, cards de resumo, subtotais)
+ * Filtros: período obrigatório, loja e tipo opcionais.
+ */
 @RestController
 @RequestMapping("/api/relatorios")
 @RequiredArgsConstructor

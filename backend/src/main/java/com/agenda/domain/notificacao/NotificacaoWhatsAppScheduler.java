@@ -22,6 +22,12 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+/**
+ * Job agendado que verifica periodicamente compromissos a vencer
+ * e envia notificações WhatsApp para os usuários com preferência
+ * ativa. Executa em horário comercial (08:00–18:00, exceto fins
+ * de semana). Notifica 1 dia antes e no próprio dia do vencimento.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -69,6 +75,13 @@ public class NotificacaoWhatsAppScheduler {
         }
     }
 
+    /**
+     * Monta as listas de pendências do usuário e, se o horário atual for
+     * elegível (de acordo com a regra de degradação de frequência), envia
+     * o resumo por WhatsApp.
+     * <p>
+     * Se o usuário não tiver lojas selecionadas, pula sem erro.
+     */
     private void processarNotificacao(PreferenciaNotificacao pref, LocalTime agora, LocalDate hoje) {
         UUID empresaId = pref.getUsuario().getEmpresa().getId();
         Set<UUID> lojaIds = pref.getLojaIds();
@@ -143,6 +156,12 @@ public class NotificacaoWhatsAppScheduler {
         }
     }
 
+    /**
+     * Busca Boletos, PIX e Cheques com vencimento anterior a hoje
+     * (independentemente do status) e filtra apenas os das lojas que o
+     * usuário selecionou. O resultado é ordenado por vencimento (mais
+     * antigo primeiro) para gerar a seção "VENCIDOS" da mensagem.
+     */
     private List<PendenciaNotificacao> buscarVencidos(UUID empresaId, Set<UUID> lojaIds, LocalDate hoje) {
         List<PendenciaNotificacao> resultado = new ArrayList<>();
 
@@ -169,6 +188,10 @@ public class NotificacaoWhatsAppScheduler {
         return resultado;
     }
 
+    /**
+     * Busca Boletos, PIX e Cheques cujo vencimento é exatamente hoje
+     * e filtra pelas lojas do usuário. Gera a seção "VENCE HOJE".
+     */
     private List<PendenciaNotificacao> buscarVenceHoje(UUID empresaId, Set<UUID> lojaIds, LocalDate hoje) {
         List<PendenciaNotificacao> resultado = new ArrayList<>();
 

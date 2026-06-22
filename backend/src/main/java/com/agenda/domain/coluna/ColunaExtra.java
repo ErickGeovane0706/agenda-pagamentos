@@ -4,6 +4,12 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.util.UUID;
 
+/**
+ * Colunas customizáveis que cada empresa pode adicionar aos
+ * formulários de pagamento (boleto, PIX, cheque).
+ * Ex.: "Nº Contrato" (TEXTO), "Valor Original" (NUMERO).
+ * Isolamento por empresa_id (sem join — coluna desnormalizada).
+ */
 @Entity
 @Table(name = "colunas_extras")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder

@@ -16,6 +16,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Service de privacidade (LGPD). Centraliza a coleta de dados
+ * pessoais do usuário logado + os registros associados ao CNPJ
+ * da empresa. A solicitação de correção apenas audita — a
+ * alteração efetiva é feita pelo suporte.
+ */
 @Service
 @RequiredArgsConstructor
 public class LgpdService {

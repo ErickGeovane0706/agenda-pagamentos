@@ -16,6 +16,14 @@ import java.time.LocalDate;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * REST controller para operações CRUD de {@link Boleto}.
+ * <p>
+ * Endpoints protegidos por {@code @PreAuthorize} exigem role ADMIN ou OPERADOR.
+ * A listagem é pública (autenticado) e suporta filtros opcionais via query params.
+ * Upload/download/deleção de arquivo são endpoints separados do CRUD principal.
+ * </p>
+ */
 @RestController
 @RequestMapping("/api/boletos")
 @RequiredArgsConstructor
@@ -24,6 +32,10 @@ public class BoletoController {
     private final BoletoService boletoService;
     private final ArquivoService arquivoService;
 
+    /**
+     * Lista paginada com filtros opcionais: loja, status, período, fornecedor.
+     * Ordenação default por vencimento ASC.
+     */
     @GetMapping
     public ResponseEntity<Page<BoletoDTO>> listar(
             @RequestParam(required = false) UUID lojaId,
@@ -48,6 +60,7 @@ public class BoletoController {
         return ResponseEntity.ok(boletoService.editar(id, req));
     }
 
+    /** Altera apenas o status (PENDENTE → PAGO / CANCELADO). O service decide se {@code pagoEm} é atualizado. */
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasAnyRole('ADMIN','OPERADOR')")
     public ResponseEntity<BoletoDTO> mudarStatus(@PathVariable UUID id,
@@ -62,6 +75,7 @@ public class BoletoController {
         return ResponseEntity.noContent().build();
     }
 
+    /** Faz upload do arquivo (PDF/imagem) do boleto e substitui o anterior se existir. */
     @PostMapping("/{id}/arquivo")
     @PreAuthorize("hasAnyRole('ADMIN','OPERADOR')")
     public ResponseEntity<BoletoDTO> uploadArquivo(@PathVariable UUID id,
@@ -69,6 +83,7 @@ public class BoletoController {
         return ResponseEntity.ok(boletoService.uploadArquivo(id, arquivo));
     }
 
+    /** Gera URL temporária (assinada) para download do arquivo. Retorna 404 se não houver arquivo. */
     @GetMapping("/{id}/arquivo")
     public ResponseEntity<Map<String, String>> getUrlArquivo(@PathVariable UUID id) {
         var boleto = boletoService.buscarPorId(id);
@@ -79,6 +94,7 @@ public class BoletoController {
         return ResponseEntity.ok(Map.of("url", url));
     }
 
+    /** Remove o arquivo do storage e limpa os metadados do boleto. */
     @DeleteMapping("/{id}/arquivo")
     @PreAuthorize("hasAnyRole('ADMIN','OPERADOR')")
     public ResponseEntity<Void> deletarArquivo(@PathVariable UUID id) {

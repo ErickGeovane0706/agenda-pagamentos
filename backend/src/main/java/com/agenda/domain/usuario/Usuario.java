@@ -6,6 +6,11 @@ import lombok.*;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+/**
+ * Entidade de usuário do sistema. Cada usuário pertence a uma empresa
+ * (tenant) e possui um perfil que define suas permissões.
+ * Suporte a soft-delete via solicitouExclusao.
+ */
 @Entity
 @Table(name = "usuarios")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder

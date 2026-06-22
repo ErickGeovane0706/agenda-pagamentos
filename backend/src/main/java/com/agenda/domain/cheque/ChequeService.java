@@ -20,6 +20,16 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+/**
+ * Serviço responsável pelas operações de negócio de Cheques.
+ * <p>
+ * Difere de {@link com.agenda.domain.boleto.BoletoService} e
+ * {@link com.agenda.domain.pix.PixService} por gerenciar {@code banco}
+ * (opcional — via {@link com.agenda.domain.banco.BancoRepository}) e
+ * {@code numeroCheque} — campos específicos do cheque físico.
+ * Multi-tenancy, auditoria e manipulação de arquivos seguem o mesmo padrão.
+ * </p>
+ */
 @Service
 @RequiredArgsConstructor
 public class ChequeService {
@@ -54,6 +64,7 @@ public class ChequeService {
                 .orElseThrow(() -> new NotFoundException("Loja não encontrada"));
         if (!loja.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
 
+        // bancoId é opcional — se não informado ou não encontrado, banco fica null
         var banco = req.bancoId() != null
                 ? bancoRepository.findById(req.bancoId()).orElse(null)
                 : null;
@@ -77,6 +88,7 @@ public class ChequeService {
 
         var loja = lojaRepository.findById(req.lojaId())
                 .orElseThrow(() -> new NotFoundException("Loja não encontrada"));
+        // Se bancoId for null, remove a referência ao banco
         var banco = req.bancoId() != null
                 ? bancoRepository.findById(req.bancoId()).orElse(null)
                 : null;
@@ -93,6 +105,11 @@ public class ChequeService {
         return ChequeDTO.from(cheque);
     }
 
+    /**
+     * Altera o status. Se COMPENSADO, registra {@code compensadoEm}; caso
+     * contrário, limpa o campo (para evitar data de compensação incorreta
+     * ao reverter ou trocar status).
+     */
     @Transactional
     public ChequeDTO mudarStatus(UUID id, StatusCheque novoStatus) {
         UUID empresaId = TenantContext.getEmpresaId();

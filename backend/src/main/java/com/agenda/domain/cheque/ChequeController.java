@@ -16,6 +16,15 @@ import java.time.LocalDate;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Controller REST para operações CRUD de Cheques.
+ * <p>
+ * Estrutura idêntica a {@link com.agenda.domain.boleto.BoletoController} e
+ * {@link com.agenda.domain.pix.PixController}. ADMIN/OPERADOR podem
+ * modificar; visualização é pública para usuários autenticados.
+ * Endpoint base: {@code /api/cheques}.
+ * </p>
+ */
 @RestController
 @RequestMapping("/api/cheques")
 @RequiredArgsConstructor
@@ -44,14 +53,14 @@ public class ChequeController {
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','OPERADOR')")
     public ResponseEntity<ChequeDTO> editar(@PathVariable UUID id,
-                                             @RequestBody @Valid EditarChequeRequest req) {
+                                              @RequestBody @Valid EditarChequeRequest req) {
         return ResponseEntity.ok(chequeService.editar(id, req));
     }
 
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasAnyRole('ADMIN','OPERADOR')")
     public ResponseEntity<ChequeDTO> mudarStatus(@PathVariable UUID id,
-                                                  @RequestBody @Valid MudarStatusChequeRequest req) {
+                                                   @RequestBody @Valid MudarStatusChequeRequest req) {
         return ResponseEntity.ok(chequeService.mudarStatus(id, req.status()));
     }
 
@@ -65,7 +74,7 @@ public class ChequeController {
     @PostMapping("/{id}/arquivo")
     @PreAuthorize("hasAnyRole('ADMIN','OPERADOR')")
     public ResponseEntity<ChequeDTO> uploadArquivo(@PathVariable UUID id,
-                                                     @RequestParam("arquivo") MultipartFile arquivo) {
+                                                      @RequestParam("arquivo") MultipartFile arquivo) {
         return ResponseEntity.ok(chequeService.uploadArquivo(id, arquivo));
     }
 

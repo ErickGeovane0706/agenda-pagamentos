@@ -5,6 +5,15 @@ import lombok.*;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+/**
+ * Entidade que armazena refresh tokens para renovação de access tokens.
+ *
+ * Regras:
+ * - Cada token é único (unique constraint) — evita duplicatas
+ * - revoked = true indica que o token foi substituído (rotation) ou
+ *   invalidado pelo logout
+ * - expires_at define a data de expiração (7 dias por padrão)
+ */
 @Entity
 @Table(name = "refresh_tokens")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
