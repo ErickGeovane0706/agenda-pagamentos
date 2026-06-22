@@ -21,7 +21,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Component
@@ -72,7 +71,7 @@ public class NotificacaoWhatsAppScheduler {
 
     private void processarNotificacao(PreferenciaNotificacao pref, LocalTime agora, LocalDate hoje) {
         UUID empresaId = pref.getUsuario().getEmpresa().getId();
-        Set<UUID> lojaIds = pref.getLojas().stream().map(Loja::getId).collect(Collectors.toSet());
+        Set<UUID> lojaIds = pref.getLojaIds();
 
         if (lojaIds.isEmpty()) {
             log.info("Usuário {} não tem lojas selecionadas para notificação, pulando.", pref.getUsuario().getId());

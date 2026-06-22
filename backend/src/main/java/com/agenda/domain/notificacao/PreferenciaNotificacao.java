@@ -1,6 +1,5 @@
 package com.agenda.domain.notificacao;
 
-import com.agenda.domain.loja.Loja;
 import com.agenda.domain.usuario.Usuario;
 import jakarta.persistence.*;
 import lombok.*;
@@ -43,14 +42,22 @@ public class PreferenciaNotificacao {
     @Column(name = "horario_4")
     private LocalTime horario4;
 
-    @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(
+    /**
+     * IDs das lojas que entram na notificação deste usuário. Usamos uma
+     * coleção simples de UUID (em vez de @ManyToMany para a entidade Loja)
+     * porque modelar isso como @ManyToMany de entidades completas exigia
+     * uma tabela de junção com chave composta gerenciada manualmente, o que
+     * é mais simples de resolver com @ElementCollection, referenciando a
+     * chave primária real desta entidade (preferencias_notificacao.id).
+     */
+    @ElementCollection
+    @CollectionTable(
             name = "usuario_lojas_notificacao",
-            joinColumns = @JoinColumn(name = "usuario_id", referencedColumnName = "usuario_id", insertable = false, updatable = false),
-            inverseJoinColumns = @JoinColumn(name = "loja_id")
+            joinColumns = @JoinColumn(name = "preferencia_id", referencedColumnName = "id")
     )
+    @Column(name = "loja_id")
     @Builder.Default
-    private Set<Loja> lojas = new HashSet<>();
+    private Set<UUID> lojaIds = new HashSet<>();
 
     @Column(name = "criado_em", nullable = false, updatable = false)
     @Builder.Default

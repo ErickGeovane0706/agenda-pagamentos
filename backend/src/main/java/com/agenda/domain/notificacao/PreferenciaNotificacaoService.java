@@ -49,15 +49,15 @@ public class PreferenciaNotificacaoService {
 
         // Garante que o usuário só pode escolher lojas da própria empresa —
         // mesmo padrão de checagem usado no BoletoService/PixService/ChequeService.
-        var lojaIds = req.lojaIds() != null ? req.lojaIds() : java.util.Set.<UUID>of();
-        var lojas = new HashSet<com.agenda.domain.loja.Loja>();
-        for (UUID lojaId : lojaIds) {
+        var lojaIdsRequest = req.lojaIds() != null ? req.lojaIds() : java.util.Set.<UUID>of();
+        var lojaIdsValidados = new HashSet<UUID>();
+        for (UUID lojaId : lojaIdsRequest) {
             var loja = lojaRepository.findById(lojaId)
                     .orElseThrow(() -> new NotFoundException("Loja não encontrada: " + lojaId));
             if (!loja.getEmpresa().getId().equals(empresaId)) {
                 throw new AccessDeniedException("Acesso negado a loja de outra empresa");
             }
-            lojas.add(loja);
+            lojaIdsValidados.add(lojaId);
         }
 
         preferencia.setTelefoneWhatsapp(req.telefoneWhatsapp());
@@ -66,7 +66,7 @@ public class PreferenciaNotificacaoService {
         preferencia.setHorario2(req.horario2());
         preferencia.setHorario3(req.horario3());
         preferencia.setHorario4(req.horario4());
-        preferencia.setLojas(lojas);
+        preferencia.setLojaIds(lojaIdsValidados);
 
         preferencia = preferenciaRepository.save(preferencia);
         return PreferenciaNotificacaoDTO.from(preferencia);

@@ -23,7 +23,7 @@ public record PreferenciaNotificacaoDTO(
                 p.getHorario2(),
                 p.getHorario3(),
                 p.getHorario4(),
-                p.getLojas().stream().map(loja -> loja.getId()).collect(java.util.stream.Collectors.toSet())
+                p.getLojaIds()
         );
     }
 }
