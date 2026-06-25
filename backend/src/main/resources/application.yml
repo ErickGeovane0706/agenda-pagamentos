@@ -49,3 +49,7 @@ server:
   compression:
     enabled: true
     mime-types: application/json,application/xml,text/html,text/plain
+
+whatsapp:
+  phone-number-id: ${WHATSAPP_PHONE_NUMBER_ID}
+  token: ${WHATSAPP_TOKEN}

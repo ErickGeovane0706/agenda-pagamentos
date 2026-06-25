@@ -28,10 +28,13 @@ public interface PreferenciaNotificacaoRepository extends JpaRepository<Preferen
      * Usado pelo scheduler a cada execução (ex: a cada 15 minutos).
      */
     @Query("""
-        SELECT p FROM PreferenciaNotificacao p
-        WHERE p.whatsappAtivo = true
-          AND p.telefoneWhatsapp IS NOT NULL
-          AND (p.horario1 = :agora OR p.horario2 = :agora OR p.horario3 = :agora OR p.horario4 = :agora)
-        """)
+    SELECT DISTINCT p FROM PreferenciaNotificacao p
+    JOIN FETCH p.usuario u
+    JOIN FETCH u.empresa
+    LEFT JOIN FETCH p.lojaIds
+    WHERE p.whatsappAtivo = true
+      AND p.telefoneWhatsapp IS NOT NULL
+      AND (p.horario1 = :agora OR p.horario2 = :agora OR p.horario3 = :agora OR p.horario4 = :agora)
+    """)
     List<PreferenciaNotificacao> findAtivosComHorario(@Param("agora") LocalTime agora);
 }
