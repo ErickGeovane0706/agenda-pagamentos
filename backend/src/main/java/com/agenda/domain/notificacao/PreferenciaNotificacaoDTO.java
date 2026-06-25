@@ -21,7 +21,12 @@ public record PreferenciaNotificacaoDTO(
 ) {
     /**
      * Converte a entidade JPA para o DTO de resposta.
-     * {@code lojaIds} vem da {@code @ElementCollection} da entidade.
+     * {@code lojaIds} vem da {@code @ElementCollection} da entidade — é
+     * carregada LAZY pelo Hibernate, então copiamos para um novo HashSet
+     * aqui dentro (ainda em transação) para forçar a inicialização da
+     * coleção antes que o objeto saia do escopo da sessão. Sem isso, o
+     * Jackson tenta serializar o proxy fora da transação e lança
+     * LazyInitializationException ("no Session").
      */
     public static PreferenciaNotificacaoDTO from(PreferenciaNotificacao p) {
         return new PreferenciaNotificacaoDTO(
@@ -32,7 +37,7 @@ public record PreferenciaNotificacaoDTO(
                 p.getHorario2(),
                 p.getHorario3(),
                 p.getHorario4(),
-                p.getLojaIds()
+                new java.util.HashSet<>(p.getLojaIds())
         );
     }
 }
