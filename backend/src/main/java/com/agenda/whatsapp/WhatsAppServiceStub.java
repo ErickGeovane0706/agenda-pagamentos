@@ -1,6 +1,7 @@
 package com.agenda.whatsapp;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 /**
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Service;
  * WhatsAppCloudApiService (ou remova o @Service daqui e adicione lá).
  */
 @Slf4j
+@Profile("dev | test")
 @Service
 public class WhatsAppServiceStub implements WhatsAppService {
 

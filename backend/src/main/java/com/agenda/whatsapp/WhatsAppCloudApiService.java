@@ -2,6 +2,7 @@ package com.agenda.whatsapp;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -9,6 +10,7 @@ import org.springframework.web.client.RestTemplate;
 import java.util.Map;
 
 @Slf4j
+@Profile("!dev & !test")
 @Service
 public class WhatsAppCloudApiService implements WhatsAppService {
 
