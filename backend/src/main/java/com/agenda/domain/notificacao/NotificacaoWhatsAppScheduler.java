@@ -106,8 +106,14 @@ public class NotificacaoWhatsAppScheduler {
             return;
         }
 
-        String mensagem = mensagemBuilder.construir(vencidos, venceHoje, venceFimDeSemana, hoje);
-        whatsAppService.enviar(pref.getTelefoneWhatsapp(), mensagem);
+        var params = new ParametrosTemplateResumo()
+                .extrair(pref.getUsuario().getNome(), vencidos, venceHoje, venceFimDeSemana);
+
+        whatsAppService.enviarTemplate(
+                pref.getTelefoneWhatsapp(),
+                "lembrete_resumo_pendencias",   // nome exato do template aprovado na Meta
+                params.paraLista()
+        );
     }
 
     /**
