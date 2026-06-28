@@ -11,12 +11,7 @@ import { useToastStore } from '../../store/toastStore';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
-const TINY_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-
-// langPath explícito para evitar que o Tesseract tente baixar de unpkg.com (bloqueado pelo CSP)
-const TESSERACT_OPTIONS = {
-  langPath: 'https://tessdata.projectnaptha.com/4.0.0',
-};
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function extrairCodigoDigitavel(texto: string): string | null {
   const t = texto.replace(/\r?\n/g, ' ').replace(/\s{2,}/g, ' ');
@@ -70,7 +65,27 @@ function validarCodigoBoleto(codigo: string): boolean {
   return /^\d{44,48}$/.test(limpo);
 }
 
+// ─── Tesseract v7 — createWorker (API correta para v5+/v7) ────────────────────
+// Em v7 as opções workerPath/langPath/corePath foram movidas para createWorker()
+// O langPath controla de onde baixa o por.traineddata
+// Usando jsDelivr pois já está liberado no CSP (connect-src)
+const TESSERACT_LANG_PATH = 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/por/4.0.0_best_int';
+
+async function criarWorkerTesseract() {
+  const worker = await Tesseract.createWorker('por', 1, {
+    langPath: TESSERACT_LANG_PATH,
+    // workerBlobURL: false faz o worker ser carregado via script normal (passa pelo CSP worker-src 'self' blob:)
+    workerBlobURL: true,
+    logger: () => {}, // silencia logs de progresso
+  });
+  return worker;
+}
+
+// ─── Tipos ────────────────────────────────────────────────────────────────────
+
 type Aba = 'camera' | 'imagem' | 'pdf';
+
+// ─── Componente ───────────────────────────────────────────────────────────────
 
 export function ModalLeitorCodigo({
                                     aberto,
@@ -85,25 +100,58 @@ export function ModalLeitorCodigo({
   const addToast = useToastStore((s) => s.addToast);
   const [aba, setAba] = useState<Aba>('imagem');
   const [lendo, setLendo] = useState(false);
-  const [preparandoOCR, setPreparandoOCR] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [paginasPDF, setPaginasPDF] = useState<string[]>([]);
   const [pdfRef, setPdfRef] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [paginaCarregando, setPaginaCarregando] = useState<number | null>(null);
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [cameraStarted, setCameraStarted] = useState(false);
+
   const resultadoRef = useRef<string | null>(null);
   const scannerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const tesseractReady = useRef(false);
-  const ocrTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scannerControlsRef = useRef<IScannerControls | null>(null);
   const cameraRunningRef = useRef(false);
+  // Worker do Tesseract reutilizável — criado uma vez e reaproveitado
+  const tesseractWorkerRef = useRef<Tesseract.Worker | null>(null);
+  const workerLoadingRef = useRef(false);
 
   function log(msg: string) {
     setDebugLogs(prev => [...prev.slice(-6), `${new Date().toLocaleTimeString()} ${msg}`]);
   }
 
+  // ─── Tesseract worker: lazy init ──────────────────────────────────────────
+  async function getWorker(): Promise<Tesseract.Worker> {
+    if (tesseractWorkerRef.current) return tesseractWorkerRef.current;
+    if (workerLoadingRef.current) {
+      // Espera o worker carregando
+      await new Promise<void>(resolve => {
+        const check = setInterval(() => {
+          if (!workerLoadingRef.current) { clearInterval(check); resolve(); }
+        }, 200);
+      });
+      return tesseractWorkerRef.current!;
+    }
+    workerLoadingRef.current = true;
+    log('Criando worker Tesseract...');
+    try {
+      const worker = await criarWorkerTesseract();
+      tesseractWorkerRef.current = worker;
+      log('Worker Tesseract pronto');
+      return worker;
+    } finally {
+      workerLoadingRef.current = false;
+    }
+  }
+
+  async function encerrarWorker() {
+    if (tesseractWorkerRef.current) {
+      try { await tesseractWorkerRef.current.terminate(); } catch (_) {}
+      tesseractWorkerRef.current = null;
+    }
+  }
+
+  // ─── Câmera ───────────────────────────────────────────────────────────────
   const pararCamera = useCallback(() => {
     cameraRunningRef.current = false;
     if (scannerControlsRef.current) {
@@ -120,48 +168,43 @@ export function ModalLeitorCodigo({
   useEffect(() => {
     if (!aberto) {
       pararCamera();
-      setResultadoRef(null);
+      resultadoRef.current = null;
       setPreviewUrl(null);
       setPaginasPDF([]);
       setPdfRef(null);
-      setPreparandoOCR(false);
-      if (ocrTimeoutRef.current) clearTimeout(ocrTimeoutRef.current);
     } else {
       setAba(isMobile ? 'camera' : 'imagem');
-      setResultadoRef(null);
+      resultadoRef.current = null;
       setPreviewUrl(null);
       setPaginasPDF([]);
       setPdfRef(null);
-
-      if (!tesseractReady.current) {
-        setPreparandoOCR(true);
-        Tesseract.recognize(TINY_PNG, 'por', TESSERACT_OPTIONS).catch(() => {});
-        ocrTimeoutRef.current = setTimeout(() => {
-          tesseractReady.current = true;
-          setPreparandoOCR(false);
-        }, 8000);
-      }
+      // Pré-carrega worker ao abrir (sem bloqueio)
+      getWorker().catch(() => {});
     }
-  }, [aberto, isMobile, pararCamera]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aberto, isMobile]);
 
+  // Limpa câmera ao trocar de aba
   useEffect(() => {
     if (!aberto || aba !== 'camera') {
       pararCamera();
     }
     return pararCamera;
-  }, [aberto, aba]);
+  }, [aberto, aba, pararCamera]);
 
-  function setResultadoRef(v: string | null) {
-    resultadoRef.current = v;
-  }
+  // Encerra worker ao desmontar
+  useEffect(() => {
+    return () => { encerrarWorker(); };
+  }, []);
 
+  // ─── Handlers ─────────────────────────────────────────────────────────────
   function handleCodigo(codigo: string) {
     const limpo = codigo.replace(/[\s.\-]/g, '');
     const { tipo, valido } = identificarTipoDocumento(limpo);
 
     if (!valido) {
-      addToast('info', 'Código identificado mas não reconhecido. Verifique se é um documento válido.');
-      setResultadoRef(limpo);
+      addToast('info', 'Código identificado mas não reconhecido como boleto. Verifique se é um documento válido.');
+      resultadoRef.current = limpo;
       return;
     }
 
@@ -212,7 +255,7 @@ export function ModalLeitorCodigo({
             const apenasDigitos = codigo.replace(/\D/g, '');
             if ([44, 47, 48].includes(apenasDigitos.length)) {
               log(`Código lido: ${apenasDigitos}`);
-              setResultadoRef(apenasDigitos);
+              resultadoRef.current = apenasDigitos;
               controls.stop();
               pararCamera();
               handleCodigo(apenasDigitos);
@@ -254,9 +297,12 @@ export function ModalLeitorCodigo({
     log('Preview URL criada');
 
     try {
-      log('Iniciando Tesseract...');
+      log('Obtendo worker Tesseract...');
+      const worker = await getWorker();
+      log('Iniciando OCR...');
+
       const resultado = await Promise.race([
-        Tesseract.recognize(url, 'por', TESSERACT_OPTIONS),
+        worker.recognize(url),
         new Promise<never>((_, reject) =>
             setTimeout(() => reject(new Error('Timeout OCR')), 60000)
         ),
@@ -274,7 +320,9 @@ export function ModalLeitorCodigo({
       }
     } catch (err: any) {
       log(`ERRO lerDeImagem: ${err?.name} - ${err?.message}`);
-      addToast('error', 'Erro ao processar a imagem');
+      // Worker pode ter corrompido — descarta para recriar na próxima tentativa
+      await encerrarWorker();
+      addToast('error', `Erro ao processar a imagem: ${err?.message || 'desconhecido'}`);
     } finally {
       setLendo(false);
       URL.revokeObjectURL(url);
@@ -302,17 +350,16 @@ export function ModalLeitorCodigo({
         return;
       }
 
-      log('Texto embutido não tem código. Iniciando OCR...');
+      log('Texto embutido sem código. Iniciando OCR...');
 
       const isMobileDevice = /Android|iPhone|iPad/i.test(navigator.userAgent);
       const scale = isMobileDevice ? 1.2 : 2.0;
-      log(`Scale OCR: ${scale} (mobile: ${isMobileDevice})`);
+      log(`Scale OCR: ${scale}`);
 
       const viewport = page.getViewport({ scale });
       const canvas = document.createElement('canvas');
       canvas.width = viewport.width;
       canvas.height = viewport.height;
-      log(`Canvas: ${canvas.width}x${canvas.height}`);
 
       await page.render({ canvasContext: canvas.getContext('2d')!, viewport }).promise;
       log('Render OK. Convertendo para JPEG...');
@@ -320,9 +367,12 @@ export function ModalLeitorCodigo({
       const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
       log(`JPEG gerado: ${(dataUrl.length / 1024).toFixed(0)}KB`);
 
-      log('Iniciando Tesseract...');
+      log('Obtendo worker Tesseract...');
+      const worker = await getWorker();
+      log('Iniciando OCR no PDF...');
+
       const resultado = await Promise.race([
-        Tesseract.recognize(dataUrl, 'por', TESSERACT_OPTIONS),
+        worker.recognize(dataUrl),
         new Promise<never>((_, reject) =>
             setTimeout(() => reject(new Error('Timeout OCR')), 60000)
         ),
@@ -341,6 +391,7 @@ export function ModalLeitorCodigo({
       }
     } catch (err: any) {
       log(`ERRO lerCodigoDaPagina: ${err?.name} - ${err?.message}`);
+      await encerrarWorker();
       addToast('error', `Erro ao ler página: ${err?.message || 'desconhecido'}`);
       console.error('lerCodigoDaPagina error:', err);
     } finally {
@@ -397,7 +448,6 @@ export function ModalLeitorCodigo({
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-
     e.target.value = '';
 
     if (aba === 'imagem') {
@@ -416,11 +466,17 @@ export function ModalLeitorCodigo({
 
   return (
       <>
-        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40" onClick={onFechar} style={{ display: cameraStarted ? 'none' : 'flex' }}>
+        {/* Modal principal */}
+        <div
+            className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40"
+            style={{ display: cameraStarted ? 'none' : 'flex' }}
+            onClick={onFechar}
+        >
           <div
               className="bg-white w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl animate-slide-in max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
           >
+            {/* Cabeçalho */}
             <div className="flex items-center justify-between p-4 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900">Ler código de barras</h2>
               <button onClick={onFechar} className="p-2 rounded-lg hover:bg-slate-100 text-slate-400">
@@ -428,6 +484,7 @@ export function ModalLeitorCodigo({
               </button>
             </div>
 
+            {/* Abas */}
             <div className="flex border-b border-slate-100">
               {abas.map(({ id, label, icon: Icon }) => (
                   <button
@@ -447,6 +504,7 @@ export function ModalLeitorCodigo({
             </div>
 
             <div className="p-4">
+              {/* Aba Câmera */}
               {aba === 'camera' && (
                   <div>
                     {!cameraStarted ? (
@@ -460,9 +518,9 @@ export function ModalLeitorCodigo({
                           >
                             {lendo ? (
                                 <span className="flex items-center gap-2">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Aguardando permissão...
-                      </span>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Aguardando permissão...
+                        </span>
                             ) : (
                                 'Ligar câmera'
                             )}
@@ -480,10 +538,7 @@ export function ModalLeitorCodigo({
                             <p className="text-sm font-mono text-amber-800 break-all mt-1">{resultadoRef.current}</p>
                           </div>
                           <button
-                              onClick={() => {
-                                onCodigoLido(resultadoRef.current!);
-                                onFechar();
-                              }}
+                              onClick={() => { onCodigoLido(resultadoRef.current!); onFechar(); }}
                               className="w-full px-4 py-2.5 bg-[#0c4a6e] text-white rounded-xl text-sm font-medium"
                           >
                             Usar mesmo assim
@@ -493,6 +548,7 @@ export function ModalLeitorCodigo({
                   </div>
               )}
 
+              {/* Aba Imagem / PDF */}
               {(aba === 'imagem' || aba === 'pdf') && (
                   <div className="space-y-4">
                     <label
@@ -537,6 +593,11 @@ export function ModalLeitorCodigo({
                                     className="relative border-2 border-slate-200 rounded-xl overflow-hidden hover:border-[#0ea5e9] transition-colors disabled:opacity-50 group"
                                 >
                                   <img src={src} alt={`Página ${i + 1}`} className="w-full" />
+                                  {paginaCarregando === i + 1 && (
+                                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                        <Loader2 className="w-6 h-6 text-white animate-spin" />
+                                      </div>
+                                  )}
                                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
                                   <div className="absolute bottom-0 inset-x-0 bg-slate-900/70 text-white text-xs py-1 text-center">
                                     Página {i + 1}
@@ -553,17 +614,10 @@ export function ModalLeitorCodigo({
                         </div>
                     )}
 
-                    {preparandoOCR && (
-                        <div className="flex items-center justify-center gap-2 text-sm text-slate-500">
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Preparando OCR (primeira vez)...
-                        </div>
-                    )}
-
                     {lendo && (
                         <div className="flex items-center justify-center gap-2 text-sm text-slate-500">
                           <Loader2 className="w-4 h-4 animate-spin" />
-                          Lendo código...
+                          {workerLoadingRef.current ? 'Carregando OCR (primeira vez)...' : 'Lendo código...'}
                         </div>
                     )}
 
@@ -572,10 +626,7 @@ export function ModalLeitorCodigo({
                           <p className="text-xs text-amber-600 font-medium">Código identificado (não reconhecido como boleto):</p>
                           <p className="text-sm font-mono text-amber-800 break-all mt-1">{resultadoRef.current}</p>
                           <button
-                              onClick={() => {
-                                onCodigoLido(resultadoRef.current!);
-                                onFechar();
-                              }}
+                              onClick={() => { onCodigoLido(resultadoRef.current!); onFechar(); }}
                               className="mt-2 w-full px-4 py-2.5 bg-[#0c4a6e] text-white rounded-xl text-sm font-medium"
                           >
                             Usar mesmo assim
@@ -586,6 +637,7 @@ export function ModalLeitorCodigo({
               )}
             </div>
 
+            {/* Debug */}
             {debugLogs.length > 0 && (
                 <div className="px-4 pb-3">
                   <details>
@@ -612,6 +664,7 @@ export function ModalLeitorCodigo({
           </div>
         </div>
 
+        {/* Container da câmera (tela cheia) */}
         <div
             ref={scannerRef}
             id="scanner-container"
@@ -625,6 +678,7 @@ export function ModalLeitorCodigo({
             }}
         />
 
+        {/* Overlay da câmera */}
         {cameraStarted && (
             <div className="fixed inset-0 z-[71]" style={{ pointerEvents: 'none' }}>
               <button
