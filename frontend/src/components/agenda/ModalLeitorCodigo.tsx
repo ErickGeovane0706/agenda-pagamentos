@@ -13,21 +13,26 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 const TINY_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
+// langPath explícito para evitar que o Tesseract tente baixar de unpkg.com (bloqueado pelo CSP)
+const TESSERACT_OPTIONS = {
+  langPath: 'https://tessdata.projectnaptha.com/4.0.0',
+};
+
 function extrairCodigoDigitavel(texto: string): string | null {
   const t = texto.replace(/\r?\n/g, ' ').replace(/\s{2,}/g, ' ');
 
   const m1 = t.match(
-    /\d{5}\.\d{4,6}\s+\d{5}\.\d{5,6}\s+\d{5}\.\d{5,6}\s+\d\s+\d{14}/
+      /\d{5}\.\d{4,6}\s+\d{5}\.\d{5,6}\s+\d{5}\.\d{5,6}\s+\d\s+\d{14}/
   );
   if (m1) return m1[0].replace(/\s+/g, '');
 
   const m2 = t.match(
-    /\d{8,11}-\d\s+\d{8,11}-\d\s+\d{8,11}-\d\s+\d{8,11}-\d/
+      /\d{8,11}-\d\s+\d{8,11}-\d\s+\d{8,11}-\d\s+\d{8,11}-\d/
   );
   if (m2) return m2[0].replace(/[\s-]/g, '');
 
   const m3 = t.match(
-    /\d{10,11}\s+\d\s+\d{10,11}\s+\d\s+\d{10,11}\s+\d\s+\d{10,11}\s+\d/
+      /\d{10,11}\s+\d\s+\d{10,11}\s+\d\s+\d{10,11}\s+\d\s+\d{10,11}\s+\d/
   );
   if (m3) return m3[0].replace(/\s+/g, '');
 
@@ -68,10 +73,10 @@ function validarCodigoBoleto(codigo: string): boolean {
 type Aba = 'camera' | 'imagem' | 'pdf';
 
 export function ModalLeitorCodigo({
-  aberto,
-  onFechar,
-  onCodigoLido,
-}: {
+                                    aberto,
+                                    onFechar,
+                                    onCodigoLido,
+                                  }: {
   aberto: boolean;
   onFechar: () => void;
   onCodigoLido: (codigo: string) => void;
@@ -130,7 +135,7 @@ export function ModalLeitorCodigo({
 
       if (!tesseractReady.current) {
         setPreparandoOCR(true);
-        Tesseract.recognize(TINY_PNG, 'por').catch(() => {});
+        Tesseract.recognize(TINY_PNG, 'por', TESSERACT_OPTIONS).catch(() => {});
         ocrTimeoutRef.current = setTimeout(() => {
           tesseractReady.current = true;
           setPreparandoOCR(false);
@@ -190,29 +195,29 @@ export function ModalLeitorCodigo({
       container.appendChild(video);
 
       const controls = await reader.decodeFromConstraints(
-        {
-          video: {
-            facingMode: 'environment',
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            focusMode: 'continuous',
-          } as any,
-          audio: false,
-        },
-        video,
-        (result, _err, controls) => {
-          if (!result || resultadoRef.current || !cameraRunningRef.current) return;
-          const codigo = result.getText();
-          if (!codigo) return;
-          const apenasDigitos = codigo.replace(/\D/g, '');
-          if ([44, 47, 48].includes(apenasDigitos.length)) {
-            log(`Código lido: ${apenasDigitos}`);
-            setResultadoRef(apenasDigitos);
-            controls.stop();
-            pararCamera();
-            handleCodigo(apenasDigitos);
+          {
+            video: {
+              facingMode: 'environment',
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+              focusMode: 'continuous',
+            } as any,
+            audio: false,
+          },
+          video,
+          (result, _err, controls) => {
+            if (!result || resultadoRef.current || !cameraRunningRef.current) return;
+            const codigo = result.getText();
+            if (!codigo) return;
+            const apenasDigitos = codigo.replace(/\D/g, '');
+            if ([44, 47, 48].includes(apenasDigitos.length)) {
+              log(`Código lido: ${apenasDigitos}`);
+              setResultadoRef(apenasDigitos);
+              controls.stop();
+              pararCamera();
+              handleCodigo(apenasDigitos);
+            }
           }
-        }
       );
       scannerControlsRef.current = controls;
       setCameraStarted(true);
@@ -251,9 +256,9 @@ export function ModalLeitorCodigo({
     try {
       log('Iniciando Tesseract...');
       const resultado = await Promise.race([
-        Tesseract.recognize(url, 'por'),
+        Tesseract.recognize(url, 'por', TESSERACT_OPTIONS),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Timeout OCR')), 60000)
+            setTimeout(() => reject(new Error('Timeout OCR')), 60000)
         ),
       ]);
       log(`OCR concluído. Texto: ${resultado.data.text.substring(0, 80)}...`);
@@ -317,9 +322,9 @@ export function ModalLeitorCodigo({
 
       log('Iniciando Tesseract...');
       const resultado = await Promise.race([
-        Tesseract.recognize(dataUrl, 'por'),
+        Tesseract.recognize(dataUrl, 'por', TESSERACT_OPTIONS),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Timeout OCR')), 60000)
+            setTimeout(() => reject(new Error('Timeout OCR')), 60000)
         ),
       ]);
       log(`OCR concluído. Texto: ${resultado.data.text.substring(0, 80)}...`);
@@ -410,246 +415,246 @@ export function ModalLeitorCodigo({
   abas.push({ id: 'pdf', label: 'PDF', icon: FileText });
 
   return (
-    <>
-    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40" onClick={onFechar} style={{ display: cameraStarted ? 'none' : 'flex' }}>
-      <div
-        className="bg-white w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl animate-slide-in max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between p-4 border-b border-slate-100">
-          <h2 className="text-lg font-bold text-slate-900">Ler código de barras</h2>
-          <button onClick={onFechar} className="p-2 rounded-lg hover:bg-slate-100 text-slate-400">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+      <>
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40" onClick={onFechar} style={{ display: cameraStarted ? 'none' : 'flex' }}>
+          <div
+              className="bg-white w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl animate-slide-in max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-slate-900">Ler código de barras</h2>
+              <button onClick={onFechar} className="p-2 rounded-lg hover:bg-slate-100 text-slate-400">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-        <div className="flex border-b border-slate-100">
-          {abas.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => setAba(id)}
-              className={clsx(
-                'flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors',
-                aba === id
-                  ? 'text-[#0c4a6e] border-[#0c4a6e]'
-                  : 'text-slate-400 border-transparent hover:text-slate-600'
-              )}
-            >
-              <Icon className="w-4 h-4" />
-              {label}
-            </button>
-          ))}
-        </div>
-
-        <div className="p-4">
-          {aba === 'camera' && (
-            <div>
-              {!cameraStarted ? (
-                <div className="flex flex-col items-center justify-center py-16">
-                  <Camera className="w-12 h-12 mb-3 text-slate-300" />
-                  <p className="text-sm text-slate-400 mb-4">Toque no botão para ligar a câmera</p>
+            <div className="flex border-b border-slate-100">
+              {abas.map(({ id, label, icon: Icon }) => (
                   <button
-                    onClick={iniciarCamera}
-                    disabled={lendo}
-                    className="px-6 py-3 bg-[#0c4a6e] text-white rounded-xl text-sm font-medium disabled:opacity-50"
+                      key={id}
+                      onClick={() => setAba(id)}
+                      className={clsx(
+                          'flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors',
+                          aba === id
+                              ? 'text-[#0c4a6e] border-[#0c4a6e]'
+                              : 'text-slate-400 border-transparent hover:text-slate-600'
+                      )}
                   >
-                    {lendo ? (
-                      <span className="flex items-center gap-2">
+                    <Icon className="w-4 h-4" />
+                    {label}
+                  </button>
+              ))}
+            </div>
+
+            <div className="p-4">
+              {aba === 'camera' && (
+                  <div>
+                    {!cameraStarted ? (
+                        <div className="flex flex-col items-center justify-center py-16">
+                          <Camera className="w-12 h-12 mb-3 text-slate-300" />
+                          <p className="text-sm text-slate-400 mb-4">Toque no botão para ligar a câmera</p>
+                          <button
+                              onClick={iniciarCamera}
+                              disabled={lendo}
+                              className="px-6 py-3 bg-[#0c4a6e] text-white rounded-xl text-sm font-medium disabled:opacity-50"
+                          >
+                            {lendo ? (
+                                <span className="flex items-center gap-2">
                         <Loader2 className="w-4 h-4 animate-spin" />
                         Aguardando permissão...
                       </span>
+                            ) : (
+                                'Ligar câmera'
+                            )}
+                          </button>
+                        </div>
                     ) : (
-                      'Ligar câmera'
+                        <div className="flex items-center justify-center py-8">
+                          <p className="text-sm text-slate-400">Câmera ativa em tela cheia</p>
+                        </div>
                     )}
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center justify-center py-8">
-                  <p className="text-sm text-slate-400">Câmera ativa em tela cheia</p>
-                </div>
-              )}
-              {resultadoRef.current && !validarCodigoBoleto(resultadoRef.current) && (
-                <div className="mt-4">
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-3">
-                    <p className="text-xs text-amber-600 font-medium">Código identificado (não reconhecido como boleto):</p>
-                    <p className="text-sm font-mono text-amber-800 break-all mt-1">{resultadoRef.current}</p>
+                    {resultadoRef.current && !validarCodigoBoleto(resultadoRef.current) && (
+                        <div className="mt-4">
+                          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-3">
+                            <p className="text-xs text-amber-600 font-medium">Código identificado (não reconhecido como boleto):</p>
+                            <p className="text-sm font-mono text-amber-800 break-all mt-1">{resultadoRef.current}</p>
+                          </div>
+                          <button
+                              onClick={() => {
+                                onCodigoLido(resultadoRef.current!);
+                                onFechar();
+                              }}
+                              className="w-full px-4 py-2.5 bg-[#0c4a6e] text-white rounded-xl text-sm font-medium"
+                          >
+                            Usar mesmo assim
+                          </button>
+                        </div>
+                    )}
                   </div>
-                  <button
-                    onClick={() => {
-                      onCodigoLido(resultadoRef.current!);
-                      onFechar();
-                    }}
-                    className="w-full px-4 py-2.5 bg-[#0c4a6e] text-white rounded-xl text-sm font-medium"
-                  >
-                    Usar mesmo assim
-                  </button>
-                </div>
+              )}
+
+              {(aba === 'imagem' || aba === 'pdf') && (
+                  <div className="space-y-4">
+                    <label
+                        htmlFor="file-input"
+                        className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center cursor-pointer hover:border-[#0ea5e9] transition-colors block"
+                    >
+                      {aba === 'imagem' ? (
+                          <>
+                            <Image className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                            <p className="text-sm text-slate-500">Clique para selecionar uma imagem</p>
+                            <p className="text-xs text-slate-400 mt-1">PNG, JPG, JPEG, WEBP</p>
+                          </>
+                      ) : (
+                          <>
+                            <FileText className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                            <p className="text-sm text-slate-500">Clique para selecionar um PDF</p>
+                            <p className="text-xs text-slate-400 mt-1">Até 10MB</p>
+                          </>
+                      )}
+                    </label>
+
+                    {previewUrl && aba === 'imagem' && (
+                        <div className="rounded-xl overflow-hidden border border-slate-100">
+                          <img src={previewUrl} alt="Preview" className="w-full" />
+                        </div>
+                    )}
+
+                    {paginasPDF.length > 0 && (
+                        <div>
+                          <p className="text-sm font-medium text-slate-700 mb-1">
+                            PDF com {paginasPDF.length} páginas — selecione o boleto que deseja ler:
+                          </p>
+                          <p className="text-xs text-slate-400 mb-3">
+                            Toque na página que contém o boleto
+                          </p>
+                          <div className="grid grid-cols-2 gap-3">
+                            {paginasPDF.map((src, i) => (
+                                <button
+                                    key={i}
+                                    onClick={() => pdfRef && lerCodigoDaPagina(pdfRef, i + 1)}
+                                    disabled={lendo}
+                                    className="relative border-2 border-slate-200 rounded-xl overflow-hidden hover:border-[#0ea5e9] transition-colors disabled:opacity-50 group"
+                                >
+                                  <img src={src} alt={`Página ${i + 1}`} className="w-full" />
+                                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                                  <div className="absolute bottom-0 inset-x-0 bg-slate-900/70 text-white text-xs py-1 text-center">
+                                    Página {i + 1}
+                                  </div>
+                                </button>
+                            ))}
+                          </div>
+                          <button
+                              onClick={() => { setPaginasPDF([]); setPdfRef(null); }}
+                              className="mt-3 w-full text-sm text-slate-400 hover:text-slate-600 py-2"
+                          >
+                            Cancelar e escolher outro arquivo
+                          </button>
+                        </div>
+                    )}
+
+                    {preparandoOCR && (
+                        <div className="flex items-center justify-center gap-2 text-sm text-slate-500">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Preparando OCR (primeira vez)...
+                        </div>
+                    )}
+
+                    {lendo && (
+                        <div className="flex items-center justify-center gap-2 text-sm text-slate-500">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Lendo código...
+                        </div>
+                    )}
+
+                    {resultadoRef.current && !validarCodigoBoleto(resultadoRef.current) && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-3">
+                          <p className="text-xs text-amber-600 font-medium">Código identificado (não reconhecido como boleto):</p>
+                          <p className="text-sm font-mono text-amber-800 break-all mt-1">{resultadoRef.current}</p>
+                          <button
+                              onClick={() => {
+                                onCodigoLido(resultadoRef.current!);
+                                onFechar();
+                              }}
+                              className="mt-2 w-full px-4 py-2.5 bg-[#0c4a6e] text-white rounded-xl text-sm font-medium"
+                          >
+                            Usar mesmo assim
+                          </button>
+                        </div>
+                    )}
+                  </div>
               )}
             </div>
-          )}
 
-          {(aba === 'imagem' || aba === 'pdf') && (
-            <div className="space-y-4">
-              <label
-                htmlFor="file-input"
-                className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center cursor-pointer hover:border-[#0ea5e9] transition-colors block"
+            {debugLogs.length > 0 && (
+                <div className="px-4 pb-3">
+                  <details>
+                    <summary className="text-xs text-slate-400 cursor-pointer hover:text-slate-600 select-none">
+                      Debug ({debugLogs.length})
+                    </summary>
+                    <div className="mt-2 bg-slate-900 text-green-400 rounded-lg p-2 text-xs font-mono max-h-40 overflow-y-auto space-y-0.5">
+                      {debugLogs.map((l, i) => (
+                          <div key={i}>{l}</div>
+                      ))}
+                    </div>
+                  </details>
+                </div>
+            )}
+
+            <input
+                ref={fileInputRef}
+                id="file-input"
+                type="file"
+                accept={aba === 'imagem' ? 'image/*' : 'application/pdf'}
+                className="hidden"
+                onChange={handleFileChange}
+            />
+          </div>
+        </div>
+
+        <div
+            ref={scannerRef}
+            id="scanner-container"
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: cameraStarted ? 70 : -1,
+              opacity: cameraStarted ? 1 : 0,
+              visibility: cameraStarted ? 'visible' : 'hidden',
+              background: '#000',
+            }}
+        />
+
+        {cameraStarted && (
+            <div className="fixed inset-0 z-[71]" style={{ pointerEvents: 'none' }}>
+              <button
+                  onClick={pararCamera}
+                  className="absolute top-4 right-4 z-10 pointer-events-auto p-2 rounded-full bg-black/50 text-white"
               >
-                {aba === 'imagem' ? (
-                  <>
-                    <Image className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                    <p className="text-sm text-slate-500">Clique para selecionar uma imagem</p>
-                    <p className="text-xs text-slate-400 mt-1">PNG, JPG, JPEG, WEBP</p>
-                  </>
-                ) : (
-                  <>
-                    <FileText className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                    <p className="text-sm text-slate-500">Clique para selecionar um PDF</p>
-                    <p className="text-xs text-slate-400 mt-1">Até 10MB</p>
-                  </>
-                )}
-              </label>
+                <X className="w-6 h-6" />
+              </button>
 
-              {previewUrl && aba === 'imagem' && (
-                <div className="rounded-xl overflow-hidden border border-slate-100">
-                  <img src={previewUrl} alt="Preview" className="w-full" />
-                </div>
-              )}
+              <div className="absolute top-0 left-0 right-0 px-4 py-3 bg-gradient-to-b from-black/60 to-transparent pointer-events-auto">
+                <span className="text-white text-sm">Alinhe o código na linha vermelha</span>
+              </div>
 
-              {paginasPDF.length > 0 && (
-                <div>
-                  <p className="text-sm font-medium text-slate-700 mb-1">
-                    PDF com {paginasPDF.length} páginas — selecione o boleto que deseja ler:
-                  </p>
-                  <p className="text-xs text-slate-400 mb-3">
-                    Toque na página que contém o boleto
-                  </p>
-                  <div className="grid grid-cols-2 gap-3">
-                    {paginasPDF.map((src, i) => (
-                      <button
-                        key={i}
-                        onClick={() => pdfRef && lerCodigoDaPagina(pdfRef, i + 1)}
-                        disabled={lendo}
-                        className="relative border-2 border-slate-200 rounded-xl overflow-hidden hover:border-[#0ea5e9] transition-colors disabled:opacity-50 group"
-                      >
-                        <img src={src} alt={`Página ${i + 1}`} className="w-full" />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
-                        <div className="absolute bottom-0 inset-x-0 bg-slate-900/70 text-white text-xs py-1 text-center">
-                          Página {i + 1}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                  <button
-                    onClick={() => { setPaginasPDF([]); setPdfRef(null); }}
-                    className="mt-3 w-full text-sm text-slate-400 hover:text-slate-600 py-2"
-                  >
-                    Cancelar e escolher outro arquivo
-                  </button>
-                </div>
-              )}
-
-              {preparandoOCR && (
-                <div className="flex items-center justify-center gap-2 text-sm text-slate-500">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Preparando OCR (primeira vez)...
-                </div>
-              )}
+              <div className="absolute inset-0">
+                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '35%', background: 'rgba(0,0,0,0.55)' }} />
+                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '35%', background: 'rgba(0,0,0,0.55)' }} />
+                <div style={{ position: 'absolute', top: '35%', left: 0, width: '5%', height: '30%', background: 'rgba(0,0,0,0.55)' }} />
+                <div style={{ position: 'absolute', top: '35%', right: 0, width: '5%', height: '30%', background: 'rgba(0,0,0,0.55)' }} />
+                <div style={{ position: 'absolute', top: '35%', left: '5%', width: '90%', height: '30%', border: '2px solid #22c55e', borderRadius: 6, boxSizing: 'border-box' }} />
+                <div style={{ position: 'absolute', top: '50%', left: '5%', width: '90%', height: '2px', background: '#ef4444', zIndex: 10 }} />
+              </div>
 
               {lendo && (
-                <div className="flex items-center justify-center gap-2 text-sm text-slate-500">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Lendo código...
-                </div>
-              )}
-
-              {resultadoRef.current && !validarCodigoBoleto(resultadoRef.current) && (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-3">
-                  <p className="text-xs text-amber-600 font-medium">Código identificado (não reconhecido como boleto):</p>
-                  <p className="text-sm font-mono text-amber-800 break-all mt-1">{resultadoRef.current}</p>
-                  <button
-                    onClick={() => {
-                      onCodigoLido(resultadoRef.current!);
-                      onFechar();
-                    }}
-                    className="mt-2 w-full px-4 py-2.5 bg-[#0c4a6e] text-white rounded-xl text-sm font-medium"
-                  >
-                    Usar mesmo assim
-                  </button>
-                </div>
+                  <div className="absolute bottom-16 left-0 right-0 flex items-center justify-center gap-2 text-white text-sm">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Aguardando código...
+                  </div>
               )}
             </div>
-          )}
-        </div>
-
-        {debugLogs.length > 0 && (
-          <div className="px-4 pb-3">
-            <details>
-              <summary className="text-xs text-slate-400 cursor-pointer hover:text-slate-600 select-none">
-                Debug ({debugLogs.length})
-              </summary>
-              <div className="mt-2 bg-slate-900 text-green-400 rounded-lg p-2 text-xs font-mono max-h-40 overflow-y-auto space-y-0.5">
-                {debugLogs.map((l, i) => (
-                  <div key={i}>{l}</div>
-                ))}
-              </div>
-            </details>
-          </div>
         )}
-
-        <input
-          ref={fileInputRef}
-          id="file-input"
-          type="file"
-          accept={aba === 'imagem' ? 'image/*' : 'application/pdf'}
-          className="hidden"
-          onChange={handleFileChange}
-        />
-      </div>
-    </div>
-
-    <div
-      ref={scannerRef}
-      id="scanner-container"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: cameraStarted ? 70 : -1,
-        opacity: cameraStarted ? 1 : 0,
-        visibility: cameraStarted ? 'visible' : 'hidden',
-        background: '#000',
-      }}
-    />
-
-    {cameraStarted && (
-      <div className="fixed inset-0 z-[71]" style={{ pointerEvents: 'none' }}>
-        <button
-          onClick={pararCamera}
-          className="absolute top-4 right-4 z-10 pointer-events-auto p-2 rounded-full bg-black/50 text-white"
-        >
-          <X className="w-6 h-6" />
-        </button>
-
-        <div className="absolute top-0 left-0 right-0 px-4 py-3 bg-gradient-to-b from-black/60 to-transparent pointer-events-auto">
-          <span className="text-white text-sm">Alinhe o código na linha vermelha</span>
-        </div>
-
-        <div className="absolute inset-0">
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '35%', background: 'rgba(0,0,0,0.55)' }} />
-          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '35%', background: 'rgba(0,0,0,0.55)' }} />
-          <div style={{ position: 'absolute', top: '35%', left: 0, width: '5%', height: '30%', background: 'rgba(0,0,0,0.55)' }} />
-          <div style={{ position: 'absolute', top: '35%', right: 0, width: '5%', height: '30%', background: 'rgba(0,0,0,0.55)' }} />
-          <div style={{ position: 'absolute', top: '35%', left: '5%', width: '90%', height: '30%', border: '2px solid #22c55e', borderRadius: 6, boxSizing: 'border-box' }} />
-          <div style={{ position: 'absolute', top: '50%', left: '5%', width: '90%', height: '2px', background: '#ef4444', zIndex: 10 }} />
-        </div>
-
-        {lendo && (
-          <div className="absolute bottom-16 left-0 right-0 flex items-center justify-center gap-2 text-white text-sm">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Aguardando código...
-          </div>
-        )}
-      </div>
-    )}
-    </>
+      </>
   );
 }
