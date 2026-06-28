@@ -184,20 +184,34 @@ function validarCodigoBoleto(codigo: string): boolean {
 }
 
 // ─── Tesseract v7 ────────────────────────────────────────────────────────────
-// workerBlobURL: false — carrega o worker diretamente do jsDelivr como URL fixa.
-//   Com true (padrão), o worker é um blob: e dentro dele tenta fazer fetch externo,
-//   o que falha no Chrome Android e outros mobile por restrição de CSP no contexto blob.
-// workerPath — URL explícita do worker no jsDelivr (já liberado no CSP worker-src).
-// langPath   — de onde baixa o por.traineddata; jsDelivr já está no connect-src.
-//   O segundo argumento (1 = OEM_LSTM_ONLY) é mais leve e preciso que o legacy (0).
-const TESSERACT_VERSION = '7.0.0';
-const TESSERACT_CDN = `https://cdn.jsdelivr.net/npm/tesseract.js@${TESSERACT_VERSION}`;
+// Problema: workerBlobURL:false exige CORS no CDN (jsDelivr não retorna
+//   Access-Control-Allow-Origin para Worker), bloqueado pelo browser.
+//   workerBlobURL:true (padrão) cria blob worker mas no celular o blob worker
+//   não consegue fazer fetch externo para carregar o script real.
+//
+// Solução: baixar o script do worker via fetch (que passa pelo connect-src),
+//   criar um Blob com o conteúdo e passar a blob URL para o Tesseract.
+//   Assim o worker roda como blob: (sem CORS), mas o script veio do CDN.
+const TESSERACT_WORKER_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/worker.min.js';
+const TESSERACT_LANG_PATH  = 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/por/4.0.0_best_int';
+
+let _workerBlobUrl: string | null = null;
+
+async function getWorkerBlobUrl(): Promise<string> {
+  if (_workerBlobUrl) return _workerBlobUrl;
+  const res = await fetch(TESSERACT_WORKER_URL);
+  if (!res.ok) throw new Error(`Falha ao baixar worker Tesseract: ${res.status}`);
+  const blob = new Blob([await res.text()], { type: 'application/javascript' });
+  _workerBlobUrl = URL.createObjectURL(blob);
+  return _workerBlobUrl;
+}
 
 async function criarWorkerTesseract() {
+  const workerPath = await getWorkerBlobUrl();
   const worker = await Tesseract.createWorker('por', 1, {
-    workerBlobURL: false,
-    workerPath: `${TESSERACT_CDN}/dist/worker.min.js`,
-    langPath: `https://cdn.jsdelivr.net/npm/@tesseract.js-data/por/4.0.0_best_int`,
+    workerBlobURL: false, // já passamos blob URL manualmente
+    workerPath,
+    langPath: TESSERACT_LANG_PATH,
     logger: () => {},
   });
   return worker;
