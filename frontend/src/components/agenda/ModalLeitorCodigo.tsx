@@ -13,48 +13,164 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+/**
+ * Extrai o código digitável/numérico de um texto OCR.
+ *
+ * Formatos suportados (todos exceto FGTS e EAN de produtos):
+ *
+ * [A] BOLETO BANCÁRIO (47 dígitos)
+ *     Código digitável: 99999.99999 99999.999999 99999.999999 9 99999999999999
+ *     Linha digitável com pontos e espaços — 3 campos + dígito + valor/venc.
+ *
+ * [B] CONCESSIONÁRIAS / CONVÊNIO (48 dígitos, começa com 8)
+ *     Produto 6 — água, luz, gás, telefone, TV a cabo, multas, etc.
+ *     Código digitável: 99999999999-9 99999999999-9 99999999999-9 99999999999-9
+ *     Ou 4 grupos separados por espaço com DV avulso:
+ *       "85800000025 9  98500328261 5  77072026176 2  26894263681 5"
+ *
+ * [C] DARF (Documento de Arrecadação de Receitas Federais) — 48 dígitos, começa com 8
+ *     Segmento 586x — Receita Federal (IRPF, IRPJ, PIS, COFINS, CSLL, IOF, IPI...)
+ *
+ * [D] GPS (Guia da Previdência Social / INSS) — 48 dígitos, começa com 8
+ *     Segmento 580x / 582x
+ *
+ * [E] DAS (Simples Nacional / MEI) — 48 dígitos, começa com 858
+ *     4 grupos: 85800000025 9 · 98500328261 5 · 77072026176 2 · 26894263681 5
+ *
+ * [F] GNRE (Guia Nacional de Recolhimento Estadual) — 48 dígitos, começa com 8
+ *     Segmento 858x — ICMS entre estados, ST, etc.
+ *
+ * [G] DAR / DARE (Documento de Arrecadação Estadual/Municipal) — 48 dígitos
+ *     Formato varia por estado; começa com 8 ou segue padrão bancário
+ *
+ * [H] GRU (Guia de Recolhimento da União) — 48 dígitos, começa com 8
+ *     Segmento 858x ou 826x — taxas federais, passaportes, universidades públicas
+ *
+ * [I] IPTU / IPVA / Licenciamento — emitidos por prefeituras/Detran
+ *     Podem usar padrão bancário (47 dígitos) ou convênio (48 dígitos)
+ *
+ * [J] Código de barras numérico puro — 44 dígitos (lido pela câmera diretamente)
+ *
+ * EXCLUÍDOS intencionalmente:
+ *   - FGTS: migrou para PIX (chave CNPJ 00.360.305/0001-04)
+ *   - EAN-8 / EAN-13 / UPC: códigos de produto — rejeitados pela validação de tamanho
+ */
 function extrairCodigoDigitavel(texto: string): string | null {
+  // Normaliza: quebras de linha viram espaço, múltiplos espaços colapsam
   const t = texto.replace(/\r?\n/g, ' ').replace(/\s{2,}/g, ' ');
 
-  const m1 = t.match(
-      /\d{5}\.\d{4,6}\s+\d{5}\.\d{5,6}\s+\d{5}\.\d{5,6}\s+\d\s+\d{14}/
+  // ── [A] Boleto bancário — 3 campos com pontos + dígito + 14 dígitos ──────
+  // Ex: "34191.75400 71630.330003 00846.390007 9 99890000025000"
+  const mBoleto = t.match(
+      /\d{4,5}\.\d{4,6}[\s]+\d{4,5}\.\d{5,6}[\s]+\d{4,5}\.\d{5,6}[\s]+\d[\s]+\d{14}/
   );
-  if (m1) return m1[0].replace(/\s+/g, '');
+  if (mBoleto) return mBoleto[0].replace(/[\s.]/g, '');
 
-  const m2 = t.match(
-      /\d{8,11}-\d\s+\d{8,11}-\d\s+\d{8,11}-\d\s+\d{8,11}-\d/
+  // ── [B] Convênio/concessionária com hífen — 4 grupos NNNNNNNNNNN-D ───────
+  // Ex: "83600000001-7 63300422008-5 93401190026-7 82259000000-6"
+  // Separadores entre grupos podem ser espaço, ponto, · ou •
+  const mHifen = t.match(
+      /\d{8,12}-\d[\s·•.]+\d{8,12}-\d[\s·•.]+\d{8,12}-\d[\s·•.]+\d{8,12}-\d/
   );
-  if (m2) return m2[0].replace(/[\s-]/g, '');
+  if (mHifen) return mHifen[0].replace(/[\s\-·•.]/g, '');
 
-  const m3 = t.match(
-      /\d{10,11}\s+\d\s+\d{10,11}\s+\d\s+\d{10,11}\s+\d\s+\d{10,11}\s+\d/
+  // ── [C–H] DAS / GPS / DARF / GNRE / GRU / DAR — 4 grupos com DV avulso ──
+  // Ex DAS: "85800000025 9  98500328261 5  77072026176 2  26894263681 5"
+  // Ex GPS: "85800000001 0  00003900202 1  60127062026 3  10003000000 0"
+  // Cada grupo: 8–12 dígitos, espaço(s)/separador, 1 dígito verificador
+  const SEP = /[\s·•,]+/;
+  const GRP = /(\d{8,12})/;
+  const DV  = /(\d)/;
+  const patGrupos = new RegExp(
+      GRP.source + SEP.source + DV.source + SEP.source +
+      GRP.source + SEP.source + DV.source + SEP.source +
+      GRP.source + SEP.source + DV.source + SEP.source +
+      GRP.source + SEP.source + DV.source
   );
-  if (m3) return m3[0].replace(/\s+/g, '');
+  const mGrupos = t.match(patGrupos);
+  if (mGrupos) {
+    return mGrupos[1] + mGrupos[2] +
+        mGrupos[3] + mGrupos[4] +
+        mGrupos[5] + mGrupos[6] +
+        mGrupos[7] + mGrupos[8];
+  }
 
-  const semEspacos = t.replace(/[\s.\-]/g, '');
-  const m4 = semEspacos.match(/\d{44,48}/);
-  if (m4) return m4[0];
+  // ── Fallback 1: remove separadores comuns e busca bloco de 44–48 dígitos ──
+  // Cobre casos onde o OCR lê sem espaços ou com separadores incomuns
+  const semSep = t.replace(/[\s.\-·•,/]/g, '');
+  const mBloco = semSep.match(/\d{44,48}/);
+  if (mBloco) return mBloco[0];
+
+  // ── Fallback 2: extrai TODOS os dígitos do texto original ────────────────
+  // Último recurso: OCR inseriu espaços no meio dos números
+  const soDig = texto.replace(/\D/g, '');
+  const mTudo = soDig.match(/\d{44,48}/);
+  if (mTudo) return mTudo[0];
 
   return null;
 }
 
+/**
+ * Identifica o tipo de documento pelo código numérico limpo (sem espaços/pontos).
+ *
+ * Referências de segmento (posições 2–4 do código de 48 dígitos começando com 8):
+ *   826x → GRU (Guia de Recolhimento da União)
+ *   840x → DARF Normal
+ *   841x → DARF Simples
+ *   850x → GPS / INSS
+ *   858x → DAS (Simples Nacional / MEI) / GNRE / DAE
+ *   880x → Multas de trânsito (RENAINF)
+ *   836x / 863x → Concessionárias (energia, água, gás, telefone)
+ *   Outros com 8 → Convênio/concessionária genérico
+ */
 function identificarTipoDocumento(codigo: string): { tipo: string; valido: boolean } {
   const limpo = codigo.replace(/[\s.\-]/g, '');
 
+  // Código de barras puro lido pela câmera (44 dígitos)
   if (limpo.length === 44) {
-    return { tipo: 'Código de Barras', valido: true };
+    if (/^\d{44}$/.test(limpo)) return { tipo: 'Código de Barras', valido: true };
+    return { tipo: 'Desconhecido', valido: false };
   }
 
+  // Código digitável — 47 dígitos (boleto bancário) ou 48 dígitos (guias/convênio)
   if (limpo.length === 47 || limpo.length === 48) {
-    if (limpo.startsWith('8')) {
-      const banco = limpo.substring(1, 4);
-      if (banco === '582' || banco === '580') return { tipo: 'GPS / INSS', valido: true };
-      if (banco === '586') return { tipo: 'DARF / Receita Federal', valido: true };
-      if (banco === '567' || banco === '566') return { tipo: 'DAR Estadual', valido: true };
-      if (banco === '858') return { tipo: 'DARF / GPS / GNRE', valido: true };
-      return { tipo: 'Guia de Arrecadação', valido: true };
+    if (!limpo.startsWith('8')) {
+      // Boleto bancário (começa com código do banco, ex: 341, 237, 033...)
+      return { tipo: 'Boleto Bancário', valido: true };
     }
-    return { tipo: 'Boleto Bancário', valido: true };
+
+    // Produto 6 — começa com 8, segmento nas posições 2-4
+    const seg = limpo.substring(1, 4); // posições 2,3,4
+
+    // GRU — Guia de Recolhimento da União (taxas federais, passaportes, universidades)
+    if (seg.startsWith('82') || seg.startsWith('826')) return { tipo: 'GRU — Guia de Recolhimento da União', valido: true };
+
+    // DARF — Receita Federal (IRPF, IRPJ, PIS, COFINS, CSLL, IOF, IPI, CIDE...)
+    if (seg === '840' || seg === '841' || seg.startsWith('84')) return { tipo: 'DARF — Receita Federal', valido: true };
+
+    // GPS / INSS — Guia da Previdência Social
+    if (seg === '850' || seg === '851' || seg === '852' || seg.startsWith('85') && parseInt(seg) <= 857) {
+      return { tipo: 'GPS — INSS / Previdência Social', valido: true };
+    }
+
+    // DAS / GNRE / DAE — Simples Nacional, MEI, GNRE, Secretarias Estaduais
+    if (seg === '858') {
+      // DAS do Simples Nacional e MEI: posição 5 indica tipo
+      const sub = limpo.substring(4, 7);
+      if (sub === '000' || sub === '001') return { tipo: 'DAS — Simples Nacional / MEI', valido: true };
+      return { tipo: 'GNRE / DAE — Guia Estadual', valido: true };
+    }
+
+    // Multas de trânsito — RENAINF
+    if (seg === '880' || seg.startsWith('88')) return { tipo: 'Multa de Trânsito (RENAINF)', valido: true };
+
+    // Concessionárias — energia elétrica, água, gás, telefone, TV a cabo
+    if (seg.startsWith('83') || seg.startsWith('86') || seg.startsWith('87')) {
+      return { tipo: 'Concessionária (energia / água / gás / telefone)', valido: true };
+    }
+
+    // Convênio genérico com prefixo 8 não mapeado acima
+    return { tipo: 'Guia de Arrecadação / Convênio', valido: true };
   }
 
   return { tipo: 'Desconhecido', valido: false };
