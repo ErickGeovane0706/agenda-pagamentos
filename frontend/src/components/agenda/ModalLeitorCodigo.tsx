@@ -8,8 +8,10 @@ import { clsx } from 'clsx';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useToastStore } from '../../store/toastStore';
 
-import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+// Worker do PDF.js via CDN — evita o erro de import dinâmico de .mjs bloqueado
+// pelo Brave, Opera e Safari. O jsDelivr já está liberado no CSP (worker-src).
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+    `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
