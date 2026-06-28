@@ -667,24 +667,28 @@ export function ModalLeitorCodigo({
               {/* Aba Imagem / PDF */}
               {(aba === 'imagem' || aba === 'pdf') && (
                   <div className="space-y-4">
-                    <label
-                        htmlFor="file-input"
-                        className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center cursor-pointer hover:border-[#0ea5e9] transition-colors block"
-                    >
-                      {aba === 'imagem' ? (
-                          <>
-                            <Image className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                            <p className="text-sm text-slate-500">Clique para selecionar uma imagem</p>
-                            <p className="text-xs text-slate-400 mt-1">PNG, JPG, JPEG, WEBP</p>
-                          </>
-                      ) : (
-                          <>
-                            <FileText className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                            <p className="text-sm text-slate-500">Clique para selecionar um PDF</p>
-                            <p className="text-xs text-slate-400 mt-1">Até 10MB</p>
-                          </>
-                      )}
-                    </label>
+
+                    {/* Seletor de arquivo — escondido enquanto seletor de páginas PDF estiver ativo */}
+                    {paginasPDF.length === 0 && (
+                        <label
+                            htmlFor="file-input"
+                            className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center cursor-pointer hover:border-[#0ea5e9] transition-colors block"
+                        >
+                          {aba === 'imagem' ? (
+                              <>
+                                <Image className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                                <p className="text-sm text-slate-500">Clique para selecionar uma imagem</p>
+                                <p className="text-xs text-slate-400 mt-1">PNG, JPG, JPEG, WEBP</p>
+                              </>
+                          ) : (
+                              <>
+                                <FileText className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                                <p className="text-sm text-slate-500">Clique para selecionar um PDF</p>
+                                <p className="text-xs text-slate-400 mt-1">Até 10MB</p>
+                              </>
+                          )}
+                        </label>
+                    )}
 
                     {previewUrl && aba === 'imagem' && (
                         <div className="rounded-xl overflow-hidden border border-slate-100">
@@ -692,45 +696,72 @@ export function ModalLeitorCodigo({
                         </div>
                     )}
 
+                    {/* Seletor de páginas do PDF */}
                     {paginasPDF.length > 0 && (
                         <div>
-                          <p className="text-sm font-medium text-slate-700 mb-1">
-                            PDF com {paginasPDF.length} páginas — selecione o boleto que deseja ler:
-                          </p>
-                          <p className="text-xs text-slate-400 mb-3">
-                            Toque na página que contém o boleto
-                          </p>
+                          {/* Cabeçalho do seletor */}
+                          <div className="flex items-center justify-between mb-3">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-700">
+                                PDF com {paginasPDF.length} páginas
+                              </p>
+                              <p className="text-xs text-slate-400 mt-0.5">
+                                Toque na página que contém o código de barras
+                              </p>
+                            </div>
+                            <button
+                                onClick={() => { setPaginasPDF([]); setPdfRef(null); }}
+                                className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 border border-slate-200 rounded-lg px-2 py-1.5 transition-colors"
+                            >
+                              <X className="w-3 h-3" />
+                              Trocar arquivo
+                            </button>
+                          </div>
+
+                          {/* Grid de miniaturas */}
                           <div className="grid grid-cols-2 gap-3">
                             {paginasPDF.map((src, i) => (
                                 <button
                                     key={i}
                                     onClick={() => pdfRef && lerCodigoDaPagina(pdfRef, i + 1)}
                                     disabled={lendo}
-                                    className="relative border-2 border-slate-200 rounded-xl overflow-hidden hover:border-[#0ea5e9] transition-colors disabled:opacity-50 group"
+                                    className={clsx(
+                                        'relative border-2 rounded-xl overflow-hidden transition-all group',
+                                        paginaCarregando === i + 1
+                                            ? 'border-[#0ea5e9] scale-[0.98]'
+                                            : 'border-slate-200 hover:border-[#0ea5e9] hover:shadow-md',
+                                        lendo && paginaCarregando !== i + 1 && 'opacity-40 cursor-not-allowed'
+                                    )}
                                 >
-                                  <img src={src} alt={`Página ${i + 1}`} className="w-full" />
+                                  <img src={src} alt={`Página ${i + 1}`} className="w-full block" />
+
+                                  {/* Spinner na página sendo processada */}
                                   {paginaCarregando === i + 1 && (
-                                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                      <div className="absolute inset-0 bg-[#0c4a6e]/60 flex flex-col items-center justify-center gap-2">
                                         <Loader2 className="w-6 h-6 text-white animate-spin" />
+                                        <span className="text-white text-xs font-medium">Lendo...</span>
                                       </div>
                                   )}
-                                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
-                                  <div className="absolute bottom-0 inset-x-0 bg-slate-900/70 text-white text-xs py-1 text-center">
+
+                                  {/* Hover overlay nas outras páginas */}
+                                  {paginaCarregando !== i + 1 && (
+                                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                                  )}
+
+                                  {/* Label da página */}
+                                  <div className={clsx(
+                                      'absolute bottom-0 inset-x-0 text-white text-xs py-1.5 text-center font-medium',
+                                      paginaCarregando === i + 1 ? 'bg-[#0c4a6e]' : 'bg-slate-900/70'
+                                  )}>
                                     Página {i + 1}
                                   </div>
                                 </button>
                             ))}
                           </div>
-                          <button
-                              onClick={() => { setPaginasPDF([]); setPdfRef(null); }}
-                              className="mt-3 w-full text-sm text-slate-400 hover:text-slate-600 py-2"
-                          >
-                            Cancelar e escolher outro arquivo
-                          </button>
                         </div>
                     )}
 
-                    {lendo && (
+                    {lendo && paginaCarregando === null && (
                         <div className="flex items-center justify-center gap-2 text-sm text-slate-500">
                           <Loader2 className="w-4 h-4 animate-spin" />
                           {workerLoadingRef.current ? 'Carregando OCR (primeira vez)...' : 'Lendo código...'}
