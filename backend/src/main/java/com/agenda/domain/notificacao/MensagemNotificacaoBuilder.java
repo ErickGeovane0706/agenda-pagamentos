@@ -6,79 +6,115 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Monta o texto da mensagem de WhatsApp a partir das pendências já filtradas
- * (vencidas, vencendo hoje, vencendo no fim de semana). Segue a ordem de
- * prioridade combinada: vencidos primeiro, depois hoje, depois fim de semana.
- * Se não houver nada pendente, envia mensagem de confirmação "tudo certo".
+ * Monta os PARÂMETROS dos templates de WhatsApp a partir das pendências já
+ * filtradas (vencidas, vencendo hoje, vencendo no fim de semana).
+ * <p>
+ * Importante: isto não monta mais um texto livre — desde que as mensagens
+ * são iniciadas pela empresa, a Meta só aceita templates pré-aprovados, com
+ * conteúdo fixo + variáveis posicionais ({{1}}, {{2}}...). As variáveis não
+ * podem conter quebra de linha, então não dá pra simular aqui a lista
+ * "🔴 VENCIDOS / 🟡 VENCE HOJE / 🔵 FIM DE SEMANA" de antes; em vez disso,
+ * o scheduler dispara uma mensagem de resumo (este builder monta os valores
+ * de {@link #parametrosResumo}) seguida de uma mensagem por pendência
+ * individual ({@link #parametrosItem}), na ordem de prioridade vencidos →
+ * hoje → fim de semana.
  */
 public class MensagemNotificacaoBuilder {
 
+    /** Nome do template de resumo cadastrado na Meta. */
+    public static final String TEMPLATE_RESUMO = "lembrete_resumo_pendencias";
+
+    /** Nome do template de item individual cadastrado na Meta. */
+    public static final String TEMPLATE_ITEM = "lembrete_detalhe_loja";
+
     /**
-     * Monta a mensagem completa de WhatsApp a partir das pendências já
-     * separadas por categoria (vencidos, vence hoje, vence fim de semana).
-     * <p>
-     * Regra de negócio: a ordem de exibição é sempre vencidos → vence hoje
-     * → vence fim de semana, porque prioriza o que requer ação mais urgente.
-     * Se não houver nenhuma pendência, retorna uma mensagem de "tudo certo"
-     * para que o usuário tenha confirmação positiva de que o sistema está
-     * verificando.
-     *
-     * @param vencidos       pendências com vencimento anterior a hoje
-     * @param venceHoje      pendências que vencem exatamente hoje
-     * @param venceFimDeSemana pendências que vencem no sábado ou domingo (só faz sentido sexta)
-     * @param hoje           data de referência (normalmente LocalDate.now())
-     * @return texto formatado para envio via WhatsApp
+     * Monta, na ordem certa (vencidos → vence hoje → vence fim de semana),
+     * a lista de pendências que vão gerar uma mensagem de template individual
+     * cada. Mantém a mesma prioridade de exibição que a versão antiga em
+     * texto único usava, só que agora cada item é uma mensagem separada.
      */
-    public String construir(
+    public List<PendenciaNotificacao> ordenarParaEnvio(
             List<PendenciaNotificacao> vencidos,
             List<PendenciaNotificacao> venceHoje,
-            List<PendenciaNotificacao> venceFimDeSemana,
-            LocalDate hoje
+            List<PendenciaNotificacao> venceFimDeSemana
     ) {
-        if (vencidos.isEmpty() && venceHoje.isEmpty() && venceFimDeSemana.isEmpty()) {
-            return "✅ *Tudo certo!*\nNenhum boleto, PIX ou cheque pendente hoje.";
-        }
-
-        var sb = new StringBuilder();
-
-        if (!vencidos.isEmpty()) {
-            sb.append("🔴 *VENCIDOS (").append(vencidos.size()).append(")*\n");
-            for (var p : vencidos) {
-                long dias = p.diasAtraso(hoje);
-                sb.append("• ").append(linhaItem(p))
-                        .append(" - venceu há ").append(dias).append(dias == 1 ? " dia" : " dias")
-                        .append("\n");
-            }
-            sb.append("\n");
-        }
-
-        if (!venceHoje.isEmpty()) {
-            sb.append("🟡 *VENCE HOJE (").append(venceHoje.size()).append(")*\n");
-            for (var p : venceHoje) {
-                sb.append("• ").append(linhaItem(p)).append("\n");
-            }
-            sb.append("\n");
-        }
-
-        if (!venceFimDeSemana.isEmpty()) {
-            sb.append("🔵 *VENCE NO FIM DE SEMANA (").append(venceFimDeSemana.size()).append(")*\n");
-            for (var p : venceFimDeSemana) {
-                String diaSemana = p.vencimento().getDayOfWeek().getDisplayName(
-                        java.time.format.TextStyle.FULL, new Locale("pt", "BR"));
-                sb.append("• ").append(linhaItem(p))
-                        .append(" - vence ").append(diaSemana)
-                        .append(", pode pagar até segunda\n");
-            }
-            sb.append("\n");
-        }
-
-        return sb.toString().trim();
+        var todos = new java.util.ArrayList<PendenciaNotificacao>(
+                vencidos.size() + venceHoje.size() + venceFimDeSemana.size());
+        todos.addAll(vencidos);
+        todos.addAll(venceHoje);
+        todos.addAll(venceFimDeSemana);
+        return todos;
     }
 
-    private String linhaItem(PendenciaNotificacao p) {
-        return tipoLabel(p.tipo()) + " " + p.fornecedor()
-                + " - " + formatarValor(p.valor())
-                + " (" + p.lojaNome() + ")";
+    /**
+     * Parâmetros {{1}}..{{5}} do template {@link #TEMPLATE_RESUMO}:
+     * nome do usuário, total de pendências, total de lojas distintas,
+     * valor total geral e valor total já vencido.
+     * <p>
+     * Quando não há nada vencido, {{5}} vem como "R$ 0,00" — o texto fixo
+     * do template ("Desse total, {{5}} já está vencido.") continua correto
+     * factualmente mesmo nesse caso, então não precisamos de um segundo
+     * template condicional só para esse cenário.
+     */
+    public List<String> parametrosResumo(
+            String nomeUsuario,
+            List<PendenciaNotificacao> vencidos,
+            List<PendenciaNotificacao> venceHoje,
+            List<PendenciaNotificacao> venceFimDeSemana
+    ) {
+        List<PendenciaNotificacao> todos = ordenarParaEnvio(vencidos, venceHoje, venceFimDeSemana);
+
+        long totalPendencias = todos.size();
+        long totalLojas = todos.stream().map(PendenciaNotificacao::lojaId).distinct().count();
+        BigDecimal valorTotal = todos.stream()
+                .map(PendenciaNotificacao::valor)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal valorVencido = vencidos.stream()
+                .map(PendenciaNotificacao::valor)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        return List.of(
+                nomeUsuario,
+                String.valueOf(totalPendencias),
+                String.valueOf(totalLojas),
+                formatarValor(valorTotal),
+                formatarValor(valorVencido)
+        );
+    }
+
+    /**
+     * Parâmetros {{1}}..{{4}} do template {@link #TEMPLATE_ITEM} para UMA
+     * pendência, na ordem exigida pelo corpo cadastrado na Meta:
+     * <pre>
+     * 📍 Loja: {{1}}
+     * 🔔 Lembrete de pagamento pendente:
+     * 📄 Referente a: {{2}}
+     * 💰 Valor a pagar: R$ {{3}}
+     * 📅 {{4}} Vencimento.
+     * </pre>
+     * Esse template tem só 4 variáveis (a Meta não aprovou a versão com tipo
+     * e fornecedor separados em 5 campos), então {{2}} já vem combinado
+     * como "Boleto Light", e {{3}} não inclui o "R$" (o texto fixo do
+     * template já tem o "R$" antes da variável). {{4}} é a data de
+     * vencimento formatada (dd/MM/yyyy) — o texto fixo já diz "Vencimento."
+     * depois da variável, então não dá pra colocar texto livre tipo "venceu
+     * há 3 dias" ali sem ficar estranho ("📅 venceu há 3 dias Vencimento.").
+     */
+    public List<String> parametrosItem(PendenciaNotificacao p) {
+        return List.of(
+                p.lojaNome(),
+                tipoLabel(p.tipo()) + " " + p.fornecedor(),
+                formatarValorSemPrefixo(p.valor()),
+                formatarData(p.vencimento())
+        );
+    }
+
+    private String formatarData(LocalDate data) {
+        return data.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+    }
+
+    private String formatarValorSemPrefixo(BigDecimal valor) {
+        return String.format(Locale.of("pt", "BR"), "%,.2f", valor);
     }
 
     private String tipoLabel(PendenciaNotificacao.TipoPendencia tipo) {

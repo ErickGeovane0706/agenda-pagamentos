@@ -78,9 +78,16 @@ public class NotificacaoWhatsAppScheduler {
     /**
      * Monta as listas de pendências do usuário e, se o horário atual for
      * elegível (de acordo com a regra de degradação de frequência), envia
-     * o resumo por WhatsApp.
+     * as notificações por WhatsApp: 1 mensagem de resumo + 1 mensagem de
+     * template por pendência individual, nessa ordem.
      * <p>
-     * Se o usuário não tiver lojas selecionadas, pula sem erro.
+     * Se o usuário não tiver lojas selecionadas, pula sem erro. Se não
+     * houver nenhuma pendência, não envia nada — diferente do
+     * comportamento antigo (que mandava uma mensagem de texto livre
+     * "tudo certo"), porque não temos um template aprovado para esse caso
+     * e o WhatsApp não permite enviar texto livre fora da janela de 24h.
+     * Se quisermos esse aviso de volta, precisamos cadastrar um terceiro
+     * template ("tudo certo, nenhuma pendência hoje") na Meta.
      */
     private void processarNotificacao(PreferenciaNotificacao pref, LocalTime agora, LocalDate hoje) {
         UUID empresaId = pref.getUsuario().getEmpresa().getId();
@@ -95,6 +102,11 @@ public class NotificacaoWhatsAppScheduler {
         List<PendenciaNotificacao> venceHoje = buscarVenceHoje(empresaId, lojaIds, hoje);
         List<PendenciaNotificacao> venceFimDeSemana = buscarVenceFimDeSemana(empresaId, lojaIds, hoje);
 
+        if (vencidos.isEmpty() && venceHoje.isEmpty() && venceFimDeSemana.isEmpty()) {
+            log.info("Usuário {} não tem pendências hoje, nada a notificar.", pref.getUsuario().getId());
+            return;
+        }
+
         long maiorAtraso = vencidos.stream()
                 .mapToLong(p -> p.diasAtraso(hoje))
                 .max()
@@ -106,14 +118,35 @@ public class NotificacaoWhatsAppScheduler {
             return;
         }
 
-        var params = new ParametrosTemplateResumo()
-                .extrair(pref.getUsuario().getNome(), vencidos, venceHoje, venceFimDeSemana);
+        enviarNotificacoes(pref, vencidos, venceHoje, venceFimDeSemana);
+    }
 
-        whatsAppService.enviarTemplate(
-                pref.getTelefoneWhatsapp(),
-                "lembrete_resumo_pendencias",   // nome exato do template aprovado na Meta
-                params.paraLista()
-        );
+    /**
+     * Dispara as mensagens de WhatsApp propriamente ditas: primeiro o
+     * template de resumo (1 mensagem), depois um template de item para
+     * cada pendência individual, na ordem vencidos → vence hoje → vence
+     * fim de semana. Mesmo que sejam várias mensagens, a Meta cobra apenas
+     * 1 conversa de 24h por usuário nesse disparo, então o custo não
+     * multiplica por item.
+     */
+    private void enviarNotificacoes(
+            PreferenciaNotificacao pref,
+            List<PendenciaNotificacao> vencidos,
+            List<PendenciaNotificacao> venceHoje,
+            List<PendenciaNotificacao> venceFimDeSemana
+    ) {
+        String telefone = pref.getTelefoneWhatsapp();
+        String nomeUsuario = pref.getUsuario().getNome();
+
+        List<String> parametrosResumo = mensagemBuilder.parametrosResumo(
+                nomeUsuario, vencidos, venceHoje, venceFimDeSemana);
+        whatsAppService.enviarTemplate(telefone, MensagemNotificacaoBuilder.TEMPLATE_RESUMO, parametrosResumo);
+
+        List<PendenciaNotificacao> itens = mensagemBuilder.ordenarParaEnvio(vencidos, venceHoje, venceFimDeSemana);
+        for (PendenciaNotificacao item : itens) {
+            List<String> parametrosItem = mensagemBuilder.parametrosItem(item);
+            whatsAppService.enviarTemplate(telefone, MensagemNotificacaoBuilder.TEMPLATE_ITEM, parametrosItem);
+        }
     }
 
     /**
