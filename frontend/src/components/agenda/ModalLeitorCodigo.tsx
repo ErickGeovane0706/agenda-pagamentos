@@ -183,18 +183,22 @@ function validarCodigoBoleto(codigo: string): boolean {
   return /^\d{44,48}$/.test(limpo);
 }
 
-// ─── Tesseract v7 — createWorker (API correta para v5+/v7) ────────────────────
-// Em v7 as opções workerPath/langPath/corePath foram movidas para createWorker()
-// O langPath controla de onde baixa o por.traineddata
-// Usando jsDelivr pois já está liberado no CSP (connect-src)
-const TESSERACT_LANG_PATH = 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/por/4.0.0_best_int';
+// ─── Tesseract v7 ────────────────────────────────────────────────────────────
+// workerBlobURL: false — carrega o worker diretamente do jsDelivr como URL fixa.
+//   Com true (padrão), o worker é um blob: e dentro dele tenta fazer fetch externo,
+//   o que falha no Chrome Android e outros mobile por restrição de CSP no contexto blob.
+// workerPath — URL explícita do worker no jsDelivr (já liberado no CSP worker-src).
+// langPath   — de onde baixa o por.traineddata; jsDelivr já está no connect-src.
+//   O segundo argumento (1 = OEM_LSTM_ONLY) é mais leve e preciso que o legacy (0).
+const TESSERACT_VERSION = '7.0.0';
+const TESSERACT_CDN = `https://cdn.jsdelivr.net/npm/tesseract.js@${TESSERACT_VERSION}`;
 
 async function criarWorkerTesseract() {
   const worker = await Tesseract.createWorker('por', 1, {
-    langPath: TESSERACT_LANG_PATH,
-    // workerBlobURL: false faz o worker ser carregado via script normal (passa pelo CSP worker-src 'self' blob:)
-    workerBlobURL: true,
-    logger: () => {}, // silencia logs de progresso
+    workerBlobURL: false,
+    workerPath: `${TESSERACT_CDN}/dist/worker.min.js`,
+    langPath: `https://cdn.jsdelivr.net/npm/@tesseract.js-data/por/4.0.0_best_int`,
+    logger: () => {},
   });
   return worker;
 }
