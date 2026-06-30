@@ -72,17 +72,17 @@ class WhatsAppAgentServiceTest {
 
     @Test
     void telefoneNaoCadastrado_naoDeveConsultarBancoNemClassificarMensagem() {
-        when(preferenciaRepository.findByTelefoneNormalizado("5583988887777")).thenReturn(Optional.empty());
+        when(preferenciaRepository.findByTelefoneNormalizadoIn(List.of("5583988887777", "558388887777"))).thenReturn(List.of());
 
         agentService.processarMensagem("5583988887777", "quanto tenho pra pagar hoje");
 
         verifyNoInteractions(classifierService, boletoRepository, pixRepository, chequeRepository);
-        verify(whatsAppService).enviarMensagemTexto(eq("5583988887777"), contains("não localizei"));
+        verify(whatsAppService).enviarMensagemTexto(eq("5583988887777"), contains("Não localizei"));
     }
 
     @Test
     void telefoneCadastrado_classificaEResponde() {
-        when(preferenciaRepository.findByTelefoneNormalizado("5583999990000")).thenReturn(Optional.of(preferencia));
+        when(preferenciaRepository.findByTelefoneNormalizadoIn(List.of("5583999990000", "558399990000"))).thenReturn(List.of(preferencia));
         when(classifierService.classificar(any())).thenReturn(
                 ResultadoClassificacao.builder()
                         .intencao(IntencaoAgente.SAUDACAO_AJUDA)
@@ -103,7 +103,7 @@ class WhatsAppAgentServiceTest {
 
         preferencia.setLojaIds(java.util.Set.of(lojaPermitida.getId()));
 
-        when(preferenciaRepository.findByTelefoneNormalizado("5583999990000")).thenReturn(Optional.of(preferencia));
+        when(preferenciaRepository.findByTelefoneNormalizadoIn(List.of("5583999990000", "558399990000"))).thenReturn(List.of(preferencia));
         when(lojaRepository.findByEmpresaIdOrderByNome(empresa.getId())).thenReturn(List.of(lojaPermitida, lojaNaoPermitida));
         when(classifierService.classificar(any())).thenReturn(
                 ResultadoClassificacao.builder()
@@ -120,7 +120,7 @@ class WhatsAppAgentServiceTest {
 
     @Test
     void falhaNaClassificacao_respondeMensagemDeErroEmVezDeQuebrar() {
-        when(preferenciaRepository.findByTelefoneNormalizado("5583999990000")).thenReturn(Optional.of(preferencia));
+        when(preferenciaRepository.findByTelefoneNormalizadoIn(List.of("5583999990000", "558399990000"))).thenReturn(List.of(preferencia));
         when(classifierService.classificar(any())).thenThrow(new RuntimeException("timeout simulado"));
 
         assertDoesNotThrow(() -> agentService.processarMensagem("5583999990000", "quanto tenho pra pagar"));
@@ -131,7 +131,7 @@ class WhatsAppAgentServiceTest {
     @Test
     @SuppressWarnings("unchecked")
     void consultarPendencias_somaValoresCorretamente() {
-        when(preferenciaRepository.findByTelefoneNormalizado("5583999990000")).thenReturn(Optional.of(preferencia));
+        when(preferenciaRepository.findByTelefoneNormalizadoIn(List.of("5583999990000", "558399990000"))).thenReturn(List.of(preferencia));
         when(classifierService.classificar(any())).thenReturn(
                 ResultadoClassificacao.builder()
                         .intencao(IntencaoAgente.CONSULTAR_PENDENCIAS)

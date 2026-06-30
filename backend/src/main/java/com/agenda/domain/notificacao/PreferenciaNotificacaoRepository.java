@@ -66,4 +66,29 @@ public interface PreferenciaNotificacaoRepository extends JpaRepository<Preferen
       AND function('regexp_replace', p.telefoneWhatsapp, '[^0-9]', '', 'g') = :telefoneNormalizado
     """)
     Optional<PreferenciaNotificacao> findByTelefoneNormalizado(@Param("telefoneNormalizado") String telefoneNormalizado);
+
+    /**
+     * Mesma busca que {@link #findByTelefoneNormalizado(String)}, mas aceita
+     * uma lista de variantes do telefone — necessário porque a Meta Cloud
+     * API pode enviar o número do remetente COM ou SEM o nono dígito dos
+     * celulares brasileiros, independente de como o número foi cadastrado
+     * em Configurações. Ver
+     * {@code WhatsAppAgentService.gerarVariantesTelefoneBr}, que monta a
+     * lista de variantes antes de chamar este método.
+     * <p>
+     * {@code SELECT DISTINCT} apenas evita duplicar a mesma linha caso ela
+     * coincidentemente bata com mais de uma variante da lista — não resolve
+     * ambiguidade de cadastro duplicado (dois registros para o mesmo
+     * titular), que continua sendo tratada no service.
+     */
+    @Query("""
+    SELECT DISTINCT p FROM PreferenciaNotificacao p
+    JOIN FETCH p.usuario u
+    JOIN FETCH u.empresa
+    LEFT JOIN FETCH p.lojaIds
+    WHERE p.whatsappAtivo = true
+      AND p.telefoneWhatsapp IS NOT NULL
+      AND function('regexp_replace', p.telefoneWhatsapp, '[^0-9]', '', 'g') IN :telefonesNormalizados
+    """)
+    List<PreferenciaNotificacao> findByTelefoneNormalizadoIn(@Param("telefonesNormalizados") List<String> telefonesNormalizados);
 }

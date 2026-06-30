@@ -95,9 +95,50 @@ public class WhatsAppAgentService {
         }
     }
 
+    /**
+     * Busca a preferência pelo telefone tentando as variantes possíveis do
+     * nono dígito (ver {@link #gerarVariantesTelefoneBr}). Necessário porque
+     * a Meta Cloud API pode enviar o {@code from} do webhook sem o nono
+     * dígito mesmo quando o número cadastrado em Configurações tem 13
+     * dígitos (com o 9) — ou vice-versa, se o usuário cadastrar sem o 9.
+     */
     private Optional<PreferenciaNotificacao> buscarPreferenciaPorTelefone(String telefone) {
         String normalizado = telefone.replaceAll("[^0-9]", "");
-        return preferenciaRepository.findByTelefoneNormalizado(normalizado);
+        List<String> variantes = gerarVariantesTelefoneBr(normalizado);
+        List<PreferenciaNotificacao> encontrados = preferenciaRepository.findByTelefoneNormalizadoIn(variantes);
+
+        if (encontrados.size() > 1) {
+            log.warn("[WHATSAPP-AGENTE] Telefone {} casou com {} cadastros diferentes — usando o primeiro.",
+                    mascarar(telefone), encontrados.size());
+        }
+        return encontrados.stream().findFirst();
+    }
+
+    /**
+     * Números de celular no Brasil têm o formato 55 + DDD(2) + 9 + XXXXXXXX(8),
+     * mas a Meta Cloud API às vezes envia (ou o usuário cadastra) a variante
+     * antiga sem o nono dígito: 55 + DDD(2) + XXXXXXXX(8). Geramos as duas
+     * formas possíveis e deixamos o repositório decidir qual existe.
+     * <p>
+     * Lista tem no máximo 2 elementos — a consulta resultante usa o mesmo
+     * índice/coluna de sempre, sem impacto de performance relevante.
+     */
+    private List<String> gerarVariantesTelefoneBr(String normalizado) {
+        List<String> variantes = new java.util.ArrayList<>();
+        variantes.add(normalizado);
+
+        boolean candidatoBrasil = normalizado.startsWith("55");
+        if (candidatoBrasil) {
+            String resto = normalizado.substring(2); // remove "55"
+            if (resto.length() == 11 && resto.charAt(2) == '9') {
+                // formato com 9: DDD(2) + 9 + numero(8) -> gera a variante sem o 9
+                variantes.add("55" + resto.substring(0, 2) + resto.substring(3));
+            } else if (resto.length() == 10) {
+                // formato sem 9: DDD(2) + numero(8) -> gera a variante com o 9
+                variantes.add("55" + resto.substring(0, 2) + "9" + resto.substring(2));
+            }
+        }
+        return variantes;
     }
 
     private String rotear(UUID empresaId, PreferenciaNotificacao pref, ResultadoClassificacao resultado) {
