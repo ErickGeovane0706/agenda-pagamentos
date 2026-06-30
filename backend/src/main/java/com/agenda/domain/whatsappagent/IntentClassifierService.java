@@ -67,6 +67,10 @@ public class IntentClassifierService {
         if (mensagemCliente == null || mensagemCliente.isBlank()) {
             return ResultadoClassificacao.naoEntendido();
         }
+        if (apiKey == null || apiKey.isBlank()) {
+            log.error("[WHATSAPP-AGENTE] ANTHROPIC_API_KEY não configurada — o agente conversacional não pode classificar mensagens. Configure a variável de ambiente no Railway.");
+            return ResultadoClassificacao.naoEntendido();
+        }
 
         try {
             String prompt = montarPrompt(mensagemCliente);

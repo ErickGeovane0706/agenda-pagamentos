@@ -47,6 +47,10 @@ public class WhatsAppWebhookController {
             @RequestParam("hub.verify_token") String token,
             @RequestParam("hub.challenge") String challenge
     ) {
+        if (verifyToken == null || verifyToken.isBlank()) {
+            log.error("[WHATSAPP-WEBHOOK] WHATSAPP_WEBHOOK_VERIFY_TOKEN não configurado — recusando verificação por segurança.");
+            return ResponseEntity.status(500).build();
+        }
         if ("subscribe".equals(mode) && verifyToken.equals(token)) {
             log.info("[WHATSAPP-WEBHOOK] Verificação de webhook bem-sucedida.");
             return ResponseEntity.ok(challenge);
