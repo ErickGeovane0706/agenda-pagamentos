@@ -83,6 +83,47 @@ public class WhatsAppCloudApiService implements WhatsAppService {
         }
     }
 
+    @Override
+    public void enviarMensagemTexto(String telefoneDestino, String texto) {
+        if (telefoneDestino == null || telefoneDestino.isBlank()) {
+            log.warn("[WHATSAPP] Telefone de destino não informado, mensagem de texto não enviada.");
+            return;
+        }
+        if (texto == null || texto.isBlank()) {
+            log.warn("[WHATSAPP] Texto vazio, mensagem não enviada para {}.", telefoneDestino);
+            return;
+        }
+
+        try {
+            String url = "https://graph.facebook.com/v20.0/" + phoneNumberId + "/messages";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.setBearerAuth(token);
+
+            String numero = telefoneDestino.replaceAll("[^0-9]", "");
+
+            Map<String, Object> body = Map.of(
+                    "messaging_product", "whatsapp",
+                    "to", numero,
+                    "type", "text",
+                    "text", Map.of("body", texto, "preview_url", false)
+            );
+
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url, HttpMethod.POST,
+                    new HttpEntity<>(body, headers),
+                    String.class
+            );
+
+            log.info("[WHATSAPP] Mensagem de texto enviada para {} — status: {}", numero, response.getStatusCode());
+
+        } catch (Exception e) {
+            log.error("[WHATSAPP] Falha ao enviar mensagem de texto para {}: {}", telefoneDestino, e.getMessage());
+            // Não propagar — mesma política de enviarTemplate: erro de WhatsApp não derruba o agente
+        }
+    }
+
     /**
      * A Meta rejeita parâmetros com quebra de linha, tabulação ou mais de
      * 4 espaços consecutivos. Sanitiza aqui como última garantia, mesmo que

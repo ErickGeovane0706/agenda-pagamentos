@@ -32,4 +32,19 @@ public interface WhatsAppService {
      *                        espaços consecutivos (regra da Meta).
      */
     void enviarTemplate(String telefoneDestino, String nomeTemplate, List<String> parametros);
+
+    /**
+     * Envia texto livre (não-template) em resposta a uma mensagem do
+     * usuário. Só é permitido pela Meta dentro da janela de 24h de uma
+     * conversa que o PRÓPRIO usuário abriu primeiro — por isso este método
+     * só deve ser chamado pelo fluxo reativo do agente conversacional
+     * ({@code WhatsAppAgentService}), nunca pelo {@code NotificacaoWhatsAppScheduler}
+     * (que inicia a conversa e por isso é obrigado a usar {@code enviarTemplate}).
+     *
+     * @param telefoneDestino número de quem mandou a mensagem original
+     * @param texto            texto livre da resposta, sem limite de formato
+     *                         imposto pela Meta (diferente dos parâmetros de
+     *                         template, que não aceitam quebra de linha)
+     */
+    void enviarMensagemTexto(String telefoneDestino, String texto);
 }

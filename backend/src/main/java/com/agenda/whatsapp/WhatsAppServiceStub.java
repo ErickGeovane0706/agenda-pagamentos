@@ -22,4 +22,9 @@ public class WhatsAppServiceStub implements WhatsAppService {
         log.info("[WHATSAPP STUB] Para: {} | Template: {} | Parâmetros: {}",
                 telefoneDestino, nomeTemplate, parametros);
     }
+
+    @Override
+    public void enviarMensagemTexto(String telefoneDestino, String texto) {
+        log.info("[WHATSAPP STUB] Para: {} | Texto livre:\n{}", telefoneDestino, texto);
+    }
 }

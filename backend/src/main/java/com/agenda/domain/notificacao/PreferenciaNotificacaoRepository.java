@@ -37,4 +37,33 @@ public interface PreferenciaNotificacaoRepository extends JpaRepository<Preferen
       AND (p.horario1 = :agora OR p.horario2 = :agora OR p.horario3 = :agora OR p.horario4 = :agora)
     """)
     List<PreferenciaNotificacao> findAtivosComHorario(@Param("agora") LocalTime agora);
+
+    /**
+     * Busca a preferência (e, por consequência, o usuário/empresa) pelo
+     * número de telefone que mandou uma mensagem no webhook do WhatsApp.
+     * <p>
+     * Usado pelo agente conversacional para identificar quem está
+     * perguntando ANTES de tocar em qualquer dado financeiro — ver
+     * {@link com.agenda.domain.whatsappagent.WhatsAppAgentService}.
+     * Só considera registros com {@code whatsappAtivo = true}: um usuário
+     * que desativou a notificação não deve conseguir consultar dados pelo
+     * número antigo.
+     * <p>
+     * Comparação normalizada (somente dígitos) porque o número pode chegar
+     * da Meta com ou sem o prefixo "+" dependendo do país/formatação salva
+     * no cadastro — a normalização usa {@code REGEXP_REPLACE} no próprio
+     * SQL, espelhando o mesmo {@code replaceAll("[^0-9]", "")} que o
+     * {@link com.agenda.domain.whatsappagent.WhatsAppAgentService} aplica
+     * ao telefone recebido do webhook antes de consultar esta query.
+     */
+    @Query("""
+    SELECT p FROM PreferenciaNotificacao p
+    JOIN FETCH p.usuario u
+    JOIN FETCH u.empresa
+    LEFT JOIN FETCH p.lojaIds
+    WHERE p.whatsappAtivo = true
+      AND p.telefoneWhatsapp IS NOT NULL
+      AND function('regexp_replace', p.telefoneWhatsapp, '[^0-9]', '', 'g') = :telefoneNormalizado
+    """)
+    Optional<PreferenciaNotificacao> findByTelefoneNormalizado(@Param("telefoneNormalizado") String telefoneNormalizado);
 }
