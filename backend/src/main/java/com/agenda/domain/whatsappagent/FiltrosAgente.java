@@ -55,10 +55,9 @@ public class FiltrosAgente {
     private String fornecedor;
 
     /**
-     * {@code true} quando o cliente pediu explicitamente para ver também o
-     * que já foi pago (ex.: "o que está pago e o que falta", "resumo da
-     * semana com pago e pendente"). Padrão {@code false}: por padrão a
-     * consulta traz só o que está pendente, como sempre foi.
+     * Que status o cliente quer ver. Nunca nulo na resposta da LLM — usa
+     * PENDENTE como padrão (comportamento de sempre: só o que falta pagar).
+     * Ver {@link FiltroStatusAgente}.
      */
-    private Boolean incluirPagos;
+    private FiltroStatusAgente filtroStatus;
 }

@@ -9,11 +9,11 @@ Responda SOMENTE com um JSON válido, sem texto antes ou depois, sem markdown, n
   "filtros": {
     "loja": "<nome da loja mencionada, ou null>",
     "tipoPagamento": "<BOLETO | PIX | CHEQUE | null>",
-    "periodo": "<HOJE | AMANHA | SEMANA | MES | ANO | VENCIDOS | INTERVALO | SEM_FILTRO>",
+    "periodo": "<HOJE | AMANHA | SEMANA | MES | ANO | VENCIDOS | INTERVALO | ONTEM | SEMANA_PASSADA | PROXIMA_SEMANA | MES_PASSADO | PROXIMO_MES | SEM_FILTRO>",
     "dataInicio": "<AAAA-MM-DD, apenas se periodo=INTERVALO, senão null>",
     "dataFim": "<AAAA-MM-DD, apenas se periodo=INTERVALO, senão null>",
     "fornecedor": "<nome do fornecedor mencionado, ou null>",
-    "incluirPagos": "<true | false>"
+    "filtroStatus": "<PENDENTE | PAGO | TODOS>"
   }
 }
 
@@ -25,9 +25,9 @@ INTENÇÕES POSSÍVEIS (escolha exatamente uma):
 
 - OBTER_DADOS_CHEQUE: o cliente quer dados de um cheque específico (número, banco, valor), incluindo quando ele menciona querer cancelar, sustar ou consultar o cheque. Ex.: "quero cancelar um cheque", "me passa os dados do cheque número 123".
 
-- SAUDACAO_AJUDA: saudação simples ("oi", "bom dia") ou pergunta sobre o que o assistente faz ("o que você faz", "como funciona", "o que posso perguntar").
+- SAUDACAO_AJUDA: saudação simples ("oi", "bom dia") ou pergunta sobre o que o assistente faz ("o que você faz", "como funciona", "o que posso perguntar"), SEM nenhum pedido de dado financeiro junto.
 
-- DETALHAR_ULTIMA_CONSULTA: o cliente está pedindo para ver a lista completa/detalhada de uma resposta anterior que veio resumida. Ex.: "manda detalhado", "quero ver tudo", "mostra item por item", "detalha isso", "quais são exatamente". Use esta intenção mesmo sem saber qual foi a consulta anterior — o sistema resolve isso separadamente. NÃO use esta intenção se a mensagem já é uma pergunta nova e completa (ex.: "e da loja centro?" combinado com um novo filtro é CONSULTAR_PENDENCIAS, não isso).
+- DETALHAR_ULTIMA_CONSULTA: o cliente está pedindo para ver a lista completa/detalhada de uma resposta anterior que veio resumida. Ex.: "manda detalhado", "quero ver tudo", "mostra item por item", "detalha isso", "quais são exatamente". Use esta intenção mesmo sem saber qual foi a consulta anterior — o sistema resolve isso separadamente. NÃO use esta intenção se a mensagem já é uma pergunta nova e completa.
 
 - NAO_ENTENDIDO: a mensagem não se encaixa em nenhuma intenção acima, está ambígua demais, ou não tem relação com o sistema financeiro (ex.: pergunta sobre assunto totalmente alheio).
 
@@ -36,13 +36,73 @@ REGRAS PARA OS FILTROS:
 - periodo é OBRIGATÓRIO e nunca null — use "SEM_FILTRO" quando o cliente não mencionar nenhum recorte de tempo.
 - "vencidos", "atrasados", "em atraso", "que já passou" → periodo = VENCIDOS.
 - "hoje" → HOJE. "amanhã" → AMANHA. "essa semana" / "na semana" → SEMANA. "esse mês" / "no mês" / "mensal" → MES. "esse ano" / "no ano" / "anual" → ANO.
-- Só use INTERVALO quando o cliente der datas explícitas ou um intervalo claro ("de 01/07 até 15/07", "entre essa semana e a próxima"). Se usar INTERVALO, dataInicio e dataFim são obrigatórios.
-- tipoPagamento só é preenchido se o cliente mencionar claramente boleto, pix ou cheque. Se ele perguntar de forma genérica ("quanto tenho pra pagar"), deixe null (significa: todos os tipos).
+- "ontem" → ONTEM. "semana passada" → SEMANA_PASSADA. "semana que vem" / "próxima semana" → PROXIMA_SEMANA. "mês passado" → MES_PASSADO. "mês que vem" / "próximo mês" → PROXIMO_MES. Todos esses são resolvidos em código a partir da data de hoje — você só escolhe o valor do enum, nunca calcula a data você mesmo.
+- Só use INTERVALO quando o cliente der datas explícitas ou um intervalo claro ("de 01/07 até 15/07"). Se usar INTERVALO, dataInicio e dataFim são obrigatórios. Se o cliente pedir um período relativo que não se encaixa em nenhum valor acima (ex.: "últimos 7 dias", "segunda-feira passada"), NÃO tente calcular a data — use SEM_FILTRO. Não invente datas.
+- tipoPagamento só é preenchido se o cliente mencionar claramente boleto, pix ou cheque (inclusive abreviações comuns: "bol", "chq", "cheq" → CHEQUE). Se ele perguntar de forma genérica ("quanto tenho pra pagar"), deixe null (significa: todos os tipos).
 - loja e fornecedor: copie o nome exatamente como o cliente escreveu, sem corrigir ortografia, sem adicionar texto. Se não mencionado, null.
-- incluirPagos = true APENAS quando o cliente pedir explicitamente para ver o que já foi pago junto com o pendente (ex.: "o que está pago e o que falta", "resumo com pago e pendente", "o que já paguei essa semana"). Em qualquer outro caso (pergunta comum sobre pendências), incluirPagos = false.
+- Quando tipo de pagamento e nome da loja aparecem colados na mesma frase sem conectivo ("cheque aurora utilidades", "aurora utilidades cheque", "pix loja centro", "loja centro pix"), separe: a palavra que bate com BOLETO/PIX/CHEQUE vira tipoPagamento, o resto do texto (mesmo com várias palavras, mesmo em ordem diferente) vira loja. A ordem das palavras não importa — isso vale tanto para "tipo + loja" quanto para "loja + tipo".
+- filtroStatus é OBRIGATÓRIO e nunca null. PENDENTE é o padrão — use sempre que o cliente perguntar de forma comum sobre o que tem/vai pagar ("quanto tenho pra pagar", "o que vence essa semana"), inclusive em casos ambíguos como "quanto pagamos esse mês" (trate como "quanto temos que pagar", não como "quanto já foi pago", a menos que o resto da frase deixe claro que é sobre pagamento já realizado). Use PAGO quando o cliente pedir explicitamente só o que JÁ foi pago (ex.: "o que já foi pago essa semana", "quanto já pagamos de boleto", "o que já quitamos"). Use TODOS quando o cliente pedir pago E pendente juntos (ex.: "o que está pago e o que falta", "resumo com pago e pendente").
+- Se a mensagem mistura saudação com um pedido de dado financeiro (ex.: "oi, cheque", "bom dia, quanto tenho pra pagar"), IGNORE a saudação e classifique pela parte do pedido financeiro — nunca use SAUDACAO_AJUDA nesse caso.
+- Se a mensagem menciona dois identificadores ao mesmo tempo para um cheque específico (ex.: número + loja, ou fornecedor + loja: "cheque número 19/03 da loja aurora"), mantenha AMBOS os filtros preenchidos (loja E o identificador, seja no texto livre ou como fornecedor) — não descarte nenhum dos dois.
 - Nunca corrija, complete ou explique nada — apenas extraia o que está explícito na mensagem.
 
 A data de hoje, para referência de "hoje"/"amanhã"/"semana", é: {{DATA_HOJE}}.
+
+EXEMPLOS:
+
+Mensagem: "cheque aurora utilidades"
+{"intencao":"CONSULTAR_PENDENCIAS","filtros":{"loja":"aurora utilidades","tipoPagamento":"CHEQUE","periodo":"SEM_FILTRO","dataInicio":null,"dataFim":null,"fornecedor":null,"filtroStatus":"PENDENTE"}}
+
+Mensagem: "aurora utilidades cheque"
+{"intencao":"CONSULTAR_PENDENCIAS","filtros":{"loja":"aurora utilidades","tipoPagamento":"CHEQUE","periodo":"SEM_FILTRO","dataInicio":null,"dataFim":null,"fornecedor":null,"filtroStatus":"PENDENTE"}}
+
+Mensagem: "resumo cheque aurora utilidades"
+{"intencao":"CONSULTAR_PENDENCIAS","filtros":{"loja":"aurora utilidades","tipoPagamento":"CHEQUE","periodo":"SEM_FILTRO","dataInicio":null,"dataFim":null,"fornecedor":null,"filtroStatus":"PENDENTE"}}
+
+Mensagem: "loja centro pix"
+{"intencao":"CONSULTAR_PENDENCIAS","filtros":{"loja":"centro","tipoPagamento":"PIX","periodo":"SEM_FILTRO","dataInicio":null,"dataFim":null,"fornecedor":null,"filtroStatus":"PENDENTE"}}
+
+Mensagem: "utilidades aurora pix"
+{"intencao":"CONSULTAR_PENDENCIAS","filtros":{"loja":"utilidades aurora","tipoPagamento":"PIX","periodo":"SEM_FILTRO","dataInicio":null,"dataFim":null,"fornecedor":null,"filtroStatus":"PENDENTE"}}
+
+Mensagem: "chq dessa semana"
+{"intencao":"CONSULTAR_PENDENCIAS","filtros":{"loja":null,"tipoPagamento":"CHEQUE","periodo":"SEMANA","dataInicio":null,"dataFim":null,"fornecedor":null,"filtroStatus":"PENDENTE"}}
+
+Mensagem: "qnt tenho pra pagar hj"
+{"intencao":"CONSULTAR_PENDENCIAS","filtros":{"loja":null,"tipoPagamento":null,"periodo":"HOJE","dataInicio":null,"dataFim":null,"fornecedor":null,"filtroStatus":"PENDENTE"}}
+
+Mensagem: "cheque número 19/03 da loja aurora"
+{"intencao":"OBTER_DADOS_CHEQUE","filtros":{"loja":"aurora","tipoPagamento":"CHEQUE","periodo":"SEM_FILTRO","dataInicio":null,"dataFim":null,"fornecedor":"19/03","filtroStatus":"PENDENTE"}}
+
+Mensagem: "oi, cheque"
+{"intencao":"OBTER_DADOS_CHEQUE","filtros":{"loja":null,"tipoPagamento":"CHEQUE","periodo":"SEM_FILTRO","dataInicio":null,"dataFim":null,"fornecedor":null,"filtroStatus":"PENDENTE"}}
+
+Mensagem: "o que vence semana que vem"
+{"intencao":"CONSULTAR_PENDENCIAS","filtros":{"loja":null,"tipoPagamento":null,"periodo":"PROXIMA_SEMANA","dataInicio":null,"dataFim":null,"fornecedor":null,"filtroStatus":"PENDENTE"}}
+
+Mensagem: "resumo do mês passado"
+{"intencao":"CONSULTAR_PENDENCIAS","filtros":{"loja":null,"tipoPagamento":null,"periodo":"MES_PASSADO","dataInicio":null,"dataFim":null,"fornecedor":null,"filtroStatus":"PENDENTE"}}
+
+Mensagem: "quanto pagamos ontem"
+{"intencao":"CONSULTAR_PENDENCIAS","filtros":{"loja":null,"tipoPagamento":null,"periodo":"ONTEM","dataInicio":null,"dataFim":null,"fornecedor":null,"filtroStatus":"PENDENTE"}}
+
+Mensagem: "quanto vou pagar no próximo mês"
+{"intencao":"CONSULTAR_PENDENCIAS","filtros":{"loja":null,"tipoPagamento":null,"periodo":"PROXIMO_MES","dataInicio":null,"dataFim":null,"fornecedor":null,"filtroStatus":"PENDENTE"}}
+
+Mensagem: "o que já foi pago essa semana"
+{"intencao":"CONSULTAR_PENDENCIAS","filtros":{"loja":null,"tipoPagamento":null,"periodo":"SEMANA","dataInicio":null,"dataFim":null,"fornecedor":null,"filtroStatus":"PAGO"}}
+
+Mensagem: "quanto já pagamos de boleto essa semana"
+{"intencao":"CONSULTAR_PENDENCIAS","filtros":{"loja":null,"tipoPagamento":"BOLETO","periodo":"SEMANA","dataInicio":null,"dataFim":null,"fornecedor":null,"filtroStatus":"PAGO"}}
+
+Mensagem: "o que está pago e o que falta"
+{"intencao":"CONSULTAR_PENDENCIAS","filtros":{"loja":null,"tipoPagamento":null,"periodo":"SEM_FILTRO","dataInicio":null,"dataFim":null,"fornecedor":null,"filtroStatus":"TODOS"}}
+
+Mensagem: "resumo dos últimos 7 dias"
+{"intencao":"CONSULTAR_PENDENCIAS","filtros":{"loja":null,"tipoPagamento":null,"periodo":"SEM_FILTRO","dataInicio":null,"dataFim":null,"fornecedor":null,"filtroStatus":"PENDENTE"}}
+
+Mensagem: "e da loja centro?"
+{"intencao":"CONSULTAR_PENDENCIAS","filtros":{"loja":"centro","tipoPagamento":null,"periodo":"SEM_FILTRO","dataInicio":null,"dataFim":null,"fornecedor":null,"filtroStatus":"PENDENTE"}}
 
 Mensagem do cliente:
 """

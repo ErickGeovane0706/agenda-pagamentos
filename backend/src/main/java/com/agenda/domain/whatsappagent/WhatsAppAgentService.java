@@ -156,7 +156,15 @@ public class WhatsAppAgentService {
         }
 
         return switch (resultado.getIntencao()) {
-            case CONSULTAR_PENDENCIAS -> consultarPendencias(empresaId, pref, lojaId, filtros);
+            case CONSULTAR_PENDENCIAS -> {
+                // Gap J: se a mensagem só trouxe 1 filtro novo (ex.: "e da loja centro?"),
+                // faz merge com a última consulta completa do usuário em vez de tratar
+                // como pergunta nova do zero. Precisa re-resolver a loja pois o merge
+                // pode ter trazido um nome de loja diferente do que já foi resolvido acima.
+                FiltrosAgente filtrosMesclados = mesclarComUltimaConsulta(pref.getUsuario().getId(), filtros);
+                UUID lojaIdMesclada = filtrosMesclados == filtros ? lojaId : resolverLoja(empresaId, filtrosMesclados.getLoja());
+                yield consultarPendencias(empresaId, pref, lojaIdMesclada, filtrosMesclados);
+            }
             case OBTER_DADOS_PAGAMENTO -> obterDadosPagamento(empresaId, pref, lojaId, filtros);
             case OBTER_DADOS_CHEQUE -> obterDadosCheque(empresaId, pref, lojaId, filtros);
             case DETALHAR_ULTIMA_CONSULTA -> detalharUltimaConsulta(empresaId, pref);
@@ -183,7 +191,10 @@ public class WhatsAppAgentService {
      */
     private String consultarPendencias(UUID empresaId, PreferenciaNotificacao pref, UUID lojaId, FiltrosAgente filtros, boolean forcarDetalhado) {
         PeriodoResolvido periodo = resolverPeriodo(filtros);
-        boolean incluirPagos = Boolean.TRUE.equals(filtros.getIncluirPagos());
+        FiltroStatusAgente filtroStatus = filtros.getFiltroStatus() != null ? filtros.getFiltroStatus() : FiltroStatusAgente.PENDENTE;
+        // "incluirPagos" (nome antigo do campo) só existe agora como conceito derivado,
+        // para o formatador saber se deve mostrar a coluna de status pago/pendente.
+        boolean incluirPagos = filtroStatus != FiltroStatusAgente.PENDENTE;
 
         List<Boleto> boletos = List.of();
         List<PagamentoPix> pixs = List.of();
@@ -191,38 +202,44 @@ public class WhatsAppAgentService {
 
         TipoPagamentoAgente tipo = filtros.getTipoPagamento();
 
-        // Três casos de status: (1) cliente pediu pago+pendente -> busca tudo
-        // e só exclui CANCELADO; (2) período VENCIDOS -> busca tudo e exclui
-        // pago/cancelado (comportamento original); (3) caso comum -> só PENDENTE.
+        // status=null na specification significa "qualquer status" — buscamos tudo
+        // sempre que precisamos filtrar em memória por PAGO ou por VENCIDOS, e só
+        // usamos o status fixo do repositório quando o caso é o mais simples (PENDENTE).
+        boolean precisaBuscarTudo = filtroStatus != FiltroStatusAgente.PENDENTE || periodo.tipo() == TipoPeriodoAgente.VENCIDOS;
+
         if (tipo == null || tipo == TipoPagamentoAgente.BOLETO) {
-            StatusBoleto status = (incluirPagos || periodo.tipo() == TipoPeriodoAgente.VENCIDOS) ? null : StatusBoleto.PENDENTE;
+            StatusBoleto status = precisaBuscarTudo ? null : StatusBoleto.PENDENTE;
             boletos = boletoRepository.findAll(BoletoSpecification.comFiltros(
                     empresaId, lojaId, status, periodo.de(), periodo.ate(), null));
             boletos = filtrarPorLojasPermitidas(boletos, pref, Boleto::getLoja);
         }
         if (tipo == null || tipo == TipoPagamentoAgente.PIX) {
-            StatusPix status = (incluirPagos || periodo.tipo() == TipoPeriodoAgente.VENCIDOS) ? null : StatusPix.PENDENTE;
+            StatusPix status = precisaBuscarTudo ? null : StatusPix.PENDENTE;
             pixs = pixRepository.findAll(PagamentoPixSpecification.comFiltros(
                     empresaId, lojaId, status, periodo.de(), periodo.ate(), null));
             pixs = filtrarPorLojasPermitidas(pixs, pref, PagamentoPix::getLoja);
         }
         if (tipo == null || tipo == TipoPagamentoAgente.CHEQUE) {
-            StatusCheque status = (incluirPagos || periodo.tipo() == TipoPeriodoAgente.VENCIDOS) ? null : StatusCheque.PENDENTE;
+            StatusCheque status = precisaBuscarTudo ? null : StatusCheque.PENDENTE;
             cheques = chequeRepository.findAll(ChequeSpecification.comFiltros(
                     empresaId, lojaId, status, periodo.de(), periodo.ate(), null));
             cheques = filtrarPorLojasPermitidas(cheques, pref, Cheque::getLoja);
         }
 
-        if (incluirPagos) {
+        if (filtroStatus == FiltroStatusAgente.PAGO) {
+            // Só o que já foi pago/compensado — exclui pendente e cancelado.
+            boletos = boletos.stream().filter(b -> b.getStatus() == StatusBoleto.PAGO).toList();
+            pixs = pixs.stream().filter(p -> p.getStatus() == StatusPix.PAGO).toList();
+            cheques = cheques.stream().filter(c -> c.getStatus() == StatusCheque.COMPENSADO).toList();
+        } else if (filtroStatus == FiltroStatusAgente.TODOS) {
             // Traz PAGO/COMPENSADO junto com PENDENTE — só CANCELADO fica fora,
             // já que um item cancelado não é "pago" nem "falta pagar".
             boletos = boletos.stream().filter(b -> b.getStatus() != StatusBoleto.CANCELADO).toList();
             pixs = pixs.stream().filter(p -> p.getStatus() != StatusPix.CANCELADO).toList();
             cheques = cheques.stream().filter(c -> c.getStatus() != StatusCheque.CANCELADO).toList();
         } else if (periodo.tipo() == TipoPeriodoAgente.VENCIDOS) {
-            // VENCIDOS: a specification já recebe [null, ontem], mas reforçamos em
-            // memória que nenhum item PAGO/COMPENSADO/CANCELADO entre na lista —
-            // status=null na specification significa "qualquer status".
+            // VENCIDOS + PENDENTE: já buscamos tudo acima, aqui filtramos em memória
+            // pra excluir PAGO/COMPENSADO/CANCELADO.
             boletos = boletos.stream().filter(b -> b.getStatus() != StatusBoleto.PAGO && b.getStatus() != StatusBoleto.CANCELADO).toList();
             pixs = pixs.stream().filter(p -> p.getStatus() != StatusPix.PAGO && p.getStatus() != StatusPix.CANCELADO).toList();
             cheques = cheques.stream().filter(c -> c.getStatus() != StatusCheque.COMPENSADO && c.getStatus() != StatusCheque.CANCELADO).toList();
@@ -231,10 +248,14 @@ public class WhatsAppAgentService {
         int totalItens = boletos.size() + pixs.size() + cheques.size();
         boolean modoResumido = !forcarDetalhado && totalItens > LIMITE_ITENS_MODO_DETALHADO;
 
+        // Guarda os filtros desta consulta (bem-sucedida) para uma eventual mensagem
+        // curta de refinamento logo em seguida ("e da loja centro?") poder herdar
+        // o restante dos filtros — ver mesclarComUltimaConsulta.
+        guardarUltimaConsulta(pref.getUsuario().getId(), filtros);
+
         if (modoResumido) {
-            // Guarda os filtros desta consulta para o próximo "manda detalhado"
-            // do mesmo usuário poder reexecutar exatamente a mesma busca, sem
-            // o cliente precisar repetir loja/período/tipo de novo.
+            // Guarda também para o próximo "manda detalhado" poder reexecutar
+            // exatamente a mesma busca, sem o cliente precisar repetir tudo.
             guardarUltimaConsultaResumida(pref.getUsuario().getId(), filtros);
             return respostaFormatter.formatarResumoPorLoja(boletos, pixs, cheques, periodo.descricao(), incluirPagos);
         }
@@ -321,6 +342,55 @@ public class WhatsAppAgentService {
 
     private void limparUltimaConsultaResumida(UUID usuarioId) {
         ultimaConsultaResumidaPorUsuario.remove(usuarioId);
+    }
+
+    /**
+     * Cache separado da última CONSULTAR_PENDENCIAS bem-sucedida, guardado
+     * em TODA consulta (não só quando cai em modo resumido) — usado só para
+     * merge de refinamento (gap J), nunca para "detalhar". Mesma limitação
+     * de sempre: não sobrevive a restart do serviço nem persiste em banco.
+     */
+    private final java.util.Map<UUID, FiltrosAgente> ultimaConsultaPorUsuario = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private void guardarUltimaConsulta(UUID usuarioId, FiltrosAgente filtros) {
+        ultimaConsultaPorUsuario.put(usuarioId, filtros);
+    }
+
+    /**
+     * Se a mensagem nova só especificou 1 filtro (ex.: só loja, como em
+     * "e da loja centro?") e existe uma consulta anterior guardada para o
+     * usuário, preenche os campos que a mensagem nova deixou em aberto
+     * (SEM_FILTRO / null) com os valores da consulta anterior — sem nunca
+     * sobrescrever um campo que a mensagem nova preencheu explicitamente.
+     * Mensagens já completas (2+ filtros específicos, ou 0 filtros — ex.:
+     * "quanto tenho pra pagar" pura) não disparam merge: presumimos que o
+     * cliente quis uma pergunta nova e genérica, não um refinamento.
+     */
+    private FiltrosAgente mesclarComUltimaConsulta(UUID usuarioId, FiltrosAgente novos) {
+        int camposPreenchidos = 0;
+        if (novos.getLoja() != null && !novos.getLoja().isBlank()) camposPreenchidos++;
+        if (novos.getTipoPagamento() != null) camposPreenchidos++;
+        if (novos.getPeriodo() != null && novos.getPeriodo() != TipoPeriodoAgente.SEM_FILTRO) camposPreenchidos++;
+        if (novos.getFornecedor() != null && !novos.getFornecedor().isBlank()) camposPreenchidos++;
+
+        if (camposPreenchidos != 1) {
+            return novos;
+        }
+
+        FiltrosAgente anteriores = ultimaConsultaPorUsuario.get(usuarioId);
+        if (anteriores == null) {
+            return novos;
+        }
+
+        return FiltrosAgente.builder()
+                .loja(novos.getLoja() != null && !novos.getLoja().isBlank() ? novos.getLoja() : anteriores.getLoja())
+                .tipoPagamento(novos.getTipoPagamento() != null ? novos.getTipoPagamento() : anteriores.getTipoPagamento())
+                .periodo(novos.getPeriodo() != null && novos.getPeriodo() != TipoPeriodoAgente.SEM_FILTRO ? novos.getPeriodo() : anteriores.getPeriodo())
+                .dataInicio(novos.getDataInicio() != null ? novos.getDataInicio() : anteriores.getDataInicio())
+                .dataFim(novos.getDataFim() != null ? novos.getDataFim() : anteriores.getDataFim())
+                .fornecedor(novos.getFornecedor() != null && !novos.getFornecedor().isBlank() ? novos.getFornecedor() : anteriores.getFornecedor())
+                .filtroStatus(novos.getFiltroStatus() != null ? novos.getFiltroStatus() : anteriores.getFiltroStatus())
+                .build();
     }
 
     private String detalharUltimaConsulta(UUID empresaId, PreferenciaNotificacao pref) {
@@ -464,6 +534,30 @@ public class WhatsAppAgentService {
                 yield new PeriodoResolvido(tipo, inicioAno, fimAno, "esse ano");
             }
             case VENCIDOS -> new PeriodoResolvido(tipo, null, hoje.minusDays(1), "em atraso");
+            case ONTEM -> new PeriodoResolvido(tipo, hoje.minusDays(1), hoje.minusDays(1), "ontem");
+            case SEMANA_PASSADA -> {
+                LocalDate inicioSemanaAtual = hoje.with(DayOfWeek.MONDAY);
+                LocalDate inicio = inicioSemanaAtual.minusWeeks(1);
+                LocalDate fim = inicioSemanaAtual.minusDays(1);
+                yield new PeriodoResolvido(tipo, inicio, fim, "semana passada");
+            }
+            case PROXIMA_SEMANA -> {
+                LocalDate inicioSemanaAtual = hoje.with(DayOfWeek.MONDAY);
+                LocalDate inicio = inicioSemanaAtual.plusWeeks(1);
+                LocalDate fim = inicio.with(DayOfWeek.SUNDAY);
+                yield new PeriodoResolvido(tipo, inicio, fim, "semana que vem");
+            }
+            case MES_PASSADO -> {
+                LocalDate primeiroDiaMesAtual = hoje.withDayOfMonth(1);
+                LocalDate inicio = primeiroDiaMesAtual.minusMonths(1);
+                LocalDate fim = primeiroDiaMesAtual.minusDays(1);
+                yield new PeriodoResolvido(tipo, inicio, fim, "mês passado");
+            }
+            case PROXIMO_MES -> {
+                LocalDate inicio = hoje.withDayOfMonth(1).plusMonths(1);
+                LocalDate fim = inicio.withDayOfMonth(inicio.lengthOfMonth());
+                yield new PeriodoResolvido(tipo, inicio, fim, "mês que vem");
+            }
             case INTERVALO -> {
                 LocalDate de = filtros.getDataInicio() != null ? filtros.getDataInicio() : hoje;
                 LocalDate ate = filtros.getDataFim() != null ? filtros.getDataFim() : hoje;

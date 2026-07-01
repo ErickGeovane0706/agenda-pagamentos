@@ -201,7 +201,7 @@ public class IntentClassifierService {
         public String dataInicio;
         public String dataFim;
         public String fornecedor;
-        public Boolean incluirPagos;
+        public String filtroStatus;
 
         FiltrosAgente toFiltrosAgente() {
             return FiltrosAgente.builder()
@@ -211,7 +211,7 @@ public class IntentClassifierService {
                     .dataInicio(parseDataSegura(dataInicio))
                     .dataFim(parseDataSegura(dataFim))
                     .fornecedor(fornecedor)
-                    .incluirPagos(Boolean.TRUE.equals(incluirPagos))
+                    .filtroStatus(parseEnumSeguro(filtroStatus, FiltroStatusAgente.class, FiltroStatusAgente.PENDENTE))
                     .build();
         }
 

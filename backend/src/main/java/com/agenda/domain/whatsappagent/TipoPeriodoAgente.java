@@ -20,6 +20,16 @@ public enum TipoPeriodoAgente {
     ANO,
     /** "vencidos", "atrasados", "em atraso". Tudo com vencimento < hoje. */
     VENCIDOS,
+    /** "ontem". */
+    ONTEM,
+    /** "semana passada". Segunda a domingo da semana anterior à corrente. */
+    SEMANA_PASSADA,
+    /** "semana que vem", "próxima semana". Segunda a domingo da semana seguinte à corrente. */
+    PROXIMA_SEMANA,
+    /** "mês passado". Do dia 1 ao último dia do mês anterior ao corrente. */
+    MES_PASSADO,
+    /** "próximo mês", "mês que vem". Do dia 1 ao último dia do mês seguinte ao corrente. */
+    PROXIMO_MES,
     /** Intervalo explícito de datas informado pelo cliente ("de 01/07 a 15/07"). */
     INTERVALO,
     /** Cliente não mencionou período — não filtra por data. */
