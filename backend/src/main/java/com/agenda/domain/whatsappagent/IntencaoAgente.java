@@ -44,6 +44,17 @@ public enum IntencaoAgente {
     SAUDACAO_AJUDA,
 
     /**
+     * Cliente pediu para ver a lista completa de uma consulta anterior que
+     * foi respondida em formato resumido (ex.: "manda detalhado", "quero
+     * ver tudo", "mostra item por item"). Não tem filtros próprios — reusa
+     * os filtros da última {@code CONSULTAR_PENDENCIAS} do mesmo usuário,
+     * guardados em {@link WhatsAppAgentService#buscarUltimaConsultaResumida}.
+     * Se não houver consulta resumida recente, o agente avisa e não inventa
+     * um período/loja para detalhar.
+     */
+    DETALHAR_ULTIMA_CONSULTA,
+
+    /**
      * Fallback: a LLM não conseguiu mapear a mensagem para nenhuma
      * intenção acima com confiança razoável. O agente responde pedindo
      * para o cliente reformular, sem tentar adivinhar.
