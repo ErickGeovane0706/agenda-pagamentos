@@ -9,10 +9,11 @@ Responda SOMENTE com um JSON válido, sem texto antes ou depois, sem markdown, n
   "filtros": {
     "loja": "<nome da loja mencionada, ou null>",
     "tipoPagamento": "<BOLETO | PIX | CHEQUE | null>",
-    "periodo": "<HOJE | AMANHA | SEMANA | VENCIDOS | INTERVALO | SEM_FILTRO>",
+    "periodo": "<HOJE | AMANHA | SEMANA | MES | ANO | VENCIDOS | INTERVALO | SEM_FILTRO>",
     "dataInicio": "<AAAA-MM-DD, apenas se periodo=INTERVALO, senão null>",
     "dataFim": "<AAAA-MM-DD, apenas se periodo=INTERVALO, senão null>",
-    "fornecedor": "<nome do fornecedor mencionado, ou null>"
+    "fornecedor": "<nome do fornecedor mencionado, ou null>",
+    "incluirPagos": "<true | false>"
   }
 }
 
@@ -26,16 +27,19 @@ INTENÇÕES POSSÍVEIS (escolha exatamente uma):
 
 - SAUDACAO_AJUDA: saudação simples ("oi", "bom dia") ou pergunta sobre o que o assistente faz ("o que você faz", "como funciona", "o que posso perguntar").
 
+- DETALHAR_ULTIMA_CONSULTA: o cliente está pedindo para ver a lista completa/detalhada de uma resposta anterior que veio resumida. Ex.: "manda detalhado", "quero ver tudo", "mostra item por item", "detalha isso", "quais são exatamente". Use esta intenção mesmo sem saber qual foi a consulta anterior — o sistema resolve isso separadamente. NÃO use esta intenção se a mensagem já é uma pergunta nova e completa (ex.: "e da loja centro?" combinado com um novo filtro é CONSULTAR_PENDENCIAS, não isso).
+
 - NAO_ENTENDIDO: a mensagem não se encaixa em nenhuma intenção acima, está ambígua demais, ou não tem relação com o sistema financeiro (ex.: pergunta sobre assunto totalmente alheio).
 
 REGRAS PARA OS FILTROS:
 
 - periodo é OBRIGATÓRIO e nunca null — use "SEM_FILTRO" quando o cliente não mencionar nenhum recorte de tempo.
 - "vencidos", "atrasados", "em atraso", "que já passou" → periodo = VENCIDOS.
-- "hoje" → HOJE. "amanhã" → AMANHA. "essa semana" / "na semana" → SEMANA.
+- "hoje" → HOJE. "amanhã" → AMANHA. "essa semana" / "na semana" → SEMANA. "esse mês" / "no mês" / "mensal" → MES. "esse ano" / "no ano" / "anual" → ANO.
 - Só use INTERVALO quando o cliente der datas explícitas ou um intervalo claro ("de 01/07 até 15/07", "entre essa semana e a próxima"). Se usar INTERVALO, dataInicio e dataFim são obrigatórios.
 - tipoPagamento só é preenchido se o cliente mencionar claramente boleto, pix ou cheque. Se ele perguntar de forma genérica ("quanto tenho pra pagar"), deixe null (significa: todos os tipos).
 - loja e fornecedor: copie o nome exatamente como o cliente escreveu, sem corrigir ortografia, sem adicionar texto. Se não mencionado, null.
+- incluirPagos = true APENAS quando o cliente pedir explicitamente para ver o que já foi pago junto com o pendente (ex.: "o que está pago e o que falta", "resumo com pago e pendente", "o que já paguei essa semana"). Em qualquer outro caso (pergunta comum sobre pendências), incluirPagos = false.
 - Nunca corrija, complete ou explique nada — apenas extraia o que está explícito na mensagem.
 
 A data de hoje, para referência de "hoje"/"amanhã"/"semana", é: {{DATA_HOJE}}.

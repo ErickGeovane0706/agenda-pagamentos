@@ -159,6 +159,7 @@ public class WhatsAppAgentService {
             case CONSULTAR_PENDENCIAS -> consultarPendencias(empresaId, pref, lojaId, filtros);
             case OBTER_DADOS_PAGAMENTO -> obterDadosPagamento(empresaId, pref, lojaId, filtros);
             case OBTER_DADOS_CHEQUE -> obterDadosCheque(empresaId, pref, lojaId, filtros);
+            case DETALHAR_ULTIMA_CONSULTA -> detalharUltimaConsulta(empresaId, pref);
             case SAUDACAO_AJUDA -> respostaFormatter.mensagemAjuda();
             case NAO_ENTENDIDO -> respostaFormatter.mensagemNaoEntendido();
         };
@@ -168,8 +169,21 @@ public class WhatsAppAgentService {
     // CONSULTAR_PENDENCIAS
     // ---------------------------------------------------------------
 
+    /** Acima desse total de itens, a resposta vira resumo por loja em vez de listar cada item. */
+    private static final int LIMITE_ITENS_MODO_DETALHADO = 8;
+
     private String consultarPendencias(UUID empresaId, PreferenciaNotificacao pref, UUID lojaId, FiltrosAgente filtros) {
+        return consultarPendencias(empresaId, pref, lojaId, filtros, false);
+    }
+
+    /**
+     * @param forcarDetalhado {@code true} quando esta chamada vem de
+     *        {@code DETALHAR_ULTIMA_CONSULTA} — força a lista completa
+     *        mesmo que o volume normalmente cairia no modo resumido.
+     */
+    private String consultarPendencias(UUID empresaId, PreferenciaNotificacao pref, UUID lojaId, FiltrosAgente filtros, boolean forcarDetalhado) {
         PeriodoResolvido periodo = resolverPeriodo(filtros);
+        boolean incluirPagos = Boolean.TRUE.equals(filtros.getIncluirPagos());
 
         List<Boleto> boletos = List.of();
         List<PagamentoPix> pixs = List.of();
@@ -177,35 +191,148 @@ public class WhatsAppAgentService {
 
         TipoPagamentoAgente tipo = filtros.getTipoPagamento();
 
+        // Três casos de status: (1) cliente pediu pago+pendente -> busca tudo
+        // e só exclui CANCELADO; (2) período VENCIDOS -> busca tudo e exclui
+        // pago/cancelado (comportamento original); (3) caso comum -> só PENDENTE.
         if (tipo == null || tipo == TipoPagamentoAgente.BOLETO) {
-            StatusBoleto status = (periodo.tipo() == TipoPeriodoAgente.VENCIDOS) ? null : StatusBoleto.PENDENTE;
+            StatusBoleto status = (incluirPagos || periodo.tipo() == TipoPeriodoAgente.VENCIDOS) ? null : StatusBoleto.PENDENTE;
             boletos = boletoRepository.findAll(BoletoSpecification.comFiltros(
                     empresaId, lojaId, status, periodo.de(), periodo.ate(), null));
             boletos = filtrarPorLojasPermitidas(boletos, pref, Boleto::getLoja);
         }
         if (tipo == null || tipo == TipoPagamentoAgente.PIX) {
-            StatusPix status = (periodo.tipo() == TipoPeriodoAgente.VENCIDOS) ? null : StatusPix.PENDENTE;
+            StatusPix status = (incluirPagos || periodo.tipo() == TipoPeriodoAgente.VENCIDOS) ? null : StatusPix.PENDENTE;
             pixs = pixRepository.findAll(PagamentoPixSpecification.comFiltros(
                     empresaId, lojaId, status, periodo.de(), periodo.ate(), null));
             pixs = filtrarPorLojasPermitidas(pixs, pref, PagamentoPix::getLoja);
         }
         if (tipo == null || tipo == TipoPagamentoAgente.CHEQUE) {
-            StatusCheque status = (periodo.tipo() == TipoPeriodoAgente.VENCIDOS) ? null : StatusCheque.PENDENTE;
+            StatusCheque status = (incluirPagos || periodo.tipo() == TipoPeriodoAgente.VENCIDOS) ? null : StatusCheque.PENDENTE;
             cheques = chequeRepository.findAll(ChequeSpecification.comFiltros(
                     empresaId, lojaId, status, periodo.de(), periodo.ate(), null));
             cheques = filtrarPorLojasPermitidas(cheques, pref, Cheque::getLoja);
         }
 
-        // VENCIDOS: a specification já recebe [null, ontem], mas reforçamos em
-        // memória que nenhum item PAGO/COMPENSADO/CANCELADO entre na lista —
-        // status=null na specification significa "qualquer status".
-        if (periodo.tipo() == TipoPeriodoAgente.VENCIDOS) {
+        if (incluirPagos) {
+            // Traz PAGO/COMPENSADO junto com PENDENTE — só CANCELADO fica fora,
+            // já que um item cancelado não é "pago" nem "falta pagar".
+            boletos = boletos.stream().filter(b -> b.getStatus() != StatusBoleto.CANCELADO).toList();
+            pixs = pixs.stream().filter(p -> p.getStatus() != StatusPix.CANCELADO).toList();
+            cheques = cheques.stream().filter(c -> c.getStatus() != StatusCheque.CANCELADO).toList();
+        } else if (periodo.tipo() == TipoPeriodoAgente.VENCIDOS) {
+            // VENCIDOS: a specification já recebe [null, ontem], mas reforçamos em
+            // memória que nenhum item PAGO/COMPENSADO/CANCELADO entre na lista —
+            // status=null na specification significa "qualquer status".
             boletos = boletos.stream().filter(b -> b.getStatus() != StatusBoleto.PAGO && b.getStatus() != StatusBoleto.CANCELADO).toList();
             pixs = pixs.stream().filter(p -> p.getStatus() != StatusPix.PAGO && p.getStatus() != StatusPix.CANCELADO).toList();
             cheques = cheques.stream().filter(c -> c.getStatus() != StatusCheque.COMPENSADO && c.getStatus() != StatusCheque.CANCELADO).toList();
         }
 
-        return respostaFormatter.formatarResumoPendencias(boletos, pixs, cheques, periodo.descricao());
+        int totalItens = boletos.size() + pixs.size() + cheques.size();
+        boolean modoResumido = !forcarDetalhado && totalItens > LIMITE_ITENS_MODO_DETALHADO;
+
+        if (modoResumido) {
+            // Guarda os filtros desta consulta para o próximo "manda detalhado"
+            // do mesmo usuário poder reexecutar exatamente a mesma busca, sem
+            // o cliente precisar repetir loja/período/tipo de novo.
+            guardarUltimaConsultaResumida(pref.getUsuario().getId(), filtros);
+            return respostaFormatter.formatarResumoPorLoja(boletos, pixs, cheques, periodo.descricao(), incluirPagos);
+        }
+
+        limparUltimaConsultaResumida(pref.getUsuario().getId());
+
+        // "Detalhar" pode ter sido chamado sobre um resumo com muitos itens —
+        // uma lista completa de, digamos, 143 itens ultrapassaria o limite de
+        // 4096 caracteres de uma mensagem do WhatsApp. Nesse caso, mostramos
+        // só os itens com vencimento mais próximo (os mais urgentes de agir)
+        // e avisamos quantos ficaram de fora, sugerindo filtrar por loja.
+        if (totalItens > LIMITE_ITENS_DETALHE_COMPLETO) {
+            TrioTruncado truncado = truncarPorVencimentoMaisProximo(boletos, pixs, cheques, LIMITE_ITENS_DETALHE_COMPLETO);
+            return respostaFormatter.formatarListaCompleta(
+                    truncado.boletos(), truncado.pixs(), truncado.cheques(),
+                    periodo.descricao(), incluirPagos, totalItens);
+        }
+
+        return respostaFormatter.formatarListaCompleta(boletos, pixs, cheques, periodo.descricao(), incluirPagos, null);
+    }
+
+    /** Acima desse total de itens, mesmo o modo detalhado é truncado (limite de caracteres do WhatsApp). */
+    private static final int LIMITE_ITENS_DETALHE_COMPLETO = 40;
+
+    /** Resultado de {@link #truncarPorVencimentoMaisProximo}: as três listas já reduzidas ao limite. */
+    private record TrioTruncado(List<Boleto> boletos, List<PagamentoPix> pixs, List<Cheque> cheques) {}
+
+    /**
+     * Seleciona, entre boletos/PIX/cheques combinados, os {@code limite}
+     * itens com vencimento mais próximo (os mais urgentes de agir), mesmo
+     * misturando os três tipos. Preserva os objetos originais — não altera
+     * nenhum valor, só decide quais entram na resposta.
+     */
+    private TrioTruncado truncarPorVencimentoMaisProximo(List<Boleto> boletos, List<PagamentoPix> pixs, List<Cheque> cheques, int limite) {
+        record Marcado(int tipo, int indice, LocalDate vencimento) {}
+
+        List<Marcado> marcados = new java.util.ArrayList<>();
+        for (int i = 0; i < boletos.size(); i++) marcados.add(new Marcado(0, i, boletos.get(i).getVencimento()));
+        for (int i = 0; i < pixs.size(); i++) marcados.add(new Marcado(1, i, pixs.get(i).getVencimento()));
+        for (int i = 0; i < cheques.size(); i++) marcados.add(new Marcado(2, i, cheques.get(i).getVencimento()));
+
+        java.util.Set<Integer> boletosSelecionados = new java.util.HashSet<>();
+        java.util.Set<Integer> pixsSelecionados = new java.util.HashSet<>();
+        java.util.Set<Integer> chequesSelecionados = new java.util.HashSet<>();
+
+        marcados.stream()
+                .sorted(java.util.Comparator.comparing(Marcado::vencimento))
+                .limit(limite)
+                .forEach(m -> {
+                    switch (m.tipo()) {
+                        case 0 -> boletosSelecionados.add(m.indice());
+                        case 1 -> pixsSelecionados.add(m.indice());
+                        case 2 -> chequesSelecionados.add(m.indice());
+                    }
+                });
+
+        List<Boleto> boletosTruncados = java.util.stream.IntStream.range(0, boletos.size())
+                .filter(boletosSelecionados::contains).mapToObj(boletos::get).toList();
+        List<PagamentoPix> pixsTruncados = java.util.stream.IntStream.range(0, pixs.size())
+                .filter(pixsSelecionados::contains).mapToObj(pixs::get).toList();
+        List<Cheque> chequesTruncados = java.util.stream.IntStream.range(0, cheques.size())
+                .filter(chequesSelecionados::contains).mapToObj(cheques::get).toList();
+
+        return new TrioTruncado(boletosTruncados, pixsTruncados, chequesTruncados);
+    }
+
+    // ---------------------------------------------------------------
+    // DETALHAR_ULTIMA_CONSULTA
+    // ---------------------------------------------------------------
+
+    /**
+     * Cache em memória (não persiste em banco, não sobrevive a restart do
+     * serviço) da última consulta respondida em modo resumido, por usuário.
+     * Suficiente para o caso de uso: "detalhar" só faz sentido como resposta
+     * imediata à mensagem anterior — se o serviço reiniciar ou o cliente
+     * voltar dias depois, ele simplesmente recebe o aviso de que não há
+     * consulta recente para detalhar, e pode perguntar de novo.
+     */
+    private final java.util.Map<UUID, FiltrosAgente> ultimaConsultaResumidaPorUsuario = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private void guardarUltimaConsultaResumida(UUID usuarioId, FiltrosAgente filtros) {
+        ultimaConsultaResumidaPorUsuario.put(usuarioId, filtros);
+    }
+
+    private void limparUltimaConsultaResumida(UUID usuarioId) {
+        ultimaConsultaResumidaPorUsuario.remove(usuarioId);
+    }
+
+    private String detalharUltimaConsulta(UUID empresaId, PreferenciaNotificacao pref) {
+        FiltrosAgente filtrosAnteriores = ultimaConsultaResumidaPorUsuario.get(pref.getUsuario().getId());
+        if (filtrosAnteriores == null) {
+            return "Não tenho nenhum resumo recente pra detalhar. Pode fazer a pergunta novamente? Ex.: \"quanto tenho pra pagar essa semana\".";
+        }
+
+        UUID lojaId = resolverLoja(empresaId, filtrosAnteriores.getLoja());
+        String resposta = consultarPendencias(empresaId, pref, lojaId, filtrosAnteriores, true);
+        limparUltimaConsultaResumida(pref.getUsuario().getId());
+        return resposta;
     }
 
     // ---------------------------------------------------------------
@@ -325,6 +452,16 @@ public class WhatsAppAgentService {
                 LocalDate inicioSemana = hoje.with(DayOfWeek.MONDAY);
                 LocalDate fimSemana = hoje.with(DayOfWeek.SUNDAY);
                 yield new PeriodoResolvido(tipo, inicioSemana, fimSemana, "essa semana");
+            }
+            case MES -> {
+                LocalDate inicioMes = hoje.withDayOfMonth(1);
+                LocalDate fimMes = hoje.withDayOfMonth(hoje.lengthOfMonth());
+                yield new PeriodoResolvido(tipo, inicioMes, fimMes, "esse mês");
+            }
+            case ANO -> {
+                LocalDate inicioAno = hoje.withDayOfYear(1);
+                LocalDate fimAno = hoje.withDayOfYear(hoje.lengthOfYear());
+                yield new PeriodoResolvido(tipo, inicioAno, fimAno, "esse ano");
             }
             case VENCIDOS -> new PeriodoResolvido(tipo, null, hoje.minusDays(1), "em atraso");
             case INTERVALO -> {
