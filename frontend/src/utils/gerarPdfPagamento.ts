@@ -11,6 +11,8 @@ export interface DadosPagamento {
   vencimento?: string;
 }
 
+// ─── Boleto: linha digitável ↔ código de barras ────────────────────────────
+
 /**
  * Converte a linha digitável de boleto bancário padrão (47 dígitos, não
  * começa com 8) pro código de barras real (44 dígitos), reorganizando os
@@ -58,6 +60,38 @@ function resolverBarcode44(codigo: string): string | null {
   return null;
 }
 
+/** Formata a linha digitável de boleto bancário com pontos/espaços no
+ * padrão oficial (ex: "75691.43402 01253.630709 00049.250012 5 15000000104500"). */
+function formatarLinhaDigitavelBoleto(d47: string): string {
+  const c1 = d47.slice(0, 10);
+  const c2 = d47.slice(10, 21);
+  const c3 = d47.slice(21, 32);
+  const c4 = d47.slice(32, 33);
+  const c5 = d47.slice(33, 47);
+  return `${c1.slice(0, 5)}.${c1.slice(5)} ${c2.slice(0, 5)}.${c2.slice(5)} ${c3.slice(0, 5)}.${c3.slice(5)} ${c4} ${c5}`;
+}
+
+/** Formata a linha digitável de convênio/guia com hífen por bloco
+ * (ex: "85800000025-9 98500328261-5 77072026176-2 26894263681-5"). */
+function formatarLinhaDigitavelConvenio(d48: string): string {
+  return [d48.slice(0, 12), d48.slice(12, 24), d48.slice(24, 36), d48.slice(36, 48)]
+    .map(bloco => `${bloco.slice(0, 11)}-${bloco.slice(11)}`)
+    .join(' ');
+}
+
+/**
+ * Formata o código salvo pro padrão oficial com separadores (pontos/espaços
+ * ou hífens), do jeito que aparece impresso num boleto de verdade. Apps de
+ * banco que fazem extração de texto (não OCR do código de barras) procuram
+ * esse formato — por isso o texto real no PDF importa tanto quanto a imagem.
+ */
+function formatarCodigoParaExibir(codigo: string): string {
+  const limpo = codigo.replace(/\D/g, '');
+  if (limpo.length === 47 && !limpo.startsWith('8')) return formatarLinhaDigitavelBoleto(limpo);
+  if (limpo.length === 48 && limpo.startsWith('8')) return formatarLinhaDigitavelConvenio(limpo);
+  return limpo;
+}
+
 function gerarImagemBarcodeITF(codigo44: string): string | null {
   try {
     const canvas = document.createElement('canvas');
@@ -74,13 +108,60 @@ function gerarImagemBarcodeITF(codigo44: string): string | null {
   }
 }
 
+// ─── PIX: payload EMV ("Copia e Cola") ──────────────────────────────────────
+
+/** Cidade do recebedor exigida pelo payload EMV. O app não coleta esse dado
+ * (não existe campo de cidade em Loja/Empresa/PIX) — usamos um valor fixo,
+ * já que o campo é só informativo no padrão e não é validado pelos bancos. */
+const CIDADE_PIX_PADRAO = 'BRASIL';
+
+/** Monta um campo TLV (Tag-Length-Value) do padrão EMV: 2 dígitos de tag +
+ * 2 dígitos de tamanho (zero-padded) + o valor. */
+function tlv(tag: string, valor: string): string {
+  return `${tag}${valor.length.toString().padStart(2, '0')}${valor}`;
+}
+
+/** CRC-16/CCITT-FALSE (poly 0x1021, init 0xFFFF) — o checksum exigido no
+ * campo final (63) do payload EMV do Pix. */
+function crc16(texto: string): string {
+  let crc = 0xffff;
+  for (let i = 0; i < texto.length; i++) {
+    crc ^= texto.charCodeAt(i) << 8;
+    for (let bit = 0; bit < 8; bit++) {
+      crc = (crc & 0x8000) !== 0 ? ((crc << 1) ^ 0x1021) & 0xffff : (crc << 1) & 0xffff;
+    }
+  }
+  return crc.toString(16).toUpperCase().padStart(4, '0');
+}
+
 /**
- * QR code com o valor bruto da chave PIX. Atenção: isso NÃO é um "BR Code"
- * (o payload EMV oficial do Banco Central, com merchant/valor/CRC) — é só a
- * chave em texto dentro do QR. Serve como redundância visual e pra apps que
- * aceitam ler a chave direto; bancos que exigem o BR Code completo pra pagar
- * por QR podem não reconhecer.
+ * Monta o payload EMV completo do Pix ("BR Code" / Pix Copia e Cola), no
+ * formato que os apps de banco reconhecem tanto por QR code quanto por
+ * texto colado — sempre começa com "000201". Campos obrigatórios do padrão
+ * que o app não coleta (cidade) usam um valor fixo; sem valor definido, o
+ * campo de valor (54) é omitido (pagamento com valor livre).
  */
+function montarPayloadPixEmv(chave: string, fornecedor: string | undefined, valor: number | undefined): string {
+  const contaComerciante = tlv('00', 'br.gov.bcb.pix') + tlv('01', chave);
+  const nomeRecebedor = (fornecedor || 'RECEBEDOR').toUpperCase().slice(0, 25);
+  const campoValor = valor != null ? tlv('54', valor.toFixed(2)) : '';
+  const dadosAdicionais = tlv('62', tlv('05', '***'));
+
+  const semCrc =
+    tlv('00', '01') +
+    tlv('26', contaComerciante) +
+    tlv('52', '0000') +
+    tlv('53', '986') +
+    campoValor +
+    tlv('58', 'BR') +
+    tlv('59', nomeRecebedor) +
+    tlv('60', CIDADE_PIX_PADRAO) +
+    dadosAdicionais +
+    '6304';
+
+  return semCrc + crc16(semCrc);
+}
+
 async function gerarImagemQrCode(valor: string): Promise<string | null> {
   try {
     return await QRCode.toDataURL(valor, { margin: 1, width: 300 });
@@ -89,11 +170,17 @@ async function gerarImagemQrCode(valor: string): Promise<string | null> {
   }
 }
 
+// ─── PDF ────────────────────────────────────────────────────────────────────
+
 /**
- * Gera um PDF simples com fornecedor/valor/vencimento e o código de
- * pagamento em destaque, com imagem (código de barras ITF pro boleto, QR
- * code pro PIX) além do texto — usado pra compartilhar com apps de banco,
- * que costumam ler o código visualmente (câmera), não extrair texto do PDF.
+ * Gera um PDF com fornecedor/valor/vencimento e o código de pagamento em
+ * destaque — pro boleto, a linha digitável formatada (padrão oficial, com
+ * pontos/espaços); pro PIX, o payload EMV completo ("Copia e Cola"). Em
+ * ambos os casos o código aparece como texto real e selecionável (não é
+ * desenhado dentro da imagem), logo acima da imagem de apoio (código de
+ * barras ITF ou QR code) — apps de banco que fazem extração de texto do PDF
+ * procuram esse texto num formato reconhecível, não necessariamente leem a
+ * imagem visualmente.
  */
 export async function gerarPdfPagamento(dados: DadosPagamento): Promise<Blob> {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
@@ -121,9 +208,19 @@ export async function gerarPdfPagamento(dados: DadosPagamento): Promise<Blob> {
     doc.text(`Vencimento: ${format(parseISO(dados.vencimento), 'dd/MM/yyyy')}`, margem, y);
     y += 8;
   }
-  y += 6;
+  y += 8;
 
   if (dados.tipo === 'boleto') {
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Linha digitável:', margem, y);
+    y += 7;
+
+    doc.setFont('courier', 'normal');
+    doc.setFontSize(12);
+    doc.text(doc.splitTextToSize(formatarCodigoParaExibir(dados.codigo), 170), margem, y);
+    y += 10;
+
     const barcode44 = resolverBarcode44(dados.codigo);
     const imagem = barcode44 ? gerarImagemBarcodeITF(barcode44) : null;
     if (imagem) {
@@ -131,19 +228,24 @@ export async function gerarPdfPagamento(dados: DadosPagamento): Promise<Blob> {
       y += 34;
     }
   } else {
-    const imagem = await gerarImagemQrCode(dados.codigo);
+    const payloadEmv = montarPayloadPixEmv(dados.codigo, dados.fornecedor, dados.valor);
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('PIX Copia e Cola:', margem, y);
+    y += 7;
+
+    doc.setFont('courier', 'normal');
+    doc.setFontSize(9);
+    doc.text(doc.splitTextToSize(payloadEmv, 170), margem, y);
+    y += 16;
+
+    const imagem = await gerarImagemQrCode(payloadEmv);
     if (imagem) {
       doc.addImage(imagem, 'PNG', margem, y, 50, 50);
       y += 56;
     }
   }
-
-  doc.setFontSize(10);
-  doc.text(dados.tipo === 'boleto' ? 'Linha digitável:' : 'Chave PIX:', margem, y);
-  y += 7;
-  doc.setFont('courier', 'normal');
-  doc.setFontSize(13);
-  doc.text(doc.splitTextToSize(dados.codigo, 170), margem, y);
 
   return doc.output('blob');
 }
