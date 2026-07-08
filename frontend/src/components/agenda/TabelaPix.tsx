@@ -264,14 +264,7 @@ export function TabelaPix({
                                 <span className="text-xs text-slate-500 font-mono truncate max-w-[180px]">
                                   {pix.chavePix}
                                 </span>
-                                <BotaoPagar
-                                  tipo="pix"
-                                  codigo={pix.chavePix}
-                                  fornecedor={pix.fornecedor}
-                                  valor={pix.valor}
-                                  vencimento={pix.vencimento}
-                                  className="px-2.5 py-1 text-xs"
-                                />
+                                <BotaoPagar codigo={pix.chavePix} className="px-2.5 py-1 text-xs" />
                               </div>
                             ) : (
                               <span className="text-slate-300 text-xs">—</span>

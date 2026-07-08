@@ -61,14 +61,7 @@ export function CardBoleto({
         </div>
 
         {boleto.codigoBarras && (
-          <BotaoPagar
-            tipo="boleto"
-            codigo={boleto.codigoBarras}
-            fornecedor={boleto.fornecedor}
-            valor={boleto.valor}
-            vencimento={boleto.vencimento}
-            className="w-1/2 mx-auto py-2.5 text-sm"
-          />
+          <BotaoPagar codigo={boleto.codigoBarras} className="w-1/2 mx-auto py-2.5 text-sm" />
         )}
       </div>
 

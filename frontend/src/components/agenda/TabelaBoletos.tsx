@@ -278,14 +278,7 @@ export function TabelaBoletos({
                                 <span className="text-xs text-slate-500 font-mono truncate max-w-[180px]">
                                   {boleto.codigoBarras.substring(0, 20)}...
                                 </span>
-                                <BotaoPagar
-                                  tipo="boleto"
-                                  codigo={boleto.codigoBarras}
-                                  fornecedor={boleto.fornecedor}
-                                  valor={boleto.valor}
-                                  vencimento={boleto.vencimento}
-                                  className="px-2.5 py-1 text-xs"
-                                />
+                                <BotaoPagar codigo={boleto.codigoBarras} className="px-2.5 py-1 text-xs" />
                               </div>
                             ) : (
                               <span className="text-slate-300 text-xs">—</span>

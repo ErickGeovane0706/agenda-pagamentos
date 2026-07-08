@@ -61,14 +61,7 @@ export function CardPix({
         </div>
 
         {pix.chavePix && (
-          <BotaoPagar
-            tipo="pix"
-            codigo={pix.chavePix}
-            fornecedor={pix.fornecedor}
-            valor={pix.valor}
-            vencimento={pix.vencimento}
-            className="w-1/2 mx-auto py-2.5 text-sm"
-          />
+          <BotaoPagar codigo={pix.chavePix} className="w-1/2 mx-auto py-2.5 text-sm" />
         )}
       </div>
 
