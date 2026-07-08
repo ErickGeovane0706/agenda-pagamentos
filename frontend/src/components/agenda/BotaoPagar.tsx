@@ -2,14 +2,26 @@ import { Wallet } from 'lucide-react';
 import { clsx } from 'clsx';
 import { copiarTexto } from '../../utils/clipboard';
 import { useToastStore } from '../../store/toastStore';
+import { gerarPdfPagamento } from '../../utils/gerarPdfPagamento';
+
+interface BotaoPagarProps {
+  codigo: string;
+  className?: string;
+  fornecedor?: string;
+  valor?: number;
+  vencimento?: string;
+}
 
 /**
  * Botão "Pagar": copia o código (código de barras ou chave PIX) e aciona o
- * menu nativo de compartilhamento do sistema (Web Share API), que já lista
- * os apps de banco instalados como opção de "Abrir com". Sem suporte a Web
- * Share (ex: desktop), o código já foi copiado — só avisa por toast.
+ * menu nativo de compartilhamento do sistema (Web Share API). Bancos como
+ * Caixa e BB só aparecem nesse menu como alvo de arquivo (ex: PDF), não de
+ * texto puro — por isso geramos um PDF simples com os dados do pagamento e
+ * compartilhamos ele quando o navegador suporta `canShare` com arquivos.
+ * Sem suporte a Web Share (ex: desktop), o código já foi copiado — só
+ * avisa por toast.
  */
-export function BotaoPagar({ codigo, className }: { codigo: string; className?: string }) {
+export function BotaoPagar({ codigo, className, fornecedor, valor, vencimento }: BotaoPagarProps) {
   const addToast = useToastStore(s => s.addToast);
 
   const pagar = async () => {
@@ -21,7 +33,14 @@ export function BotaoPagar({ codigo, className }: { codigo: string; className?: 
     }
 
     try {
-      await navigator.share({ text: codigo });
+      const pdf = gerarPdfPagamento({ codigo, fornecedor, valor, vencimento });
+      const arquivo = new File([pdf], 'boleto.pdf', { type: 'application/pdf' });
+
+      if (navigator.canShare?.({ files: [arquivo] })) {
+        await navigator.share({ files: [arquivo], title: 'Boleto para pagamento' });
+      } else {
+        await navigator.share({ text: codigo });
+      }
     } catch (err: any) {
       if (err?.name !== 'AbortError') {
         addToast('info', 'Código copiado. Cole no app do seu banco.');
