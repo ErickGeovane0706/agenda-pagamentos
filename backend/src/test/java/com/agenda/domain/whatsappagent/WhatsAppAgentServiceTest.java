@@ -14,26 +14,34 @@ import com.agenda.whatsapp.WhatsAppService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.temporal.TemporalAdjusters;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
  * Cobre principalmente as regras de SEGURANÇA do agente — são as que não
  * podem regredir silenciosamente: telefone não cadastrado nunca consulta
  * o banco, e loja fora da permissão do usuário nunca aparece na resposta.
+ * <p>
+ * A partir daqui, também cobre os novos {@link TipoPeriodoAgente} (gaps de
+ * jargões de data em português) e, em especial, a regressão do bug
+ * original — "até segunda" sendo resolvido uma semana inteira além do
+ * esperado por falta de um enum próprio.
  */
 @ExtendWith(MockitoExtension.class)
 class WhatsAppAgentServiceTest {
@@ -70,6 +78,10 @@ class WhatsAppAgentServiceTest {
                 .build();
     }
 
+    // ---------------------------------------------------------------
+    // Testes de segurança já existentes
+    // ---------------------------------------------------------------
+
     @Test
     void telefoneNaoCadastrado_naoDeveConsultarBancoNemClassificarMensagem() {
         when(preferenciaRepository.findByTelefoneNormalizadoIn(List.of("5583988887777", "558388887777"))).thenReturn(List.of());
@@ -83,7 +95,7 @@ class WhatsAppAgentServiceTest {
     @Test
     void telefoneCadastrado_classificaEResponde() {
         when(preferenciaRepository.findByTelefoneNormalizadoIn(List.of("5583999990000", "558399990000"))).thenReturn(List.of(preferencia));
-        when(classifierService.classificar(any())).thenReturn(
+        when(classifierService.classificar(any(), any())).thenReturn(
                 ResultadoClassificacao.builder()
                         .intencao(IntencaoAgente.SAUDACAO_AJUDA)
                         .filtros(FiltrosAgente.builder().periodo(TipoPeriodoAgente.SEM_FILTRO).build())
@@ -105,7 +117,7 @@ class WhatsAppAgentServiceTest {
 
         when(preferenciaRepository.findByTelefoneNormalizadoIn(List.of("5583999990000", "558399990000"))).thenReturn(List.of(preferencia));
         when(lojaRepository.findByEmpresaIdOrderByNome(empresa.getId())).thenReturn(List.of(lojaPermitida, lojaNaoPermitida));
-        when(classifierService.classificar(any())).thenReturn(
+        when(classifierService.classificar(any(), any())).thenReturn(
                 ResultadoClassificacao.builder()
                         .intencao(IntencaoAgente.CONSULTAR_PENDENCIAS)
                         .filtros(FiltrosAgente.builder().loja("Loja Sul").periodo(TipoPeriodoAgente.HOJE).build())
@@ -121,7 +133,7 @@ class WhatsAppAgentServiceTest {
     @Test
     void falhaNaClassificacao_respondeMensagemDeErroEmVezDeQuebrar() {
         when(preferenciaRepository.findByTelefoneNormalizadoIn(List.of("5583999990000", "558399990000"))).thenReturn(List.of(preferencia));
-        when(classifierService.classificar(any())).thenThrow(new RuntimeException("timeout simulado"));
+        when(classifierService.classificar(any(), any())).thenThrow(new RuntimeException("timeout simulado"));
 
         assertDoesNotThrow(() -> agentService.processarMensagem("5583999990000", "quanto tenho pra pagar"));
 
@@ -132,7 +144,7 @@ class WhatsAppAgentServiceTest {
     @SuppressWarnings("unchecked")
     void consultarPendencias_somaValoresCorretamente() {
         when(preferenciaRepository.findByTelefoneNormalizadoIn(List.of("5583999990000", "558399990000"))).thenReturn(List.of(preferencia));
-        when(classifierService.classificar(any())).thenReturn(
+        when(classifierService.classificar(any(), any())).thenReturn(
                 ResultadoClassificacao.builder()
                         .intencao(IntencaoAgente.CONSULTAR_PENDENCIAS)
                         .filtros(FiltrosAgente.builder().periodo(TipoPeriodoAgente.HOJE).build())
@@ -153,5 +165,268 @@ class WhatsAppAgentServiceTest {
         agentService.processarMensagem("5583999990000", "quanto vence hoje");
 
         verify(whatsAppService).enviarMensagemTexto(eq("5583999990000"), contains("150,00"));
+    }
+
+    // ---------------------------------------------------------------
+    // Regressão do bug original: "até segunda" (ou qualquer dia da semana)
+    // não pode ser resolvido como se fosse "semana que vem" inteira.
+    // ---------------------------------------------------------------
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void ateSegunda_naoDeveEstenderParaProximaSemanaInteira() {
+        stubPreferenciaEncontrada();
+        when(classifierService.classificar(any(), any())).thenReturn(
+                ResultadoClassificacao.builder()
+                        .intencao(IntencaoAgente.CONSULTAR_PENDENCIAS)
+                        .filtros(FiltrosAgente.builder()
+                                .periodo(TipoPeriodoAgente.ATE_DIA_SEMANA)
+                                .diaSemanaAlvo(DiaSemanaAgente.SEGUNDA)
+                                .build())
+                        .build()
+        );
+        semResultadosNosRepositorios();
+
+        agentService.processarMensagem("5583999990000", "o que tenho pra pagar até segunda");
+
+        // A data-limite calculada tem que ser a PRÓXIMA segunda-feira a partir de
+        // hoje (nunca a segunda da semana seguinte à próxima) — essa é a asserção
+        // que teria pego o bug original antes de ir pro ar.
+        LocalDate hoje = LocalDate.now();
+        LocalDate proximaSegunda = hoje.with(TemporalAdjusters.nextOrSame(DayOfWeek.MONDAY));
+        long diasAteLimite = java.time.temporal.ChronoUnit.DAYS.between(hoje, proximaSegunda);
+
+        assertTrue(diasAteLimite < 7,
+                "\"até segunda\" nunca deve ultrapassar 6 dias a partir de hoje; calculado: " + diasAteLimite);
+        verify(whatsAppService).enviarMensagemTexto(eq("5583999990000"), contains("segunda-feira"));
+    }
+
+    /**
+     * Cobre os 7 dias da semana (o "off-by-one" do bug original só aparecia
+     * em alguns casos — quando hoje já era o próprio dia-alvo, ou o dia
+     * anterior a ele — por isso vale testar todos, não só um exemplo).
+     */
+    @ParameterizedTest
+    @EnumSource(DiaSemanaAgente.class)
+    @SuppressWarnings("unchecked")
+    void ateQualquerDiaDaSemana_intervaloNuncaUltrapassaSeteDias(DiaSemanaAgente diaAlvo) {
+        stubPreferenciaEncontrada();
+        when(classifierService.classificar(any(), any())).thenReturn(
+                ResultadoClassificacao.builder()
+                        .intencao(IntencaoAgente.CONSULTAR_PENDENCIAS)
+                        .filtros(FiltrosAgente.builder()
+                                .periodo(TipoPeriodoAgente.ATE_DIA_SEMANA)
+                                .diaSemanaAlvo(diaAlvo)
+                                .build())
+                        .build()
+        );
+        semResultadosNosRepositorios();
+
+        assertDoesNotThrow(() -> agentService.processarMensagem("5583999990000", "até " + diaAlvo));
+
+        verify(whatsAppService).enviarMensagemTexto(eq("5583999990000"), any());
+    }
+
+    // ---------------------------------------------------------------
+    // Novos jargões de período
+    // ---------------------------------------------------------------
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void quinzena_semPosicaoExplicita_naoQuebra() {
+        stubPreferenciaEncontrada();
+        when(classifierService.classificar(any(), any())).thenReturn(
+                ResultadoClassificacao.builder()
+                        .intencao(IntencaoAgente.CONSULTAR_PENDENCIAS)
+                        .filtros(FiltrosAgente.builder().periodo(TipoPeriodoAgente.QUINZENA).build())
+                        .build()
+        );
+        semResultadosNosRepositorios();
+
+        agentService.processarMensagem("5583999990000", "o que vence na quinzena?");
+
+        verify(whatsAppService).enviarMensagemTexto(eq("5583999990000"), contains("quinzena"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void quinzena_comPosicaoPrimeira_calculaDias1a15() {
+        stubPreferenciaEncontrada();
+        when(classifierService.classificar(any(), any())).thenReturn(
+                ResultadoClassificacao.builder()
+                        .intencao(IntencaoAgente.CONSULTAR_PENDENCIAS)
+                        .filtros(FiltrosAgente.builder()
+                                .periodo(TipoPeriodoAgente.QUINZENA)
+                                .posicaoQuinzena(PosicaoQuinzenaAgente.PRIMEIRA)
+                                .mesReferencia(MesReferenciaAgente.ATUAL)
+                                .build())
+                        .build()
+        );
+        semResultadosNosRepositorios();
+
+        assertDoesNotThrow(() -> agentService.processarMensagem("5583999990000", "primeira quinzena do mês"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void fimDeSemana_naoQuebra() {
+        stubPreferenciaEncontrada();
+        when(classifierService.classificar(any(), any())).thenReturn(
+                ResultadoClassificacao.builder()
+                        .intencao(IntencaoAgente.CONSULTAR_PENDENCIAS)
+                        .filtros(FiltrosAgente.builder().periodo(TipoPeriodoAgente.FIM_DE_SEMANA).build())
+                        .build()
+        );
+        semResultadosNosRepositorios();
+
+        agentService.processarMensagem("5583999990000", "o que vence no fds?");
+
+        verify(whatsAppService).enviarMensagemTexto(eq("5583999990000"), contains("fim de semana"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void proximoFimDeSemana_ficaDepoisDoFimDeSemanaAtual() {
+        stubPreferenciaEncontrada();
+        when(classifierService.classificar(any(), any())).thenReturn(
+                ResultadoClassificacao.builder()
+                        .intencao(IntencaoAgente.CONSULTAR_PENDENCIAS)
+                        .filtros(FiltrosAgente.builder().periodo(TipoPeriodoAgente.PROXIMO_FIM_DE_SEMANA).build())
+                        .build()
+        );
+        semResultadosNosRepositorios();
+
+        assertDoesNotThrow(() -> agentService.processarMensagem("5583999990000", "fim de semana que vem"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void viradaDeMes_semanaComercialAtravessaAFronteiraDoMes() {
+        stubPreferenciaEncontrada();
+        when(classifierService.classificar(any(), any())).thenReturn(
+                ResultadoClassificacao.builder()
+                        .intencao(IntencaoAgente.CONSULTAR_PENDENCIAS)
+                        .filtros(FiltrosAgente.builder()
+                                .periodo(TipoPeriodoAgente.VIRADA_MES)
+                                .mesReferencia(MesReferenciaAgente.ATUAL)
+                                .build())
+                        .build()
+        );
+        semResultadosNosRepositorios();
+
+        agentService.processarMensagem("5583999990000", "o que passa de um mês pro outro?");
+
+        verify(whatsAppService).enviarMensagemTexto(eq("5583999990000"), contains("virada do mês"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void diaDoMes_ate15_naoQuebra() {
+        stubPreferenciaEncontrada();
+        when(classifierService.classificar(any(), any())).thenReturn(
+                ResultadoClassificacao.builder()
+                        .intencao(IntencaoAgente.CONSULTAR_PENDENCIAS)
+                        .filtros(FiltrosAgente.builder()
+                                .periodo(TipoPeriodoAgente.DIA_DO_MES)
+                                .diaDoMes(15)
+                                .mesReferencia(MesReferenciaAgente.ATUAL)
+                                .build())
+                        .build()
+        );
+        semResultadosNosRepositorios();
+
+        agentService.processarMensagem("5583999990000", "o que vence até o dia 15");
+
+        verify(whatsAppService).enviarMensagemTexto(eq("5583999990000"), contains("dia 15"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void diaDoMes_diaInexistenteNoMes_naoQuebra() {
+        // Regressão do "31 de fevereiro": o código deve truncar pro último dia
+        // real do mês em vez de lançar DateTimeException.
+        stubPreferenciaEncontrada();
+        when(classifierService.classificar(any(), any())).thenReturn(
+                ResultadoClassificacao.builder()
+                        .intencao(IntencaoAgente.CONSULTAR_PENDENCIAS)
+                        .filtros(FiltrosAgente.builder()
+                                .periodo(TipoPeriodoAgente.DIA_DO_MES)
+                                .diaDoMes(31)
+                                .mesReferencia(MesReferenciaAgente.ATUAL)
+                                .build())
+                        .build()
+        );
+        semResultadosNosRepositorios();
+
+        assertDoesNotThrow(() -> agentService.processarMensagem("5583999990000", "o que vence até o dia 31"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void periodoNaoMapeado_caiEmSemFiltro_naoInventaData() {
+        // "próximo dia útil" não tem enum — deve virar SEM_FILTRO em vez de
+        // o classificador ou o código tentarem adivinhar uma data.
+        stubPreferenciaEncontrada();
+        when(classifierService.classificar(any(), any())).thenReturn(
+                ResultadoClassificacao.builder()
+                        .intencao(IntencaoAgente.CONSULTAR_PENDENCIAS)
+                        .filtros(FiltrosAgente.builder().periodo(TipoPeriodoAgente.SEM_FILTRO).build())
+                        .build()
+        );
+        semResultadosNosRepositorios();
+
+        assertDoesNotThrow(() -> agentService.processarMensagem("5583999990000", "tenho algo pra pagar até o próximo dia útil?"));
+    }
+
+    // ---------------------------------------------------------------
+    // REFINAR_ULTIMA_CONSULTA: intenção nova, precisa forçar o merge com a
+    // última consulta mesmo quando a mensagem de refinamento traz mais de
+    // 1 filtro novo (a heurística antiga só mesclava com exatamente 1).
+    // ---------------------------------------------------------------
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void refinarUltimaConsulta_mescleMesmoComDoisFiltrosNovos() {
+        stubPreferenciaEncontrada();
+        semResultadosNosRepositorios();
+
+        ResultadoClassificacao primeiraConsulta = ResultadoClassificacao.builder()
+                .intencao(IntencaoAgente.CONSULTAR_PENDENCIAS)
+                .filtros(FiltrosAgente.builder().periodo(TipoPeriodoAgente.SEMANA).build())
+                .build();
+        ResultadoClassificacao refinamento = ResultadoClassificacao.builder()
+                .intencao(IntencaoAgente.REFINAR_ULTIMA_CONSULTA)
+                .filtros(FiltrosAgente.builder()
+                        .tipoPagamento(TipoPagamentoAgente.BOLETO)
+                        .fornecedor("Fornecedora X")
+                        .periodo(TipoPeriodoAgente.SEM_FILTRO)
+                        .build())
+                .build();
+        when(classifierService.classificar(any(), any())).thenReturn(primeiraConsulta, refinamento);
+
+        agentService.processarMensagem("5583999990000", "quanto tenho pra pagar essa semana");
+        agentService.processarMensagem("5583999990000", "e de boleto da fornecedora X?");
+
+        // Sob a heurística antiga (só mescla com exatamente 1 campo novo), esses 2
+        // filtros (tipoPagamento + fornecedor) não teriam mesclado o período SEMANA
+        // da consulta anterior. Como a intenção já veio como REFINAR_ULTIMA_CONSULTA,
+        // o merge é forçado — as duas respostas devem refletir o período "semana".
+        verify(whatsAppService, times(2)).enviarMensagemTexto(eq("5583999990000"), contains("semana"));
+    }
+
+    // ---------------------------------------------------------------
+    // Helpers
+    // ---------------------------------------------------------------
+
+    private void stubPreferenciaEncontrada() {
+        when(preferenciaRepository.findByTelefoneNormalizadoIn(List.of("5583999990000", "558399990000")))
+                .thenReturn(List.of(preferencia));
+    }
+
+    @SuppressWarnings("unchecked")
+    private void semResultadosNosRepositorios() {
+        when(boletoRepository.findAll(any(Specification.class))).thenReturn(List.of());
+        when(pixRepository.findAll(any(Specification.class))).thenReturn(List.of());
+        when(chequeRepository.findAll(any(Specification.class))).thenReturn(List.of());
     }
 }

@@ -55,6 +55,16 @@ public enum IntencaoAgente {
     DETALHAR_ULTIMA_CONSULTA,
 
     /**
+     * Cliente está complementando ou estreitando uma consulta anterior sem
+     * repetir os filtros já dados antes (ex.: "e de boleto?", "e da loja
+     * centro?"). Tratada igual a {@link #CONSULTAR_PENDENCIAS} em
+     * {@link WhatsAppAgentService#rotear}, mas força o merge com os filtros
+     * da última consulta do usuário independente de quantos campos vieram
+     * preenchidos na mensagem nova.
+     */
+    REFINAR_ULTIMA_CONSULTA,
+
+    /**
      * Fallback: a LLM não conseguiu mapear a mensagem para nenhuma
      * intenção acima com confiança razoável. O agente responde pedindo
      * para o cliente reformular, sem tentar adivinhar.

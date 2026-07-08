@@ -63,7 +63,7 @@ public class IntentClassifierService {
      * falha (rede, parsing) é tratada e devolve {@code naoEntendido()},
      * deixando o agente decidir a mensagem de erro amigável.
      */
-    public ResultadoClassificacao classificar(String mensagemCliente) {
+    public ResultadoClassificacao classificar(String mensagemCliente, FiltrosAgente filtrosAnteriores) {
         if (mensagemCliente == null || mensagemCliente.isBlank()) {
             return ResultadoClassificacao.naoEntendido();
         }
@@ -73,7 +73,7 @@ public class IntentClassifierService {
         }
 
         try {
-            String prompt = montarPrompt(mensagemCliente);
+            String prompt = montarPrompt(mensagemCliente, filtrosAnteriores);
             String respostaBruta = chamarApiAnthropic(prompt);
             return parsearResposta(respostaBruta);
         } catch (Exception e) {
@@ -82,11 +82,31 @@ public class IntentClassifierService {
         }
     }
 
-    private String montarPrompt(String mensagemCliente) {
+    private String montarPrompt(String mensagemCliente, FiltrosAgente filtrosAnteriores) {
         String hoje = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
         return promptTemplate
                 .replace("{{DATA_HOJE}}", hoje)
+                .replace("{{FILTROS_ANTERIORES}}", formatarFiltrosAnteriores(filtrosAnteriores))
                 .replace("{{MENSAGEM_CLIENTE}}", sanitizarParaPrompt(mensagemCliente));
+    }
+
+    /**
+     * Representação compacta dos filtros da última consulta do usuário,
+     * para o prompt dar contexto suficiente à LLM decidir entre
+     * {@code REFINAR_ULTIMA_CONSULTA} e uma intenção nova. Nunca inclui
+     * dados financeiros — só os próprios filtros de texto já extraídos
+     * anteriormente da mensagem do cliente.
+     */
+    private String formatarFiltrosAnteriores(FiltrosAgente filtros) {
+        if (filtros == null) {
+            return "nenhuma consulta anterior nesta conversa";
+        }
+        StringBuilder descricao = new StringBuilder();
+        if (filtros.getLoja() != null) descricao.append("loja=").append(filtros.getLoja()).append("; ");
+        if (filtros.getTipoPagamento() != null) descricao.append("tipoPagamento=").append(filtros.getTipoPagamento()).append("; ");
+        if (filtros.getPeriodo() != null) descricao.append("periodo=").append(filtros.getPeriodo()).append("; ");
+        if (filtros.getFiltroStatus() != null) descricao.append("filtroStatus=").append(filtros.getFiltroStatus()).append("; ");
+        return descricao.isEmpty() ? "nenhum filtro específico" : descricao.toString();
     }
 
     /**
@@ -146,8 +166,13 @@ public class IntentClassifierService {
      * Faz o parsing do JSON devolvido pela LLM. Tolera blocos ```json
      * que o modelo eventualmente envolva a resposta, mesmo com a
      * instrução explícita no prompt para não fazer isso.
+     * <p>
+     * Visibilidade de pacote (não {@code private}) para ser exercitado
+     * diretamente por {@link IntentClassifierServiceTest} sem precisar de
+     * uma chamada HTTP real — é o caminho que estava sem cobertura quando
+     * o formato do JSON do prompt mudou e quebrou silenciosamente.
      */
-    private ResultadoClassificacao parsearResposta(String respostaBruta) throws IOException {
+    ResultadoClassificacao parsearResposta(String respostaBruta) throws IOException {
         String json = respostaBruta
                 .replaceAll("(?s)```json\\s*", "")
                 .replaceAll("(?s)```\\s*", "")
@@ -170,7 +195,13 @@ public class IntentClassifierService {
      * snake/camel conforme instruído à LLM). Mantido como classe interna
      * privada porque é só um DTO de desserialização intermediário — o
      * resto do código trabalha com {@link ResultadoClassificacao}.
+     * <p>
+     * {@code @JsonIgnoreProperties(ignoreUnknown = true)}: um campo extra
+     * que a LLM eventualmente devolva (ex.: alucinação, ou o prompt ganhar
+     * um campo novo antes deste DTO ser atualizado) nunca pode derrubar
+     * TODA classificação — só o próprio campo desconhecido é ignorado.
      */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
     private static class JsonNoLlmResponse {
         public String intencao;
         public FiltrosJson filtros;
@@ -194,10 +225,15 @@ public class IntentClassifierService {
         }
     }
 
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
     private static class FiltrosJson {
         public String loja;
         public String tipoPagamento;
         public String periodo;
+        public String diaSemanaAlvo;
+        public String posicaoQuinzena;
+        public Integer diaDoMes;
+        public String mesReferencia;
         public String dataInicio;
         public String dataFim;
         public String fornecedor;
@@ -208,6 +244,10 @@ public class IntentClassifierService {
                     .loja(loja)
                     .tipoPagamento(parseEnumSeguro(tipoPagamento, TipoPagamentoAgente.class))
                     .periodo(parseEnumSeguro(periodo, TipoPeriodoAgente.class, TipoPeriodoAgente.SEM_FILTRO))
+                    .diaSemanaAlvo(parseEnumSeguro(diaSemanaAlvo, DiaSemanaAgente.class))
+                    .posicaoQuinzena(parseEnumSeguro(posicaoQuinzena, PosicaoQuinzenaAgente.class))
+                    .diaDoMes(diaDoMes)
+                    .mesReferencia(parseEnumSeguro(mesReferencia, MesReferenciaAgente.class))
                     .dataInicio(parseDataSegura(dataInicio))
                     .dataFim(parseDataSegura(dataFim))
                     .fornecedor(fornecedor)

@@ -81,7 +81,8 @@ public class WhatsAppAgentService {
         UUID empresaId = pref.getUsuario().getEmpresa().getId();
 
         try {
-            ResultadoClassificacao resultado = classifierService.classificar(textoMensagem);
+            FiltrosAgente filtrosAnteriores = ultimaConsultaPorUsuario.get(pref.getUsuario().getId());
+            ResultadoClassificacao resultado = classifierService.classificar(textoMensagem, filtrosAnteriores);
             log.info("[WHATSAPP-AGENTE] Usuário {} | intenção classificada: {}", pref.getUsuario().getId(), resultado.getIntencao());
 
             String resposta = rotear(empresaId, pref, resultado);
@@ -156,12 +157,16 @@ public class WhatsAppAgentService {
         }
 
         return switch (resultado.getIntencao()) {
-            case CONSULTAR_PENDENCIAS -> {
+            case CONSULTAR_PENDENCIAS, REFINAR_ULTIMA_CONSULTA -> {
                 // Gap J: se a mensagem só trouxe 1 filtro novo (ex.: "e da loja centro?"),
                 // faz merge com a última consulta completa do usuário em vez de tratar
-                // como pergunta nova do zero. Precisa re-resolver a loja pois o merge
-                // pode ter trazido um nome de loja diferente do que já foi resolvido acima.
-                FiltrosAgente filtrosMesclados = mesclarComUltimaConsulta(pref.getUsuario().getId(), filtros);
+                // como pergunta nova do zero. Quando a própria LLM já classificou como
+                // REFINAR_ULTIMA_CONSULTA, o merge é forçado independente de quantos
+                // campos vieram preenchidos — a LLM já reconheceu que é continuação.
+                // Precisa re-resolver a loja pois o merge pode ter trazido um nome de
+                // loja diferente do que já foi resolvido acima.
+                boolean refinamentoExplicito = resultado.getIntencao() == IntencaoAgente.REFINAR_ULTIMA_CONSULTA;
+                FiltrosAgente filtrosMesclados = mesclarComUltimaConsulta(pref.getUsuario().getId(), filtros, refinamentoExplicito);
                 UUID lojaIdMesclada = filtrosMesclados == filtros ? lojaId : resolverLoja(empresaId, filtrosMesclados.getLoja());
                 yield consultarPendencias(empresaId, pref, lojaIdMesclada, filtrosMesclados);
             }
@@ -365,16 +370,22 @@ public class WhatsAppAgentService {
      * Mensagens já completas (2+ filtros específicos, ou 0 filtros — ex.:
      * "quanto tenho pra pagar" pura) não disparam merge: presumimos que o
      * cliente quis uma pergunta nova e genérica, não um refinamento.
+     *
+     * @param forcarMerge quando {@code true} (intenção já classificada como
+     *        {@code REFINAR_ULTIMA_CONSULTA}), ignora a contagem de campos
+     *        e sempre tenta mesclar — a LLM já decidiu que é continuação.
      */
-    private FiltrosAgente mesclarComUltimaConsulta(UUID usuarioId, FiltrosAgente novos) {
-        int camposPreenchidos = 0;
-        if (novos.getLoja() != null && !novos.getLoja().isBlank()) camposPreenchidos++;
-        if (novos.getTipoPagamento() != null) camposPreenchidos++;
-        if (novos.getPeriodo() != null && novos.getPeriodo() != TipoPeriodoAgente.SEM_FILTRO) camposPreenchidos++;
-        if (novos.getFornecedor() != null && !novos.getFornecedor().isBlank()) camposPreenchidos++;
+    private FiltrosAgente mesclarComUltimaConsulta(UUID usuarioId, FiltrosAgente novos, boolean forcarMerge) {
+        if (!forcarMerge) {
+            int camposPreenchidos = 0;
+            if (novos.getLoja() != null && !novos.getLoja().isBlank()) camposPreenchidos++;
+            if (novos.getTipoPagamento() != null) camposPreenchidos++;
+            if (novos.getPeriodo() != null && novos.getPeriodo() != TipoPeriodoAgente.SEM_FILTRO) camposPreenchidos++;
+            if (novos.getFornecedor() != null && !novos.getFornecedor().isBlank()) camposPreenchidos++;
 
-        if (camposPreenchidos != 1) {
-            return novos;
+            if (camposPreenchidos != 1) {
+                return novos;
+            }
         }
 
         FiltrosAgente anteriores = ultimaConsultaPorUsuario.get(usuarioId);
@@ -382,12 +393,23 @@ public class WhatsAppAgentService {
             return novos;
         }
 
+        // Campos de período "composto" (diaSemanaAlvo, posicaoQuinzena, diaDoMes,
+        // mesReferencia) só fazem sentido junto do periodo que os originou — por
+        // isso viajam JUNTOS com o periodo escolhido (novo OU anterior), nunca
+        // misturados entre um filtro novo e o outro antigo.
+        boolean usaPeriodoNovo = novos.getPeriodo() != null && novos.getPeriodo() != TipoPeriodoAgente.SEM_FILTRO;
+        FiltrosAgente origemPeriodo = usaPeriodoNovo ? novos : anteriores;
+
         return FiltrosAgente.builder()
                 .loja(novos.getLoja() != null && !novos.getLoja().isBlank() ? novos.getLoja() : anteriores.getLoja())
                 .tipoPagamento(novos.getTipoPagamento() != null ? novos.getTipoPagamento() : anteriores.getTipoPagamento())
-                .periodo(novos.getPeriodo() != null && novos.getPeriodo() != TipoPeriodoAgente.SEM_FILTRO ? novos.getPeriodo() : anteriores.getPeriodo())
-                .dataInicio(novos.getDataInicio() != null ? novos.getDataInicio() : anteriores.getDataInicio())
-                .dataFim(novos.getDataFim() != null ? novos.getDataFim() : anteriores.getDataFim())
+                .periodo(usaPeriodoNovo ? novos.getPeriodo() : anteriores.getPeriodo())
+                .diaSemanaAlvo(origemPeriodo.getDiaSemanaAlvo())
+                .posicaoQuinzena(origemPeriodo.getPosicaoQuinzena())
+                .diaDoMes(origemPeriodo.getDiaDoMes())
+                .mesReferencia(origemPeriodo.getMesReferencia())
+                .dataInicio(usaPeriodoNovo ? novos.getDataInicio() : anteriores.getDataInicio())
+                .dataFim(usaPeriodoNovo ? novos.getDataFim() : anteriores.getDataFim())
                 .fornecedor(novos.getFornecedor() != null && !novos.getFornecedor().isBlank() ? novos.getFornecedor() : anteriores.getFornecedor())
                 .filtroStatus(novos.getFiltroStatus() != null ? novos.getFiltroStatus() : anteriores.getFiltroStatus())
                 .build();
@@ -563,7 +585,142 @@ public class WhatsAppAgentService {
                 LocalDate ate = filtros.getDataFim() != null ? filtros.getDataFim() : hoje;
                 yield new PeriodoResolvido(tipo, de, ate, "de " + de + " até " + ate);
             }
+
+            // Corrige o bug original: "até segunda" não tinha enum próprio e
+            // caía em PROXIMA_SEMANA por aproximação, gerando um intervalo uma
+            // semana inteira maior do que o esperado. Aqui o intervalo vai de
+            // hoje até a PRÓXIMA ocorrência do dia da semana pedido (inclusive
+            // hoje, se hoje já for esse dia).
+            case ATE_DIA_SEMANA -> {
+                if (filtros.getDiaSemanaAlvo() == null) {
+                    yield new PeriodoResolvido(TipoPeriodoAgente.SEM_FILTRO, null, null, null);
+                }
+                DayOfWeek alvo = converterDiaSemana(filtros.getDiaSemanaAlvo());
+                int diasAte = (alvo.getValue() - hoje.getDayOfWeek().getValue() + 7) % 7;
+                LocalDate fim = hoje.plusDays(diasAte);
+                yield new PeriodoResolvido(tipo, hoje, fim, "até " + descreverDiaSemana(filtros.getDiaSemanaAlvo()));
+            }
+
+            case QUINZENA -> {
+                LocalDate mesRef = primeiroDiaDoMesReferencia(hoje, filtros.getMesReferencia());
+                LocalDate inicio;
+                LocalDate fim;
+                if (filtros.getPosicaoQuinzena() == PosicaoQuinzenaAgente.PRIMEIRA) {
+                    inicio = mesRef.withDayOfMonth(1);
+                    fim = mesRef.withDayOfMonth(15);
+                } else if (filtros.getPosicaoQuinzena() == PosicaoQuinzenaAgente.SEGUNDA) {
+                    inicio = mesRef.withDayOfMonth(16);
+                    fim = mesRef.withDayOfMonth(mesRef.lengthOfMonth());
+                } else {
+                    // Sem posição explícita: quinzena corrente com base no dia de hoje.
+                    if (hoje.getDayOfMonth() <= 15) {
+                        inicio = hoje.withDayOfMonth(1);
+                        fim = hoje.withDayOfMonth(15);
+                    } else {
+                        inicio = hoje.withDayOfMonth(16);
+                        fim = hoje.withDayOfMonth(hoje.lengthOfMonth());
+                    }
+                }
+                yield new PeriodoResolvido(tipo, inicio, fim, "quinzena");
+            }
+
+            case FIM_DE_SEMANA -> {
+                LocalDate sabado = hoje.with(java.time.temporal.TemporalAdjusters.nextOrSame(DayOfWeek.SATURDAY));
+                LocalDate domingo = sabado.plusDays(1);
+                yield new PeriodoResolvido(tipo, sabado, domingo, "fim de semana");
+            }
+
+            case PROXIMO_FIM_DE_SEMANA -> {
+                LocalDate sabadoEstaSemana = hoje.with(java.time.temporal.TemporalAdjusters.nextOrSame(DayOfWeek.SATURDAY));
+                LocalDate sabado = sabadoEstaSemana.plusWeeks(1);
+                LocalDate domingo = sabado.plusDays(1);
+                yield new PeriodoResolvido(tipo, sabado, domingo, "fim de semana que vem");
+            }
+
+            case INICIO_MES -> {
+                LocalDate mesRef = primeiroDiaDoMesReferencia(hoje, filtros.getMesReferencia());
+                yield new PeriodoResolvido(tipo, mesRef.withDayOfMonth(1), mesRef.withDayOfMonth(10), "início do mês");
+            }
+
+            case MEIO_MES -> {
+                LocalDate mesRef = primeiroDiaDoMesReferencia(hoje, filtros.getMesReferencia());
+                yield new PeriodoResolvido(tipo, mesRef.withDayOfMonth(11), mesRef.withDayOfMonth(20), "meio do mês");
+            }
+
+            case FIM_MES -> {
+                LocalDate mesRef = primeiroDiaDoMesReferencia(hoje, filtros.getMesReferencia());
+                yield new PeriodoResolvido(tipo, mesRef.withDayOfMonth(21), mesRef.withDayOfMonth(mesRef.lengthOfMonth()), "final do mês");
+            }
+
+            // Semana comercial (segunda a sexta) que atravessa a fronteira entre
+            // o mês de referência e o seguinte: última segunda-feira do mês de
+            // referência cuja sexta-feira correspondente já cai no mês seguinte.
+            case VIRADA_MES -> {
+                LocalDate mesRef = primeiroDiaDoMesReferencia(hoje, filtros.getMesReferencia());
+                LocalDate ultimoDiaMes = mesRef.withDayOfMonth(mesRef.lengthOfMonth());
+                LocalDate segunda = ultimoDiaMes.with(java.time.temporal.TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+                LocalDate sexta = segunda.plusDays(4);
+                // Se a sexta correspondente ainda cai dentro do próprio mês de
+                // referência, a "semana de virada" real é a segunda seguinte.
+                if (!sexta.isAfter(ultimoDiaMes)) {
+                    segunda = segunda.plusWeeks(1);
+                    sexta = segunda.plusDays(4);
+                }
+                yield new PeriodoResolvido(tipo, segunda, sexta, "virada do mês");
+            }
+
+            case DIA_DO_MES -> {
+                LocalDate mesRef = primeiroDiaDoMesReferencia(hoje, filtros.getMesReferencia());
+                int dia = filtros.getDiaDoMes() != null
+                        ? Math.min(filtros.getDiaDoMes(), mesRef.lengthOfMonth())
+                        : mesRef.lengthOfMonth();
+                LocalDate alvo = mesRef.withDayOfMonth(dia);
+                LocalDate inicio = alvo.isBefore(hoje) ? alvo : hoje;
+                yield new PeriodoResolvido(tipo, inicio, alvo, "até o dia " + dia);
+            }
+
             case SEM_FILTRO -> new PeriodoResolvido(tipo, null, null, null);
+        };
+    }
+
+    /**
+     * Resolve {@link MesReferenciaAgente} (ATUAL/PASSADO/PROXIMO, default
+     * ATUAL quando null) para o primeiro dia do mês correspondente,
+     * relativo a hoje.
+     */
+    private LocalDate primeiroDiaDoMesReferencia(LocalDate hoje, MesReferenciaAgente mesReferencia) {
+        LocalDate primeiroDiaMesAtual = hoje.withDayOfMonth(1);
+        if (mesReferencia == null) {
+            return primeiroDiaMesAtual;
+        }
+        return switch (mesReferencia) {
+            case PASSADO -> primeiroDiaMesAtual.minusMonths(1);
+            case PROXIMO -> primeiroDiaMesAtual.plusMonths(1);
+            case ATUAL -> primeiroDiaMesAtual;
+        };
+    }
+
+    private DayOfWeek converterDiaSemana(DiaSemanaAgente dia) {
+        return switch (dia) {
+            case SEGUNDA -> DayOfWeek.MONDAY;
+            case TERCA -> DayOfWeek.TUESDAY;
+            case QUARTA -> DayOfWeek.WEDNESDAY;
+            case QUINTA -> DayOfWeek.THURSDAY;
+            case SEXTA -> DayOfWeek.FRIDAY;
+            case SABADO -> DayOfWeek.SATURDAY;
+            case DOMINGO -> DayOfWeek.SUNDAY;
+        };
+    }
+
+    private String descreverDiaSemana(DiaSemanaAgente dia) {
+        return switch (dia) {
+            case SEGUNDA -> "segunda-feira";
+            case TERCA -> "terça-feira";
+            case QUARTA -> "quarta-feira";
+            case QUINTA -> "quinta-feira";
+            case SEXTA -> "sexta-feira";
+            case SABADO -> "sábado";
+            case DOMINGO -> "domingo";
         };
     }
 

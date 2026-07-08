@@ -41,6 +41,39 @@ public class FiltrosAgente {
     /** Como o período foi delimitado. Nunca nulo na resposta da LLM — usa SEM_FILTRO. */
     private TipoPeriodoAgente periodo;
 
+    /**
+     * Dia da semana mencionado como limite ("até segunda"). Preenchido
+     * apenas quando {@code periodo == ATE_DIA_SEMANA}; obrigatório nesse
+     * caso. Ver {@link DiaSemanaAgente}.
+     */
+    private DiaSemanaAgente diaSemanaAlvo;
+
+    /**
+     * Qual metade do mês, quando o cliente especifica ("primeira quinzena",
+     * "segunda quinzena"). Usado apenas quando {@code periodo == QUINZENA};
+     * pode ficar {@code null} nesse mesmo caso se o cliente não especificar
+     * ("a quinzena", sem qualificar) — o código assume a quinzena corrente.
+     * Ver {@link PosicaoQuinzenaAgente}.
+     */
+    private PosicaoQuinzenaAgente posicaoQuinzena;
+
+    /**
+     * Dia numérico do mês mencionado ("até o dia 15"). Preenchido apenas
+     * quando {@code periodo == DIA_DO_MES}; obrigatório nesse caso.
+     * Valores válidos: 1 a 31 (dias inexistentes no mês de referência,
+     * ex.: 31 em fevereiro, são truncados em código para o último dia real).
+     */
+    private Integer diaDoMes;
+
+    /**
+     * A qual mês o cliente se refere quando o período depende de "mês de
+     * referência" (ver {@link MesReferenciaAgente}). Usado junto de
+     * INICIO_MES, MEIO_MES, FIM_MES, VIRADA_MES, DIA_DO_MES e QUINZENA
+     * (quando {@code posicaoQuinzena} está preenchida). Quando a LLM não
+     * preenche e o período exige, o código assume ATUAL como padrão.
+     */
+    private MesReferenciaAgente mesReferencia;
+
     /** Preenchido apenas quando {@code periodo == INTERVALO}. */
     private LocalDate dataInicio;
 
