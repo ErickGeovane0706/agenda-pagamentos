@@ -62,6 +62,7 @@ export function CardPix({
 
         {pix.chavePix && (
           <BotaoPagar
+            tipo="pix"
             codigo={pix.chavePix}
             fornecedor={pix.fornecedor}
             valor={pix.valor}

@@ -5,6 +5,7 @@ import { useToastStore } from '../../store/toastStore';
 import { gerarPdfPagamento } from '../../utils/gerarPdfPagamento';
 
 interface BotaoPagarProps {
+  tipo: 'boleto' | 'pix';
   codigo: string;
   className?: string;
   fornecedor?: string;
@@ -21,7 +22,7 @@ interface BotaoPagarProps {
  * Sem suporte a Web Share (ex: desktop), o código já foi copiado — só
  * avisa por toast.
  */
-export function BotaoPagar({ codigo, className, fornecedor, valor, vencimento }: BotaoPagarProps) {
+export function BotaoPagar({ tipo, codigo, className, fornecedor, valor, vencimento }: BotaoPagarProps) {
   const addToast = useToastStore(s => s.addToast);
 
   const pagar = async () => {
@@ -33,7 +34,7 @@ export function BotaoPagar({ codigo, className, fornecedor, valor, vencimento }:
     }
 
     try {
-      const pdf = gerarPdfPagamento({ codigo, fornecedor, valor, vencimento });
+      const pdf = await gerarPdfPagamento({ tipo, codigo, fornecedor, valor, vencimento });
       const arquivo = new File([pdf], 'boleto.pdf', { type: 'application/pdf' });
 
       if (navigator.canShare?.({ files: [arquivo] })) {

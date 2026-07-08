@@ -279,6 +279,7 @@ export function TabelaBoletos({
                                   {boleto.codigoBarras.substring(0, 20)}...
                                 </span>
                                 <BotaoPagar
+                                  tipo="boleto"
                                   codigo={boleto.codigoBarras}
                                   fornecedor={boleto.fornecedor}
                                   valor={boleto.valor}

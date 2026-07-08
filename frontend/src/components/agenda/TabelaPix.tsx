@@ -265,6 +265,7 @@ export function TabelaPix({
                                   {pix.chavePix}
                                 </span>
                                 <BotaoPagar
+                                  tipo="pix"
                                   codigo={pix.chavePix}
                                   fornecedor={pix.fornecedor}
                                   valor={pix.valor}

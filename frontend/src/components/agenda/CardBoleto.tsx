@@ -62,6 +62,7 @@ export function CardBoleto({
 
         {boleto.codigoBarras && (
           <BotaoPagar
+            tipo="boleto"
             codigo={boleto.codigoBarras}
             fornecedor={boleto.fornecedor}
             valor={boleto.valor}
