@@ -47,6 +47,23 @@ public class BoletoController {
         return ResponseEntity.ok(boletoService.listar(lojaId, status, de, ate, fornecedor, pageable));
     }
 
+    /**
+     * Retorna o índice (0-based) da primeira página com boleto pendente/vencido,
+     * respeitando os mesmos filtros e o {@code size} da listagem. Usado pelo front
+     * para abrir a aba já na primeira página que tem pendência.
+     */
+    @GetMapping("/pagina-pendente")
+    public ResponseEntity<Map<String, Integer>> paginaPendente(
+            @RequestParam(required = false) UUID lojaId,
+            @RequestParam(required = false) StatusBoleto status,
+            @RequestParam(required = false) LocalDate de,
+            @RequestParam(required = false) LocalDate ate,
+            @RequestParam(required = false) String fornecedor,
+            @RequestParam(defaultValue = "15") int size) {
+        return ResponseEntity.ok(Map.of("page",
+                boletoService.paginaPendente(lojaId, status, de, ate, fornecedor, size)));
+    }
+
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN','OPERADOR')")
     public ResponseEntity<BoletoDTO> criar(@RequestBody @Valid CriarBoletoRequest req) {

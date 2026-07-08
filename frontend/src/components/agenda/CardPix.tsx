@@ -3,6 +3,7 @@ import { format, isPast, parseISO } from 'date-fns';
 import { PagamentoPix, StatusPix } from '../../types';
 import { BadgeStatus } from '../BadgeStatus';
 import { ValorMonetario } from '../ValorMonetario';
+import { BotaoPagar } from './BotaoPagar';
 import { clsx } from 'clsx';
 import api from '../../api/client';
 
@@ -60,21 +61,7 @@ export function CardPix({
         </div>
 
         {pix.chavePix && (
-          <button
-            onClick={() => onCopiar(pix.chavePix, pix.id)}
-            className={clsx(
-              'w-1/2 mx-auto flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium',
-              'transition-all duration-200',
-              copiado === pix.id
-                ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
-                : 'bg-[#0c4a6e] text-white'
-            )}
-          >
-            {copiado === pix.id
-              ? <><Check className="w-4 h-4" /> Chave copiada!</>
-              : <><Copy className="w-4 h-4" /> Copiar chave PIX</>
-            }
-          </button>
+          <BotaoPagar codigo={pix.chavePix} className="w-1/2 mx-auto py-2.5 text-sm" />
         )}
       </div>
 
@@ -101,6 +88,20 @@ export function CardPix({
               className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500"
             >
               <Upload className="w-4 h-4" />
+            </button>
+          )}
+          {pix.chavePix && (
+            <button
+              onClick={() => onCopiar(pix.chavePix, pix.id)}
+              title="Copiar chave PIX"
+              className={clsx(
+                'p-2 rounded-lg transition-colors',
+                copiado === pix.id
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-500'
+              )}
+            >
+              {copiado === pix.id ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
             </button>
           )}
         </div>

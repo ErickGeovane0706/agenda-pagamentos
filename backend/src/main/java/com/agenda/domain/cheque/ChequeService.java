@@ -10,7 +10,9 @@ import com.agenda.shared.exception.AccessDeniedException;
 import com.agenda.shared.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -46,6 +48,29 @@ public class ChequeService {
         var spec = ChequeSpecification.comFiltros(empresaId, lojaId, status, de, ate, fornecedor);
         return chequeRepository.findAll(spec, pageable)
                 .map(ChequeDTO::from);
+    }
+
+    /**
+     * Índice (0-based) da primeira página com cheque pendente, respeitando os mesmos
+     * filtros e a ordenação (vencimento ASC) da listagem. Cheque não tem status VENCIDO
+     * (o "vencido" é apenas PENDENTE com data passada), então basta filtrar por PENDENTE.
+     * Ver {@link com.agenda.domain.boleto.BoletoService#paginaPendente} para a estratégia.
+     */
+    @Transactional(readOnly = true)
+    public int paginaPendente(UUID lojaId, StatusCheque status, LocalDate de, LocalDate ate, String fornecedor, int size) {
+        if (size <= 0) size = 15;
+        UUID empresaId = TenantContext.getEmpresaId();
+        var base = ChequeSpecification.comFiltros(empresaId, lojaId, status, de, ate, fornecedor);
+
+        var pendentes = base.and((root, query, cb) -> cb.equal(root.get("status"), StatusCheque.PENDENTE));
+        var primeiro = chequeRepository.findAll(pendentes,
+                PageRequest.of(0, 1, Sort.by(Sort.Direction.ASC, "vencimento")));
+        if (primeiro.isEmpty()) return 0;
+
+        LocalDate menorVencimento = primeiro.getContent().get(0).getVencimento();
+        var antes = base.and((root, query, cb) -> cb.lessThan(root.get("vencimento"), menorVencimento));
+        long quantidadeAntes = chequeRepository.count(antes);
+        return (int) (quantidadeAntes / size);
     }
 
     @Transactional(readOnly = true)

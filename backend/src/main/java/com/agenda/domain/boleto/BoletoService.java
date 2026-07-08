@@ -9,7 +9,9 @@ import com.agenda.shared.exception.AccessDeniedException;
 import com.agenda.shared.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -47,6 +49,33 @@ public class BoletoService {
         var spec = BoletoSpecification.comFiltros(empresaId, lojaId, status, de, ate, fornecedor);
         return boletoRepository.findAll(spec, pageable)
                 .map(BoletoDTO::from);
+    }
+
+    /**
+     * Índice (0-based) da primeira página que contém um boleto pendente ou vencido,
+     * considerando os mesmos filtros e a mesma ordenação (vencimento ASC) da listagem.
+     * <p>
+     * Estratégia: acha o menor vencimento entre os pendentes/vencidos e conta quantos
+     * itens (de todos os status, respeitando os filtros) vêm antes dele. A página é
+     * {@code floor(quantidadeAntes / size)}. Se não houver pendência, retorna 0.
+     * </p>
+     */
+    @Transactional(readOnly = true)
+    public int paginaPendente(UUID lojaId, StatusBoleto status, LocalDate de, LocalDate ate, String fornecedor, int size) {
+        if (size <= 0) size = 15;
+        UUID empresaId = TenantContext.getEmpresaId();
+        var base = BoletoSpecification.comFiltros(empresaId, lojaId, status, de, ate, fornecedor);
+
+        var pendentes = base.and((root, query, cb) ->
+                root.get("status").in(StatusBoleto.PENDENTE, StatusBoleto.VENCIDO));
+        var primeiro = boletoRepository.findAll(pendentes,
+                PageRequest.of(0, 1, Sort.by(Sort.Direction.ASC, "vencimento")));
+        if (primeiro.isEmpty()) return 0;
+
+        LocalDate menorVencimento = primeiro.getContent().get(0).getVencimento();
+        var antes = base.and((root, query, cb) -> cb.lessThan(root.get("vencimento"), menorVencimento));
+        long quantidadeAntes = boletoRepository.count(antes);
+        return (int) (quantidadeAntes / size);
     }
 
     /**

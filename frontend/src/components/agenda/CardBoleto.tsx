@@ -3,6 +3,7 @@ import { format, isPast, parseISO } from 'date-fns';
 import { Boleto, StatusBoleto } from '../../types';
 import { BadgeStatus } from '../BadgeStatus';
 import { ValorMonetario } from '../ValorMonetario';
+import { BotaoPagar } from './BotaoPagar';
 import { clsx } from 'clsx';
 import api from '../../api/client';
 
@@ -60,21 +61,7 @@ export function CardBoleto({
         </div>
 
         {boleto.codigoBarras && (
-          <button
-            onClick={() => onCopiar(boleto.codigoBarras!, boleto.id)}
-            className={clsx(
-              'w-1/2 mx-auto flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium',
-              'transition-all duration-200',
-              copiado === boleto.id
-                ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
-                : 'bg-[#0c4a6e] text-white'
-            )}
-          >
-            {copiado === boleto.id
-              ? <><Check className="w-4 h-4" /> Código copiado!</>
-              : <><Copy className="w-4 h-4" /> Copiar código de barras</>
-            }
-          </button>
+          <BotaoPagar codigo={boleto.codigoBarras} className="w-1/2 mx-auto py-2.5 text-sm" />
         )}
       </div>
 
@@ -101,6 +88,20 @@ export function CardBoleto({
               className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500"
             >
               <Upload className="w-4 h-4" />
+            </button>
+          )}
+          {boleto.codigoBarras && (
+            <button
+              onClick={() => onCopiar(boleto.codigoBarras!, boleto.id)}
+              title="Copiar código de barras"
+              className={clsx(
+                'p-2 rounded-lg transition-colors',
+                copiado === boleto.id
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-500'
+              )}
+            >
+              {copiado === boleto.id ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
             </button>
           )}
         </div>

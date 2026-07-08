@@ -9,7 +9,9 @@ import com.agenda.shared.exception.AccessDeniedException;
 import com.agenda.shared.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -46,6 +48,29 @@ public class PixService {
         var spec = PagamentoPixSpecification.comFiltros(empresaId, lojaId, status, de, ate, fornecedor);
         return pixRepository.findAll(spec, pageable)
                 .map(PixDTO::from);
+    }
+
+    /**
+     * Índice (0-based) da primeira página com PIX pendente ou vencido, respeitando os
+     * mesmos filtros e a ordenação (vencimento ASC) da listagem. Ver
+     * {@link com.agenda.domain.boleto.BoletoService#paginaPendente} para a estratégia.
+     */
+    @Transactional(readOnly = true)
+    public int paginaPendente(UUID lojaId, StatusPix status, LocalDate de, LocalDate ate, String fornecedor, int size) {
+        if (size <= 0) size = 15;
+        UUID empresaId = TenantContext.getEmpresaId();
+        var base = PagamentoPixSpecification.comFiltros(empresaId, lojaId, status, de, ate, fornecedor);
+
+        var pendentes = base.and((root, query, cb) ->
+                root.get("status").in(StatusPix.PENDENTE, StatusPix.VENCIDO));
+        var primeiro = pixRepository.findAll(pendentes,
+                PageRequest.of(0, 1, Sort.by(Sort.Direction.ASC, "vencimento")));
+        if (primeiro.isEmpty()) return 0;
+
+        LocalDate menorVencimento = primeiro.getContent().get(0).getVencimento();
+        var antes = base.and((root, query, cb) -> cb.lessThan(root.get("vencimento"), menorVencimento));
+        long quantidadeAntes = pixRepository.count(antes);
+        return (int) (quantidadeAntes / size);
     }
 
     /**

@@ -44,6 +44,22 @@ public class ChequeController {
         return ResponseEntity.ok(chequeService.listar(lojaId, status, de, ate, fornecedor, pageable));
     }
 
+    /**
+     * Índice (0-based) da primeira página com cheque pendente, respeitando filtros e
+     * {@code size}. Usado pelo front para abrir a aba na primeira página com pendência.
+     */
+    @GetMapping("/pagina-pendente")
+    public ResponseEntity<Map<String, Integer>> paginaPendente(
+            @RequestParam(required = false) UUID lojaId,
+            @RequestParam(required = false) StatusCheque status,
+            @RequestParam(required = false) LocalDate de,
+            @RequestParam(required = false) LocalDate ate,
+            @RequestParam(required = false) String fornecedor,
+            @RequestParam(defaultValue = "15") int size) {
+        return ResponseEntity.ok(Map.of("page",
+                chequeService.paginaPendente(lojaId, status, de, ate, fornecedor, size)));
+    }
+
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN','OPERADOR')")
     public ResponseEntity<ChequeDTO> criar(@RequestBody @Valid CriarChequeRequest req) {

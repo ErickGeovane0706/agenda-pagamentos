@@ -44,6 +44,22 @@ public class PixController {
         return ResponseEntity.ok(pixService.listar(lojaId, status, de, ate, fornecedor, pageable));
     }
 
+    /**
+     * Índice (0-based) da primeira página com PIX pendente/vencido, respeitando filtros
+     * e {@code size}. Usado pelo front para abrir a aba na primeira página com pendência.
+     */
+    @GetMapping("/pagina-pendente")
+    public ResponseEntity<Map<String, Integer>> paginaPendente(
+            @RequestParam(required = false) UUID lojaId,
+            @RequestParam(required = false) StatusPix status,
+            @RequestParam(required = false) LocalDate de,
+            @RequestParam(required = false) LocalDate ate,
+            @RequestParam(required = false) String fornecedor,
+            @RequestParam(defaultValue = "15") int size) {
+        return ResponseEntity.ok(Map.of("page",
+                pixService.paginaPendente(lojaId, status, de, ate, fornecedor, size)));
+    }
+
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN','OPERADOR')")
     public ResponseEntity<PixDTO> criar(@RequestBody @Valid CriarPixRequest req) {

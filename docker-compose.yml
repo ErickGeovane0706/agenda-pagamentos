@@ -26,11 +26,14 @@ services:
       DATABASE_URL: jdbc:postgresql://db:5432/agenda_pagamentos
       DATABASE_USER: postgres
       DATABASE_PASS: postgres
-      JWT_SECRET: chave-local-dev
+      JWT_SECRET: ${JWT_SECRET}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
       R2_ACCOUNT_ID: ${R2_ACCOUNT_ID}
       R2_ACCESS_KEY: ${R2_ACCESS_KEY}
       R2_SECRET_KEY: ${R2_SECRET_KEY}
       R2_BUCKET: agenda-pagamentos-arquivos
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID}
+      WHATSAPP_TOKEN: ${WHATSAPP_TOKEN}
     depends_on:
       db:
         condition: service_healthy

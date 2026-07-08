@@ -3,7 +3,7 @@ import {
   Pencil, Trash2, Plus,
   ExternalLink, Upload, FileX
 } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { format, isPast, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import api from '../../api/client';
@@ -16,6 +16,7 @@ import { CardCheque } from './CardCheque';
 import { Pagination } from '../Pagination';
 import { SkeletonTable } from '../Skeleton';
 import { clsx } from 'clsx';
+import { usePaginaInicialPendente } from '../../hooks/usePaginaInicialPendente';
 
 import type { FiltrosAgenda } from '../../types';
 
@@ -32,10 +33,8 @@ export function TabelaCheques({
   const [chequeEditando, setChequeEditando] = useState<Cheque | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const [chequeUpload, setChequeUpload] = useState<string | null>(null);
-  const [page, setPage] = useState(0);
   const pageSize = 15;
-
-  useEffect(() => { setPage(0); }, [lojaId, filtros]);
+  const [page, setPage] = usePaginaInicialPendente('cheques', lojaId, filtros, pageSize);
 
   const { data: pageData, isLoading } = useQuery({
     queryKey: ['cheques', lojaId, filtros, page, pageSize],

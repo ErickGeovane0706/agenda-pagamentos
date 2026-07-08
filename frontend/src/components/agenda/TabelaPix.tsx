@@ -3,7 +3,7 @@ import {
   Copy, Check, Pencil, Trash2, Plus,
   ExternalLink, Upload, FileX
 } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { format, isPast, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import api from '../../api/client';
@@ -17,6 +17,8 @@ import { Pagination } from '../Pagination';
 import { SkeletonTable } from '../Skeleton';
 import { clsx } from 'clsx';
 import { copiarTexto } from '../../utils/clipboard';
+import { usePaginaInicialPendente } from '../../hooks/usePaginaInicialPendente';
+import { BotaoPagar } from './BotaoPagar';
 
 import type { FiltrosAgenda } from '../../types';
 
@@ -34,10 +36,8 @@ export function TabelaPix({
   const [pixEditando, setPixEditando] = useState<PagamentoPix | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const [pixUpload, setPixUpload] = useState<string | null>(null);
-  const [page, setPage] = useState(0);
   const pageSize = 15;
-
-  useEffect(() => { setPage(0); }, [lojaId, filtros]);
+  const [page, setPage] = usePaginaInicialPendente('pix', lojaId, filtros, pageSize);
 
   const { data: pageData, isLoading } = useQuery({
     queryKey: ['pix', lojaId, filtros, page, pageSize],
@@ -264,22 +264,7 @@ export function TabelaPix({
                                 <span className="text-xs text-slate-500 font-mono truncate max-w-[180px]">
                                   {pix.chavePix}
                                 </span>
-                                <button
-                                  onClick={() => copiarChave(pix.chavePix, pix.id)}
-                                  title="Copiar chave PIX"
-                                  className={clsx(
-                                    'flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium',
-                                    'transition-all duration-200',
-                                    copiado === pix.id
-                                      ? 'bg-emerald-100 text-emerald-700'
-                                      : 'bg-[#0c4a6e] hover:bg-[#0a3d5c] text-white'
-                                  )}
-                                >
-                                  {copiado === pix.id
-                                    ? <><Check className="w-3 h-3" /> Copiado</>
-                                    : <><Copy className="w-3 h-3" /> Copiar</>
-                                  }
-                                </button>
+                                <BotaoPagar codigo={pix.chavePix} className="px-2.5 py-1 text-xs" />
                               </div>
                             ) : (
                               <span className="text-slate-300 text-xs">—</span>
@@ -312,6 +297,21 @@ export function TabelaPix({
                                   className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500"
                                 >
                                   <Upload className="w-4 h-4" />
+                                </button>
+                              )}
+
+                              {pix.chavePix && (
+                                <button
+                                  onClick={() => copiarChave(pix.chavePix, pix.id)}
+                                  title="Copiar chave PIX"
+                                  className={clsx(
+                                    'p-2 rounded-lg transition-colors',
+                                    copiado === pix.id
+                                      ? 'bg-emerald-100 text-emerald-700'
+                                      : 'bg-slate-100 hover:bg-slate-200 text-slate-500'
+                                  )}
+                                >
+                                  {copiado === pix.id ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                                 </button>
                               )}
 
