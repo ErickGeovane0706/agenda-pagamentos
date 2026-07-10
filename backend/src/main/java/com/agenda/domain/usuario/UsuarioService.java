@@ -55,6 +55,9 @@ public class UsuarioService {
 
     @Transactional
     public UsuarioDTO criar(CriarUsuarioRequest req) {
+        if (req.perfil() == PerfilUsuario.MASTER && !UserContext.isMaster()) {
+            throw new AccessDeniedException("Apenas MASTER pode criar usuário MASTER");
+        }
         passwordValidator.validar(req.senha());
         UUID empresaId = TenantContext.getEmpresaId();
         var empresa = empresaRepository.getReferenceById(empresaId);
@@ -121,14 +124,34 @@ public class UsuarioService {
         auditoriaService.registrar("EXCLUIR", "USUARIO", id, "Email: " + usuario.getEmail());
     }
 
+    /**
+     * Marca APENAS o usuário logado para exclusão (anonimizado no job das 03:00).
+     * Nunca afeta a empresa nem outros usuários — encerrar a empresa inteira é
+     * um fluxo separado, deliberado.
+     *
+     * Bloqueia a auto-exclusão do último ADMIN ativo: deixar a empresa sem
+     * nenhum administrador tornaria os dados órfãos (sem acesso, sem titular
+     * responsável pela LGPD).
+     */
     @Transactional
     public void solicitarExclusao() {
-        UUID empresaId = TenantContext.getEmpresaId();
-        var empresa = empresaRepository.findById(empresaId)
-            .orElseThrow(() -> new NotFoundException("Empresa não encontrada"));
-        empresa.setSolicitouExclusao(true);
-        empresa.setSolicitouExclusaoEm(LocalDateTime.now());
-        empresaRepository.save(empresa);
-        auditoriaService.registrar("SOLICITAR_EXCLUSAO", "EMPRESA", empresaId, "Empresa: " + empresa.getNome());
+        UUID usuarioId = UserContext.getUsuarioId();
+        var usuario = usuarioRepository.findById(usuarioId)
+            .orElseThrow(() -> new NotFoundException("Usuário não encontrado"));
+
+        if (usuario.getPerfil() == PerfilUsuario.ADMIN) {
+            long adminsAtivos = usuarioRepository
+                .countByEmpresaIdAndPerfilAndSolicitouExclusaoFalseAndExcluidoEmIsNull(
+                    usuario.getEmpresa().getId(), PerfilUsuario.ADMIN);
+            if (adminsAtivos <= 1) {
+                throw new IllegalArgumentException(
+                    "Você é o último administrador da empresa. Mantenha ao menos um administrador ativo ou encerre a empresa.");
+            }
+        }
+
+        usuario.setSolicitouExclusao(true);
+        usuario.setSolicitouExclusaoEm(LocalDateTime.now());
+        usuarioRepository.save(usuario);
+        auditoriaService.registrar("SOLICITAR_EXCLUSAO", "USUARIO", usuarioId, "Email: " + usuario.getEmail());
     }
 }

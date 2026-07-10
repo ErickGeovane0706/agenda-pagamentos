@@ -5,16 +5,20 @@ import com.agenda.domain.usuario.Usuario;
 import com.agenda.domain.usuario.UsuarioDTO;
 import com.agenda.domain.usuario.UsuarioRepository;
 import com.agenda.security.JwtService;
+import com.agenda.security.RateLimiterService;
 import com.agenda.security.RefreshTokenService;
 import com.agenda.security.TokenBlacklistService;
 import com.agenda.shared.UserContext;
 import com.agenda.shared.exception.NotFoundException;
+import com.agenda.shared.exception.TooManyRequestsException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Duration;
 
 /**
  * Lógica de autenticação e gerenciamento de sessão.
@@ -32,6 +36,17 @@ public class AuthService {
     private final TokenBlacklistService tokenBlacklistService;
     private final AuthenticationManager authenticationManager;
     private final AuditoriaService auditoriaService;
+    private final RateLimiterService rateLimiter;
+
+    /**
+     * Teto de tentativas de login por EMAIL: 10 falhas a cada 15 minutos.
+     * Keado por email (não por IP) para ser infalsificável e mirar o alvo
+     * real — brute-force contra uma conta específica. Só uma tentativa que
+     * FALHA consome um token, então quem digita a senha certa nunca é
+     * bloqueado (evita o "lockout DoS" de trancar a conta de outra pessoa).
+     */
+    private static final int LOGIN_MAX_FALHAS = 10;
+    private static final Duration LOGIN_JANELA = Duration.ofMinutes(15);
 
     /**
      * Realiza login do usuário.
@@ -47,10 +62,18 @@ public class AuthService {
     @Transactional
     public AuthLoginResult login(AuthDTO dto) {
         var email = dto.email();
+        var chaveRateLimit = "login:" + email.toLowerCase();
+
+        if (!rateLimiter.temTokenDisponivel(chaveRateLimit, LOGIN_MAX_FALHAS, LOGIN_JANELA)) {
+            auditoriaService.registrar("LOGIN_FALHA", "USUARIO", null, "Email: " + email + " (rate limit)");
+            throw new TooManyRequestsException("Muitas tentativas de login. Tente novamente em alguns minutos.");
+        }
+
         try {
             authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(email, dto.senha()));
         } catch (Exception e) {
+            rateLimiter.tentarConsumir(chaveRateLimit, LOGIN_MAX_FALHAS, LOGIN_JANELA);
             auditoriaService.registrar("LOGIN_FALHA", "USUARIO", null, "Email: " + email);
             throw e;
         }

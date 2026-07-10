@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.*;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
@@ -49,8 +50,10 @@ public class IntentClassifierService {
 
     private static final String PROMPT_RESOURCE = "prompts/classificador-whatsapp.txt";
     private static final int MAX_TOKENS_RESPOSTA = 300;
+    private static final int CONNECT_TIMEOUT_MS = 5_000;
+    private static final int READ_TIMEOUT_MS = 30_000;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate = criarRestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final String promptTemplate;
 
@@ -180,6 +183,19 @@ public class IntentClassifierService {
 
         JsonNoLlmResponse parsed = objectMapper.readValue(json, JsonNoLlmResponse.class);
         return parsed.toResultado();
+    }
+
+    /**
+     * RestTemplate com timeouts de conexão e leitura. Sem eles, uma resposta
+     * lenta da Anthropic prenderia a thread indefinidamente — como
+     * {@code processarMensagem} roda no pool async, um pico de lentidão
+     * poderia esgotar o pool.
+     */
+    private static RestTemplate criarRestTemplate() {
+        var factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(CONNECT_TIMEOUT_MS);
+        factory.setReadTimeout(READ_TIMEOUT_MS);
+        return new RestTemplate(factory);
     }
 
     private String carregarPromptTemplate() {

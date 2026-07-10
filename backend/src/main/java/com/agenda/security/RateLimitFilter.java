@@ -41,8 +41,11 @@ public class RateLimitFilter implements Filter {
         var httpRequest = (HttpServletRequest) request;
         var path = httpRequest.getRequestURI();
 
-        // Rate limiting aplicado apenas ao endpoint de login
-        if (!path.equals("/api/auth/login")) {
+        // Rate limiting por IP nas rotas públicas de autenticação (login + refresh).
+        // É uma camada SECUNDÁRIA: o controle principal (infalsificável) é por
+        // email no AuthService. Atrás do nginx/borda do Railway o X-Forwarded-For
+        // pode ser parcialmente forjável — por isso não confiamos só nisto.
+        if (!path.equals("/api/auth/login") && !path.equals("/api/auth/refresh")) {
             chain.doFilter(request, response);
             return;
         }

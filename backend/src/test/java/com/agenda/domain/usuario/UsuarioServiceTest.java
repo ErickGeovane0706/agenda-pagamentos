@@ -4,6 +4,8 @@ import com.agenda.auditoria.AuditoriaService;
 import com.agenda.domain.empresa.Empresa;
 import com.agenda.domain.empresa.EmpresaRepository;
 import com.agenda.shared.TenantContext;
+import com.agenda.shared.UserContext;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -45,6 +47,12 @@ class UsuarioServiceTest {
         TenantContext.setEmpresaId(empresaId);
     }
 
+    @AfterEach
+    void tearDown() {
+        UserContext.clear();
+        TenantContext.clear();
+    }
+
     @Test
     void criar_DeveSalvarUsuario() {
         when(empresaRepository.getReferenceById(empresaId)).thenReturn(empresa);
@@ -62,6 +70,30 @@ class UsuarioServiceTest {
         assertEquals(PerfilUsuario.OPERADOR, result.perfil());
         verify(passwordValidator).validar("Senha123");
         verify(auditoriaService).registrar(eq("CRIAR"), eq("USUARIO"), any(), anyString());
+    }
+
+    @Test
+    void criar_NaoMasterNaoPodeCriarMaster() {
+        var req = new CriarUsuarioRequest("Fulano", "fulano@test.com", "Senha123", PerfilUsuario.MASTER);
+        assertThrows(RuntimeException.class, () -> usuarioService.criar(req));
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    void criar_MasterPodeCriarMaster() {
+        UserContext.set(UUID.randomUUID(), "Master", "MASTER");
+        when(empresaRepository.getReferenceById(empresaId)).thenReturn(empresa);
+        when(passwordEncoder.encode("Senha123")).thenReturn("hash");
+        when(usuarioRepository.save(any())).thenAnswer(i -> {
+            var u = i.getArgument(0, Usuario.class);
+            u.setId(UUID.randomUUID());
+            return u;
+        });
+
+        var req = new CriarUsuarioRequest("Outro Master", "master2@test.com", "Senha123", PerfilUsuario.MASTER);
+        var result = usuarioService.criar(req);
+
+        assertEquals(PerfilUsuario.MASTER, result.perfil());
     }
 
     @Test
@@ -127,14 +159,52 @@ class UsuarioServiceTest {
     }
 
     @Test
-    void solicitarExclusao_DeveMarcarEmpresa() {
-        when(empresaRepository.findById(empresaId)).thenReturn(Optional.of(empresa));
-        when(empresaRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+    void solicitarExclusao_DeveMarcarApenasUsuarioLogado() {
+        var operador = Usuario.builder()
+            .id(UUID.randomUUID()).empresa(empresa).nome("Op")
+            .email("op@test.com").senhaHash("hash").perfil(PerfilUsuario.OPERADOR)
+            .build();
+        UserContext.set(operador.getId(), "Op", "OPERADOR");
+        when(usuarioRepository.findById(operador.getId())).thenReturn(Optional.of(operador));
+        when(usuarioRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         usuarioService.solicitarExclusao();
 
-        assertTrue(empresa.getSolicitouExclusao());
-        assertNotNull(empresa.getSolicitouExclusaoEm());
-        verify(auditoriaService).registrar(eq("SOLICITAR_EXCLUSAO"), eq("EMPRESA"), eq(empresaId), any());
+        assertTrue(operador.getSolicitouExclusao());
+        assertNotNull(operador.getSolicitouExclusaoEm());
+        verify(empresaRepository, never()).save(any());
+        verify(auditoriaService).registrar(eq("SOLICITAR_EXCLUSAO"), eq("USUARIO"), eq(operador.getId()), any());
+    }
+
+    @Test
+    void solicitarExclusao_DeveBloquearUltimoAdmin() {
+        var admin = Usuario.builder()
+            .id(UUID.randomUUID()).empresa(empresa).nome("Admin")
+            .email("admin@test.com").senhaHash("hash").perfil(PerfilUsuario.ADMIN)
+            .build();
+        UserContext.set(admin.getId(), "Admin", "ADMIN");
+        when(usuarioRepository.findById(admin.getId())).thenReturn(Optional.of(admin));
+        when(usuarioRepository.countByEmpresaIdAndPerfilAndSolicitouExclusaoFalseAndExcluidoEmIsNull(
+            empresaId, PerfilUsuario.ADMIN)).thenReturn(1L);
+
+        assertThrows(IllegalArgumentException.class, () -> usuarioService.solicitarExclusao());
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    void solicitarExclusao_DevePermitirAdminQuandoHaOutros() {
+        var admin = Usuario.builder()
+            .id(UUID.randomUUID()).empresa(empresa).nome("Admin")
+            .email("admin@test.com").senhaHash("hash").perfil(PerfilUsuario.ADMIN)
+            .build();
+        UserContext.set(admin.getId(), "Admin", "ADMIN");
+        when(usuarioRepository.findById(admin.getId())).thenReturn(Optional.of(admin));
+        when(usuarioRepository.countByEmpresaIdAndPerfilAndSolicitouExclusaoFalseAndExcluidoEmIsNull(
+            empresaId, PerfilUsuario.ADMIN)).thenReturn(2L);
+        when(usuarioRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        usuarioService.solicitarExclusao();
+
+        assertTrue(admin.getSolicitouExclusao());
     }
 }

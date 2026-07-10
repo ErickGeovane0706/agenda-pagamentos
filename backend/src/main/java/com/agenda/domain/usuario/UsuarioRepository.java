@@ -13,4 +13,10 @@ import java.util.UUID;
 public interface UsuarioRepository extends JpaRepository<Usuario, UUID> {
     Optional<Usuario> findByEmail(String email);
     List<Usuario> findByEmpresaId(UUID empresaId);
+
+    /** Usuários que pediram exclusão individual e ainda não foram anonimizados (job 03:00). */
+    List<Usuario> findBySolicitouExclusaoTrueAndExcluidoEmIsNull();
+
+    /** Conta administradores ativos (não excluídos, sem pedido de exclusão) de uma empresa. */
+    long countByEmpresaIdAndPerfilAndSolicitouExclusaoFalseAndExcluidoEmIsNull(UUID empresaId, PerfilUsuario perfil);
 }

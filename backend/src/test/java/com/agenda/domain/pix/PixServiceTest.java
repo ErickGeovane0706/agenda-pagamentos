@@ -6,9 +6,14 @@ import com.agenda.domain.empresa.Empresa;
 import com.agenda.domain.loja.Loja;
 import com.agenda.domain.loja.LojaRepository;
 import com.agenda.shared.TenantContext;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Path;
+import jakarta.persistence.criteria.Root;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.autoconfigure.data.web.SpringDataWebProperties;
@@ -118,18 +123,29 @@ class PixServiceTest {
     }
 
     @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
     void listar_DeveFiltrarPorEmpresa() {
         var pageable = PageRequest.of(0, 10);
-        when(pixRepository.findAll(any(Specification.class), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(
-                        PagamentoPix.builder().id(UUID.randomUUID()).empresa(empresa).loja(loja)
-                                .fornecedor("Teste").valor(new BigDecimal("100"))
-                                .vencimento(LocalDate.now()).chavePix("chave-teste").build()
-                ), pageable, 1));
+        var pix = PagamentoPix.builder().id(UUID.randomUUID()).empresa(empresa).loja(loja)
+                .fornecedor("Teste").valor(new BigDecimal("100"))
+                .vencimento(LocalDate.now()).chavePix("chave-teste").build();
+        ArgumentCaptor<Specification<PagamentoPix>> specCaptor = ArgumentCaptor.forClass(Specification.class);
+        when(pixRepository.findAll(specCaptor.capture(), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(pix), pageable, 1));
 
         var result = pixService.listar(null, null, null, null, null, pageable);
 
-        assertNotNull(result);
-        assertTrue(result.isEmpty());
+        // o resultado do repositório é mapeado (não vem vazio)
+        assertEquals(1, result.getTotalElements());
+
+        // e a Specification aplica o filtro pela empresa do tenant atual
+        Root<PagamentoPix> root = mock(Root.class);
+        Path empresaPath = mock(Path.class);
+        Path idPath = mock(Path.class);
+        when(root.get("empresa")).thenReturn(empresaPath);
+        when(empresaPath.get("id")).thenReturn(idPath);
+        CriteriaBuilder cb = mock(CriteriaBuilder.class);
+        specCaptor.getValue().toPredicate(root, mock(CriteriaQuery.class), cb);
+        verify(cb).equal(idPath, empresa.getId());
     }
 }

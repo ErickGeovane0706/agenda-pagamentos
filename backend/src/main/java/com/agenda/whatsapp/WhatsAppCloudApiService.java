@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.*;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -26,7 +27,22 @@ public class WhatsAppCloudApiService implements WhatsAppService {
     @Value("${whatsapp.template-language:pt_BR}")
     private String templateLanguage;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private static final int CONNECT_TIMEOUT_MS = 5_000;
+    private static final int READ_TIMEOUT_MS = 15_000;
+
+    private final RestTemplate restTemplate = criarRestTemplate();
+
+    /**
+     * RestTemplate com timeouts. Sem eles, a Meta lenta prenderia a thread
+     * (do scheduler ou do agente) indefinidamente. Envio de mensagem é rápido,
+     * então read timeout curto.
+     */
+    private static RestTemplate criarRestTemplate() {
+        var factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(CONNECT_TIMEOUT_MS);
+        factory.setReadTimeout(READ_TIMEOUT_MS);
+        return new RestTemplate(factory);
+    }
 
     @Override
     public void enviarTemplate(String telefoneDestino, String nomeTemplate, List<String> parametros) {

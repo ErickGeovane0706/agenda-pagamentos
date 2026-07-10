@@ -10,6 +10,10 @@ jwt:
   secret: DuX/YP1e/lLly8HzTYR4AQtnhyDXlhppYnSplw8ftLA=
   expiration: 86400000
 
+# Dev roda em http://localhost — cookie Secure quebraria o login local.
+security:
+  cookie-secure: false
+
 r2:
   account-id: seu_account_id
   access-key: sua_access_key

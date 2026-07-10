@@ -8,6 +8,7 @@ import com.agenda.domain.empresa.Empresa;
 import com.agenda.domain.loja.Loja;
 import com.agenda.domain.pix.PagamentoPixRepository;
 import com.agenda.domain.usuario.Usuario;
+import com.agenda.domain.whatsappagent.WhatsAppAgentService;
 import com.agenda.whatsapp.WhatsAppService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,6 +35,7 @@ class NotificacaoWhatsAppSchedulerTest {
     @Mock private PagamentoPixRepository pixRepository;
     @Mock private ChequeRepository chequeRepository;
     @Mock private WhatsAppService whatsAppService;
+    @Mock private WhatsAppAgentService whatsAppAgentService;
 
     private NotificacaoWhatsAppScheduler scheduler;
 
@@ -46,11 +48,22 @@ class NotificacaoWhatsAppSchedulerTest {
     @BeforeEach
     void setUp() {
         scheduler = new NotificacaoWhatsAppScheduler(
-                preferenciaRepository, boletoRepository, pixRepository, chequeRepository, whatsAppService);
+                preferenciaRepository, boletoRepository, pixRepository, chequeRepository,
+                whatsAppService, whatsAppAgentService);
+        // Fixa o relógio do job para o dia/horário simulado — sem isso, o
+        // scheduler usaria LocalTime.now() do relógio de parede e os stubs
+        // de findAtivosComHorario(horário fixo) nunca casariam.
+        fixarRelogio(horario);
 
         empresa = Empresa.builder().id(UUID.randomUUID()).nome("Empresa Teste").build();
         usuario = Usuario.builder().id(UUID.randomUUID()).nome("João").empresa(empresa).build();
         loja = Loja.builder().id(UUID.randomUUID()).empresa(empresa).nome("Mercado Central").build();
+    }
+
+    /** Faz o job "achar" que agora é {@link #hoje} às {@code agora}. */
+    private void fixarRelogio(LocalTime agora) {
+        java.time.ZoneId zona = java.time.ZoneId.systemDefault();
+        scheduler.clock = java.time.Clock.fixed(hoje.atTime(agora).atZone(zona).toInstant(), zona);
     }
 
     private PreferenciaNotificacao preferencia(LocalTime... horarios) {
@@ -106,7 +119,7 @@ class NotificacaoWhatsAppSchedulerTest {
     }
 
     @Test
-    void comPendenciaVencidaDentroDaFrequenciaNormal_DeveEnviarResumoMaisUmItem() {
+    void comPendenciaVencidaDentroDaFrequenciaNormal_DeveEnviarApenasResumoEGuardarDetalhe() {
         var pref = preferencia(horario);
         when(preferenciaRepository.findAtivosComHorario(horario)).thenReturn(List.of(pref));
         when(boletoRepository.findVencidos(any(), any())).thenReturn(List.of(boletoVencido(2)));
@@ -116,12 +129,36 @@ class NotificacaoWhatsAppSchedulerTest {
 
         scheduler.verificarEEnviarNotificacoes();
 
-        // 1 resumo + 1 item = 2 chamadas
+        // Só o resumo é enviado; nenhum template de item (que antes multiplicava o custo).
         verify(whatsAppService, times(1)).enviarTemplate(
                 eq(pref.getTelefoneWhatsapp()), eq(MensagemNotificacaoBuilder.TEMPLATE_RESUMO), anyList());
-        verify(whatsAppService, times(1)).enviarTemplate(
+        verify(whatsAppService, never()).enviarTemplate(
                 eq(pref.getTelefoneWhatsapp()), eq(MensagemNotificacaoBuilder.TEMPLATE_ITEM), anyList());
         verifyNoMoreInteractions(whatsAppService);
+
+        // O detalhe item a item fica guardado para envio sob demanda ("detalhar").
+        verify(whatsAppAgentService).registrarDetalheNotificacao(eq(usuario.getId()), anyString());
+    }
+
+    @Test
+    void comMuitosItens_DeveEnviarExatamenteUmaMensagem_NaoNMaisUm() {
+        var pref = preferencia(horario);
+        when(preferenciaRepository.findAtivosComHorario(horario)).thenReturn(List.of(pref));
+        // 10 boletos vencidos -> antes seriam 11 mensagens (1 resumo + 10 itens).
+        List<Boleto> muitos = java.util.stream.IntStream.rangeClosed(1, 10)
+                .mapToObj(this::boletoVencido).toList();
+        when(boletoRepository.findVencidos(any(), any())).thenReturn(muitos);
+        when(boletoRepository.findPendentesVencendoEm(any(), any())).thenReturn(List.of());
+        when(boletoRepository.findPendentesEntre(any(), any(), any())).thenReturn(List.of());
+        semPixNemCheque();
+
+        scheduler.verificarEEnviarNotificacoes();
+
+        // Exatamente 1 chamada de envio, independentemente da quantidade de itens.
+        verify(whatsAppService, times(1)).enviarTemplate(
+                eq(pref.getTelefoneWhatsapp()), eq(MensagemNotificacaoBuilder.TEMPLATE_RESUMO), anyList());
+        verifyNoMoreInteractions(whatsAppService);
+        verify(whatsAppAgentService, times(1)).registrarDetalheNotificacao(eq(usuario.getId()), anyString());
     }
 
     @Test
@@ -133,6 +170,7 @@ class NotificacaoWhatsAppSchedulerTest {
 
         // Simula a execução do job exatamente no horário do meio (h2),
         // com 15 dias de atraso (>10 -> regra diz: só dispara no índice 0).
+        fixarRelogio(h2);
         when(preferenciaRepository.findAtivosComHorario(h2)).thenReturn(List.of(pref));
         when(boletoRepository.findVencidos(any(), any())).thenReturn(List.of(boletoVencido(15)));
         when(boletoRepository.findPendentesVencendoEm(any(), any())).thenReturn(List.of());
@@ -153,6 +191,7 @@ class NotificacaoWhatsAppSchedulerTest {
         LocalTime h3 = LocalTime.of(18, 0);
         var pref = preferencia(h1, h2, h3);
 
+        fixarRelogio(h3);
         when(preferenciaRepository.findAtivosComHorario(h3)).thenReturn(List.of(pref));
         when(boletoRepository.findVencidos(any(), any())).thenReturn(List.of(boletoVencido(7)));
         when(boletoRepository.findPendentesVencendoEm(any(), any())).thenReturn(List.of());
@@ -200,10 +239,8 @@ class NotificacaoWhatsAppSchedulerTest {
 
         assertDoesNotThrow(scheduler::verificarEEnviarNotificacoes);
 
-        // prefOk ainda deve ter recebido resumo + item, mesmo com erro no primeiro usuário
+        // prefOk ainda deve ter recebido o resumo, mesmo com erro no primeiro usuário
         verify(whatsAppService, times(1)).enviarTemplate(
                 eq(prefOk.getTelefoneWhatsapp()), eq(MensagemNotificacaoBuilder.TEMPLATE_RESUMO), anyList());
-        verify(whatsAppService, times(1)).enviarTemplate(
-                eq(prefOk.getTelefoneWhatsapp()), eq(MensagemNotificacaoBuilder.TEMPLATE_ITEM), anyList());
     }
 }

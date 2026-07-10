@@ -7,6 +7,7 @@ import com.agenda.domain.cheque.ChequeRepository;
 import com.agenda.domain.loja.Loja;
 import com.agenda.domain.pix.PagamentoPix;
 import com.agenda.domain.pix.PagamentoPixRepository;
+import com.agenda.domain.whatsappagent.WhatsAppAgentService;
 import com.agenda.whatsapp.WhatsAppService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,6 +15,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -38,7 +40,17 @@ public class NotificacaoWhatsAppScheduler {
     private final PagamentoPixRepository pixRepository;
     private final ChequeRepository chequeRepository;
     private final WhatsAppService whatsAppService;
+    private final WhatsAppAgentService whatsAppAgentService;
     private final MensagemNotificacaoBuilder mensagemBuilder = new MensagemNotificacaoBuilder();
+
+    /**
+     * Fonte de tempo do job. Em produção usa o relógio do sistema (mesmo
+     * comportamento de sempre — o fuso é o da JVM/ambiente). Existe como
+     * campo separado, e não {@code LocalTime.now()} direto, só para os testes
+     * poderem fixar um horário/data determinístico. Não é injetado pelo Spring
+     * (não é final), então não exige um bean de {@code Clock}.
+     */
+    Clock clock = Clock.systemDefaultZone();
 
     /**
      * Roda a cada 15 minutos. Para cada usuário com WhatsApp ativo, verifica
@@ -53,8 +65,8 @@ public class NotificacaoWhatsAppScheduler {
     @Transactional(readOnly = true)
     @Scheduled(cron = "0 * * * * *")
     public void verificarEEnviarNotificacoes() {
-        LocalTime agora = LocalTime.now().withSecond(0).withNano(0);
-        LocalDate hoje = LocalDate.now();
+        LocalTime agora = LocalTime.now(clock).withSecond(0).withNano(0);
+        LocalDate hoje = LocalDate.now(clock);
 
         List<PreferenciaNotificacao> preferencias = preferenciaRepository.findAtivosComHorario(agora);
 
@@ -78,8 +90,8 @@ public class NotificacaoWhatsAppScheduler {
     /**
      * Monta as listas de pendências do usuário e, se o horário atual for
      * elegível (de acordo com a regra de degradação de frequência), envia
-     * as notificações por WhatsApp: 1 mensagem de resumo + 1 mensagem de
-     * template por pendência individual, nessa ordem.
+     * a notificação por WhatsApp: 1 única mensagem de resumo (o detalhe item
+     * a item fica guardado para envio sob demanda — ver {@link #enviarNotificacoes}).
      * <p>
      * Se o usuário não tiver lojas selecionadas, pula sem erro. Se não
      * houver nenhuma pendência, não envia nada — diferente do
@@ -122,12 +134,17 @@ public class NotificacaoWhatsAppScheduler {
     }
 
     /**
-     * Dispara as mensagens de WhatsApp propriamente ditas: primeiro o
-     * template de resumo (1 mensagem), depois um template de item para
-     * cada pendência individual, na ordem vencidos → vence hoje → vence
-     * fim de semana. Mesmo que sejam várias mensagens, a Meta cobra apenas
-     * 1 conversa de 24h por usuário nesse disparo, então o custo não
-     * multiplica por item.
+     * Dispara APENAS o template de resumo (1 mensagem) e guarda a lista item
+     * a item para envio sob demanda.
+     * <p>
+     * Antes o job também mandava 1 template de item por pendência (resumo +
+     * N itens = N+1 mensagens). Como cada template de Utilidade é cobrado por
+     * mensagem pela Meta, isso multiplicava o custo por item mesmo sendo
+     * informação redundante com o resumo. Agora só o resumo vai proativamente;
+     * o detalhe item a item fica guardado em {@link WhatsAppAgentService} e só
+     * é enviado (texto livre, dentro da janela de 24h) se o cliente responder
+     * "detalhar" — reaproveitando o fluxo {@code DETALHAR_ULTIMA_CONSULTA} do
+     * agente conversacional.
      */
     private void enviarNotificacoes(
             PreferenciaNotificacao pref,
@@ -142,11 +159,10 @@ public class NotificacaoWhatsAppScheduler {
                 nomeUsuario, vencidos, venceHoje, venceFimDeSemana);
         whatsAppService.enviarTemplate(telefone, MensagemNotificacaoBuilder.TEMPLATE_RESUMO, parametrosResumo);
 
-        List<PendenciaNotificacao> itens = mensagemBuilder.ordenarParaEnvio(vencidos, venceHoje, venceFimDeSemana);
-        for (PendenciaNotificacao item : itens) {
-            List<String> parametrosItem = mensagemBuilder.parametrosItem(item);
-            whatsAppService.enviarTemplate(telefone, MensagemNotificacaoBuilder.TEMPLATE_ITEM, parametrosItem);
-        }
+        // Detalhe CONGELADO no momento do disparo: se o cliente responder
+        // "detalhar", recebe exatamente esta lista, sem re-consultar o banco.
+        String detalhe = mensagemBuilder.textoDetalhado(vencidos, venceHoje, venceFimDeSemana);
+        whatsAppAgentService.registrarDetalheNotificacao(pref.getUsuario().getId(), detalhe);
     }
 
     /**

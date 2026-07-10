@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
@@ -25,6 +26,14 @@ import java.time.Duration;
 public class AuthController {
 
     private final AuthService authService;
+
+    /**
+     * Flag {@code Secure} dos cookies de auth. Default {@code true} (produção,
+     * borda HTTPS do Railway); sobrescrito para {@code false} no perfil local
+     * (dev em http://localhost).
+     */
+    @Value("${security.cookie-secure:true}")
+    private boolean cookieSecure;
 
     /**
      * Autentica o usuário por email+senha.
@@ -84,7 +93,7 @@ public class AuthController {
     private void setAuthCookies(HttpServletResponse response, AuthLoginResult result) {
         var jwtCookie = ResponseCookie.from("jwt", result.accessToken())
             .httpOnly(true)
-            .secure(false)
+            .secure(cookieSecure)
             .sameSite("Strict")
             .path("/api")
             .maxAge(Duration.ofMillis(86400000))
@@ -93,7 +102,7 @@ public class AuthController {
 
         var refreshCookie = ResponseCookie.from("refresh_token", result.refreshToken())
             .httpOnly(true)
-            .secure(false)
+            .secure(cookieSecure)
             .sameSite("Strict")
             .path("/api/auth/refresh")
             .maxAge(Duration.ofDays(7))
@@ -104,7 +113,7 @@ public class AuthController {
     private void clearAuthCookies(HttpServletResponse response) {
         var jwtCookie = ResponseCookie.from("jwt", "")
             .httpOnly(true)
-            .secure(false)
+            .secure(cookieSecure)
             .sameSite("Strict")
             .path("/api")
             .maxAge(0)
@@ -113,7 +122,7 @@ public class AuthController {
 
         var refreshCookie = ResponseCookie.from("refresh_token", "")
             .httpOnly(true)
-            .secure(false)
+            .secure(cookieSecure)
             .sameSite("Strict")
             .path("/api/auth/refresh")
             .maxAge(0)

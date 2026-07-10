@@ -89,6 +89,15 @@ public class RestExceptionHandler {
     }
 
     /**
+     * Excesso de tentativas → 429 TOO_MANY_REQUESTS.
+     * Ex.: tentativas de login demais para o mesmo email.
+     */
+    @ExceptionHandler(TooManyRequestsException.class)
+    public ResponseEntity<ErrorResponse> handleTooManyRequests(TooManyRequestsException ex) {
+        return error(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage());
+    }
+
+    /**
      * Qualquer exceção não tratada → 500 INTERNAL_SERVER_ERROR.
      * Loga o stack trace completo para debug e retorna mensagem genérica.
      */

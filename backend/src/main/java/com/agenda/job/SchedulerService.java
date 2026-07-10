@@ -14,11 +14,16 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 
 /**
- * Job agendado (03:00 todos os dias) que processa exclusão lógica
- * de empresas que solicitaram remoção. Anonimiza dados pessoais
- * dos usuários (nome, email, hash da senha) e dados financeiros
- * (fornecedor, observações) de boletos, PIX e cheques antes de
- * marcar a empresa como excluída — requisito LGPD.
+ * Job agendado (03:00 todos os dias) que processa exclusões lógicas (LGPD).
+ * Dois fluxos independentes:
+ * <ul>
+ *   <li><b>Empresa</b>: anonimiza dados pessoais dos usuários (nome, email,
+ *       hash da senha) e financeiros (fornecedor, observações) de boletos,
+ *       PIX e cheques, e marca a empresa como excluída.</li>
+ *   <li><b>Usuário individual</b>: anonimiza apenas os usuários que pediram
+ *       exclusão da própria conta, sem tocar na empresa nem em outros
+ *       usuários ({@code anonimizarUsuariosIndividuais}).</li>
+ * </ul>
  */
 @Slf4j
 @Component
@@ -45,20 +50,38 @@ public class SchedulerService {
             log.info("Empresa {} anonimizada", empresa.getId());
         }
 
+        anonimizarUsuariosIndividuais();
+
         if (empresas.isEmpty()) {
             log.info("Nenhuma exclusão pendente.");
         }
     }
 
     private void anonimizarUsuarios(com.agenda.domain.empresa.Empresa empresa) {
-        var usuarios = usuarioRepository.findByEmpresaId(empresa.getId());
-        for (var usuario : usuarios) {
-            usuario.setNome("Usuário Removido");
-            usuario.setEmail("removido_" + usuario.getId() + "@anonimo.local");
-            usuario.setSenhaHash("REMOVIDO");
-            usuario.setExcluidoEm(LocalDateTime.now());
+        for (var usuario : usuarioRepository.findByEmpresaId(empresa.getId())) {
+            anonimizarUsuario(usuario);
             usuarioRepository.save(usuario);
         }
+    }
+
+    /**
+     * Anonimiza usuários que pediram exclusão individual (sem apagar a empresa).
+     * Usuários de empresas já anonimizadas acima têm excluidoEm preenchido e são
+     * ignorados pela query (excluidoEm IS NULL) — sem processamento duplicado.
+     */
+    private void anonimizarUsuariosIndividuais() {
+        for (var usuario : usuarioRepository.findBySolicitouExclusaoTrueAndExcluidoEmIsNull()) {
+            anonimizarUsuario(usuario);
+            usuarioRepository.save(usuario);
+            log.info("Usuário {} anonimizado (exclusão individual)", usuario.getId());
+        }
+    }
+
+    private void anonimizarUsuario(com.agenda.domain.usuario.Usuario usuario) {
+        usuario.setNome("Usuário Removido");
+        usuario.setEmail("removido_" + usuario.getId() + "@anonimo.local");
+        usuario.setSenhaHash("REMOVIDO");
+        usuario.setExcluidoEm(LocalDateTime.now());
     }
 
     private void anonimizarRegistrosFinanceiros(com.agenda.domain.empresa.Empresa empresa) {

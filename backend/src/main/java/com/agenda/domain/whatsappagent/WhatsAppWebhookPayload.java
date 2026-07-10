@@ -65,6 +65,8 @@ public class WhatsAppWebhookPayload {
     @Setter
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class IncomingMessage {
+        /** ID único da mensagem na Meta (ex.: "wamid...."), usado para idempotência. */
+        private String id;
         /** Número de quem enviou a mensagem, só dígitos (ex.: "5583999999999"). */
         private String from;
         /** "text", "audio", "image", "button", etc. — só "text" é tratado na v1. */

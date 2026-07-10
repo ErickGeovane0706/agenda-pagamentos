@@ -16,6 +16,7 @@ import com.agenda.domain.pix.PagamentoPix;
 import com.agenda.domain.pix.PagamentoPixRepository;
 import com.agenda.domain.pix.PagamentoPixSpecification;
 import com.agenda.domain.pix.StatusPix;
+import com.agenda.security.RateLimiterService;
 import com.agenda.whatsapp.WhatsAppService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.DayOfWeek;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -53,6 +55,18 @@ public class WhatsAppAgentService {
     private final IntentClassifierService classifierService;
     private final RespostaFormatterService respostaFormatter;
     private final WhatsAppService whatsAppService;
+    private final RateLimiterService rateLimiter;
+
+    /**
+     * Teto de mensagens por REMETENTE (telefone): 15 a cada 5 minutos.
+     * Cada mensagem processada dispara uma chamada PAGA à Anthropic — este
+     * teto evita que um único número (mesmo já cadastrado) amplifique o custo
+     * de IA com um flood. Keado por telefone (infalsificável, dentro do
+     * payload já validado por HMAC no webhook), não por IP: o webhook chega
+     * todo dos IPs da Meta, então IP aqui não distingue remetentes.
+     */
+    private static final int WEBHOOK_MAX_MENSAGENS = 15;
+    private static final Duration WEBHOOK_JANELA = Duration.ofMinutes(5);
 
     /**
      * Processa uma mensagem recebida do webhook. Não lança exceção — toda
@@ -68,6 +82,13 @@ public class WhatsAppAgentService {
     @Async
     @Transactional(readOnly = true)
     public void processarMensagem(String telefoneOrigem, String textoMensagem) {
+        if (!rateLimiter.tentarConsumir("wa:" + telefoneOrigem, WEBHOOK_MAX_MENSAGENS, WEBHOOK_JANELA)) {
+            // Teto por remetente atingido: descarta em silêncio (sem chamar a IA
+            // nem responder) para não amplificar custo nem entrar em loop de eco.
+            log.warn("[WHATSAPP-AGENTE] Teto de mensagens por remetente atingido, ignorando: {}", mascarar(telefoneOrigem));
+            return;
+        }
+
         Optional<PreferenciaNotificacao> preferenciaOpt = buscarPreferenciaPorTelefone(telefoneOrigem);
 
         if (preferenciaOpt.isEmpty()) {
@@ -341,11 +362,43 @@ public class WhatsAppAgentService {
      */
     private final java.util.Map<UUID, FiltrosAgente> ultimaConsultaResumidaPorUsuario = new java.util.concurrent.ConcurrentHashMap<>();
 
+    /**
+     * Detalhe já formatado (texto livre) de um lembrete automático recente,
+     * por usuário. O {@code NotificacaoWhatsAppScheduler} envia proativamente
+     * só o template de resumo e guarda AQUI a lista item a item — que só é
+     * mandada (dentro da janela de 24h) se o cliente responder "detalhar".
+     * <p>
+     * Diferente do fluxo de chat, o detalhe do lembrete é CONGELADO no momento
+     * do disparo (não re-consultado por filtros), porque o lembrete é a união
+     * de vencidos + vence hoje + fim de semana — combinação que não se reduz a
+     * um único {@link FiltrosAgente}. Congelar garante que o "detalhar" bata
+     * exatamente com o resumo que o cliente recebeu.
+     */
+    private final java.util.Map<UUID, String> detalheNotificacaoPorUsuario = new java.util.concurrent.ConcurrentHashMap<>();
+
     private void guardarUltimaConsultaResumida(UUID usuarioId, FiltrosAgente filtros) {
         ultimaConsultaResumidaPorUsuario.put(usuarioId, filtros);
+        // Uma consulta resumida via chat passa a ser a "última ação" a detalhar:
+        // invalida qualquer detalhe de lembrete pendente (comportamento "último vence").
+        detalheNotificacaoPorUsuario.remove(usuarioId);
     }
 
     private void limparUltimaConsultaResumida(UUID usuarioId) {
+        ultimaConsultaResumidaPorUsuario.remove(usuarioId);
+        detalheNotificacaoPorUsuario.remove(usuarioId);
+    }
+
+    /**
+     * Registra, para um usuário, o detalhe já formatado de um lembrete
+     * automático, para que um "detalhar" logo em seguida devolva exatamente
+     * essa lista. Chamado pelo {@code NotificacaoWhatsAppScheduler}.
+     * <p>
+     * Como esta é a "última ação" a detalhar, invalida qualquer consulta
+     * resumida de chat pendente — assim, no máximo uma das duas fontes fica
+     * ativa por vez e o "detalhar" nunca fica ambíguo.
+     */
+    public void registrarDetalheNotificacao(UUID usuarioId, String detalhe) {
+        detalheNotificacaoPorUsuario.put(usuarioId, detalhe);
         ultimaConsultaResumidaPorUsuario.remove(usuarioId);
     }
 
@@ -416,14 +469,24 @@ public class WhatsAppAgentService {
     }
 
     private String detalharUltimaConsulta(UUID empresaId, PreferenciaNotificacao pref) {
-        FiltrosAgente filtrosAnteriores = ultimaConsultaResumidaPorUsuario.get(pref.getUsuario().getId());
+        UUID usuarioId = pref.getUsuario().getId();
+
+        // Detalhe congelado de um lembrete automático recente tem prioridade:
+        // reproduz item a item exatamente o que o lembrete resumiu, sem
+        // re-consultar o banco (ver detalheNotificacaoPorUsuario).
+        String detalheLembrete = detalheNotificacaoPorUsuario.remove(usuarioId);
+        if (detalheLembrete != null) {
+            return detalheLembrete;
+        }
+
+        FiltrosAgente filtrosAnteriores = ultimaConsultaResumidaPorUsuario.get(usuarioId);
         if (filtrosAnteriores == null) {
             return "Não tenho nenhum resumo recente pra detalhar. Pode fazer a pergunta novamente? Ex.: \"quanto tenho pra pagar essa semana\".";
         }
 
         UUID lojaId = resolverLoja(empresaId, filtrosAnteriores.getLoja());
         String resposta = consultarPendencias(empresaId, pref, lojaId, filtrosAnteriores, true);
-        limparUltimaConsultaResumida(pref.getUsuario().getId());
+        limparUltimaConsultaResumida(usuarioId);
         return resposta;
     }
 

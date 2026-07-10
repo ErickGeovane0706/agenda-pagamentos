@@ -10,6 +10,7 @@ import com.agenda.domain.notificacao.PreferenciaNotificacao;
 import com.agenda.domain.notificacao.PreferenciaNotificacaoRepository;
 import com.agenda.domain.pix.PagamentoPixRepository;
 import com.agenda.domain.usuario.Usuario;
+import com.agenda.security.RateLimiterService;
 import com.agenda.whatsapp.WhatsAppService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -66,7 +67,7 @@ class WhatsAppAgentServiceTest {
         respostaFormatter = new RespostaFormatterService();
         agentService = new WhatsAppAgentService(
                 preferenciaRepository, lojaRepository, boletoRepository, pixRepository,
-                chequeRepository, classifierService, respostaFormatter, whatsAppService);
+                chequeRepository, classifierService, respostaFormatter, whatsAppService, new RateLimiterService());
 
         empresa = Empresa.builder().id(UUID.randomUUID()).nome("Empresa Teste").build();
         usuario = Usuario.builder().id(UUID.randomUUID()).nome("Maria").empresa(empresa).build();
@@ -412,6 +413,31 @@ class WhatsAppAgentServiceTest {
         // da consulta anterior. Como a intenção já veio como REFINAR_ULTIMA_CONSULTA,
         // o merge é forçado — as duas respostas devem refletir o período "semana".
         verify(whatsAppService, times(2)).enviarMensagemTexto(eq("5583999990000"), contains("semana"));
+    }
+
+    // ---------------------------------------------------------------
+    // DETALHAR após lembrete automático: deve devolver o detalhe congelado
+    // pelo scheduler, sem re-consultar o banco.
+    // ---------------------------------------------------------------
+
+    @Test
+    void detalhar_aposLembreteAutomatico_devolveDetalheCongeladoSemConsultarBanco() {
+        stubPreferenciaEncontrada();
+        when(classifierService.classificar(any(), any())).thenReturn(
+                ResultadoClassificacao.builder()
+                        .intencao(IntencaoAgente.DETALHAR_ULTIMA_CONSULTA)
+                        .filtros(FiltrosAgente.builder().periodo(TipoPeriodoAgente.SEM_FILTRO).build())
+                        .build()
+        );
+
+        String detalhe = "📋 Pendências:\n\n🏬 Loja Centro — R$ 1.500,00\n"
+                + "  • 🧾 Boleto: Light — R$ 1.500,00 (venc. 24/06)\n\n💰 Total: R$ 1.500,00";
+        agentService.registrarDetalheNotificacao(usuario.getId(), detalhe);
+
+        agentService.processarMensagem("5583999990000", "detalhar");
+
+        verify(whatsAppService).enviarMensagemTexto(eq("5583999990000"), eq(detalhe));
+        verifyNoInteractions(boletoRepository, pixRepository, chequeRepository);
     }
 
     // ---------------------------------------------------------------

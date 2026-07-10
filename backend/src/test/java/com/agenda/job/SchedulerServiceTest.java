@@ -68,6 +68,28 @@ class SchedulerServiceTest {
     }
 
     @Test
+    void processarExclusoes_DeveAnonimizarUsuarioComExclusaoIndividualSemTocarEmpresa() {
+        var usuario = Usuario.builder()
+            .id(UUID.randomUUID()).empresa(empresa).nome("Maria")
+            .email("maria@test.com").senhaHash("hash").solicitouExclusao(true)
+            .build();
+
+        when(empresaRepository.findBySolicitouExclusaoTrueAndExcluidoEmIsNull())
+            .thenReturn(List.of());
+        when(usuarioRepository.findBySolicitouExclusaoTrueAndExcluidoEmIsNull())
+            .thenReturn(List.of(usuario));
+
+        schedulerService.processarExclusoes();
+
+        assertEquals("Usuário Removido", usuario.getNome());
+        assertTrue(usuario.getEmail().startsWith("removido_"));
+        assertEquals("REMOVIDO", usuario.getSenhaHash());
+        assertNotNull(usuario.getExcluidoEm());
+        verify(usuarioRepository).save(usuario);
+        verify(empresaRepository, never()).save(any());
+    }
+
+    @Test
     void processarExclusoes_DeveIgnorarQuandoNaoHaPendentes() {
         when(empresaRepository.findBySolicitouExclusaoTrueAndExcluidoEmIsNull())
             .thenReturn(List.of());

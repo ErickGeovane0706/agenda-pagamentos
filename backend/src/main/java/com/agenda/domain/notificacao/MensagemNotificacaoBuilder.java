@@ -2,8 +2,13 @@ package com.agenda.domain.notificacao;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Monta os PARÂMETROS dos templates de WhatsApp a partir das pendências já
@@ -107,6 +112,69 @@ public class MensagemNotificacaoBuilder {
                 formatarValorSemPrefixo(p.valor()),
                 formatarData(p.vencimento())
         );
+    }
+
+    /**
+     * Monta o texto livre detalhado (item a item, agrupado por loja) das
+     * pendências do lembrete. Diferente de {@link #parametrosResumo} e
+     * {@link #parametrosItem}, este NÃO é template: só é enviado quando o
+     * cliente responde "detalhar" ao lembrete, já dentro da janela de 24h,
+     * então pode ter quebras de linha à vontade.
+     * <p>
+     * O layout espelha o do agente conversacional
+     * ({@code RespostaFormatterService#formatarListaCompleta}) para o cliente
+     * ver o mesmo formato venha o detalhe do chat ou do lembrete automático.
+     */
+    public String textoDetalhado(
+            List<PendenciaNotificacao> vencidos,
+            List<PendenciaNotificacao> venceHoje,
+            List<PendenciaNotificacao> venceFimDeSemana
+    ) {
+        List<PendenciaNotificacao> todos = ordenarParaEnvio(vencidos, venceHoje, venceFimDeSemana);
+
+        Map<UUID, List<PendenciaNotificacao>> porLoja = todos.stream()
+                .collect(Collectors.groupingBy(PendenciaNotificacao::lojaId, LinkedHashMap::new, Collectors.toList()));
+
+        List<UUID> ordemLojas = porLoja.keySet().stream()
+                .sorted(Comparator.comparing(id -> porLoja.get(id).get(0).lojaNome(), String.CASE_INSENSITIVE_ORDER))
+                .toList();
+
+        StringBuilder sb = new StringBuilder("📋 Pendências:\n");
+        for (UUID lojaId : ordemLojas) {
+            List<PendenciaNotificacao> itensDaLoja = porLoja.get(lojaId).stream()
+                    .sorted(Comparator.comparing(PendenciaNotificacao::vencimento))
+                    .toList();
+            BigDecimal totalLoja = itensDaLoja.stream()
+                    .map(PendenciaNotificacao::valor)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            sb.append("\n🏬 ").append(itensDaLoja.get(0).lojaNome())
+                    .append(" — ").append(formatarValor(totalLoja)).append("\n");
+
+            for (PendenciaNotificacao p : itensDaLoja) {
+                sb.append("  • ").append(emoji(p.tipo())).append(" ").append(tipoLabel(p.tipo())).append(": ")
+                        .append(p.fornecedor()).append(" — ").append(formatarValor(p.valor()))
+                        .append(" (venc. ").append(formatarDiaMes(p.vencimento())).append(")\n");
+            }
+        }
+
+        BigDecimal totalGeral = todos.stream()
+                .map(PendenciaNotificacao::valor)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        sb.append("\n💰 Total: ").append(formatarValor(totalGeral));
+        return sb.toString();
+    }
+
+    private String emoji(PendenciaNotificacao.TipoPendencia tipo) {
+        return switch (tipo) {
+            case BOLETO -> "🧾";
+            case PIX -> "💸";
+            case CHEQUE -> "📝";
+        };
+    }
+
+    private String formatarDiaMes(LocalDate data) {
+        return data.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM"));
     }
 
     private String formatarData(LocalDate data) {

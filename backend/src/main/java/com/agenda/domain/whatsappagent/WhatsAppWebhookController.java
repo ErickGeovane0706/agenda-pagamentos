@@ -1,5 +1,7 @@
 package com.agenda.domain.whatsappagent;
 
+import com.agenda.domain.webhook.WebhookIdempotencyService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,9 +28,9 @@ import java.util.List;
  * <p>
  * Rota fora de {@code /api/**}, então cai na regra
  * {@code anyRequest().permitAll()} do {@code SecurityConfig} — não exige
- * JWT. A "autenticação" deste endpoint é o {@code hub.verify_token} (na
- * configuração) e, em produção, deveria também validar o header
- * {@code X-Hub-Signature-256} (ver nota no método {@code receberEvento}).
+ * JWT. A autenticação do POST é a validação do header
+ * {@code X-Hub-Signature-256} (HMAC-SHA256 com o App Secret, ver
+ * {@code receberEvento}); o GET usa o {@code hub.verify_token}.
  */
 @Slf4j
 @RestController
@@ -36,7 +38,12 @@ import java.util.List;
 @RequiredArgsConstructor
 public class WhatsAppWebhookController {
 
+    private static final String ORIGEM = "WHATSAPP";
+
     private final WhatsAppAgentService agentService;
+    private final WhatsAppSignatureValidator signatureValidator;
+    private final WebhookIdempotencyService idempotencyService;
+    private final ObjectMapper objectMapper;
 
     @Value("${whatsapp.webhook-verify-token}")
     private String verifyToken;
@@ -60,24 +67,57 @@ public class WhatsAppWebhookController {
     }
 
     /**
-     * TODO antes de produção: validar o header {@code X-Hub-Signature-256}
-     * (HMAC-SHA256 do corpo da requisição com o App Secret da Meta) para
-     * garantir que a chamada realmente vem da Meta, e não de um terceiro
-     * que descobriu esta URL. Requer acesso ao corpo raw da requisição
-     * antes da desserialização — normalmente implementado com um
-     * {@code Filter} dedicado, não dentro do controller.
+     * Recebe eventos da Meta. Recebe o corpo cru ({@code byte[]}) porque a
+     * validação da assinatura {@code X-Hub-Signature-256} (HMAC-SHA256 com o
+     * App Secret) precisa dos bytes exatos, antes da desserialização.
+     *
+     * <ul>
+     *   <li>Se o App Secret está configurado e a assinatura não confere → 401
+     *       (rejeita chamada forjada).</li>
+     *   <li>Se o App Secret ainda não foi configurado → processa com aviso
+     *       (a validação passa a valer sozinha assim que o secret for definido).</li>
+     * </ul>
+     *
+     * Cada mensagem é deduplicada por {@code message.id} (idempotência): uma
+     * reentrega da Meta não dispara processamento (nem custo de IA) de novo.
      */
     @PostMapping
-    public ResponseEntity<Void> receberEvento(@RequestBody WhatsAppWebhookPayload payload) {
+    public ResponseEntity<Void> receberEvento(
+            @RequestBody byte[] corpo,
+            @RequestHeader(value = "X-Hub-Signature-256", required = false) String signature) {
+
+        if (signatureValidator.isConfigurado()) {
+            if (!signatureValidator.assinaturaValida(corpo, signature)) {
+                log.warn("[WHATSAPP-WEBHOOK] Assinatura X-Hub-Signature-256 inválida — rejeitando.");
+                return ResponseEntity.status(401).build();
+            }
+        } else {
+            log.warn("[WHATSAPP-WEBHOOK] WHATSAPP_APP_SECRET não configurado — assinatura NÃO validada. "
+                    + "Configure o App Secret para fechar o webhook.");
+        }
+
         try {
-            extrairMensagensDeTexto(payload).forEach(msg ->
-                    agentService.processarMensagem(msg.getFrom(), msg.getText().getBody()));
+            var payload = objectMapper.readValue(corpo, WhatsAppWebhookPayload.class);
+            extrairMensagensDeTexto(payload).forEach(this::processarSeNova);
         } catch (Exception e) {
             // Mesmo em erro de parsing/roteamento, respondemos 200 — devolver erro
             // para a Meta só causaria reenvios repetidos do mesmo payload malformado.
             log.error("[WHATSAPP-WEBHOOK] Erro ao processar payload recebido: {}", e.getMessage(), e);
         }
         return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Processa a mensagem só se ainda não foi vista (dedup por {@code id}).
+     * Sem {@code id} (payload atípico), processa — não há como deduplicar.
+     */
+    private void processarSeNova(WhatsAppWebhookPayload.IncomingMessage msg) {
+        String id = msg.getId();
+        if (id != null && !idempotencyService.registrarSeNovo(ORIGEM, id)) {
+            log.info("[WHATSAPP-WEBHOOK] Mensagem duplicada ignorada: {}", id);
+            return;
+        }
+        agentService.processarMensagem(msg.getFrom(), msg.getText().getBody());
     }
 
     private List<WhatsAppWebhookPayload.IncomingMessage> extrairMensagensDeTexto(WhatsAppWebhookPayload payload) {
