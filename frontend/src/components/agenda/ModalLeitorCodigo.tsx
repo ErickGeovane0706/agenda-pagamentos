@@ -5,8 +5,16 @@ import { BrowserMultiFormatReader, IScannerControls } from '@zxing/browser';
 import { BarcodeFormat, DecodeHintType } from '@zxing/library';
 import { X, Camera, Image, FileText, Loader2, RotateCw } from 'lucide-react';
 import { clsx } from 'clsx';
-import { useIsMobile } from '../../hooks/useIsMobile';
 import { useToastStore } from '../../store/toastStore';
+
+/**
+ * "É um aparelho de mão, com câmera traseira?" — pergunta diferente da do
+ * useIsMobile ("a tela é estreita?"), e usar aquele aqui era um bug: o leitor
+ * deita a tela, a largura do celular passa dos 768px, o app concluía que virou
+ * um desktop, trocava a aba de câmera para imagem e matava a câmera no meio da
+ * leitura. Ponteiro grosso não muda quando o aparelho gira.
+ */
+const APARELHO_DE_TOQUE = window.matchMedia('(pointer: coarse)').matches;
 
 // Worker do PDF.js via CDN — evita o erro de import dinâmico de .mjs bloqueado
 // pelo Brave, Opera e Safari. O jsDelivr já está liberado no CSP (worker-src).
@@ -232,7 +240,6 @@ export function ModalLeitorCodigo({
   onFechar: () => void;
   onCodigoLido: (codigo: string) => void;
 }) {
-  const isMobile = useIsMobile();
   const addToast = useToastStore((s) => s.addToast);
   const [aba, setAba] = useState<Aba>('imagem');
   const [lendo, setLendo] = useState(false);
@@ -358,7 +365,7 @@ export function ModalLeitorCodigo({
       setPaginasPDF([]);
       setPdfRef(null);
     } else {
-      setAba(isMobile ? 'camera' : 'imagem');
+      setAba(APARELHO_DE_TOQUE ? 'camera' : 'imagem');
       resultadoRef.current = null;
       setPreviewUrl(null);
       setPaginasPDF([]);
@@ -367,7 +374,7 @@ export function ModalLeitorCodigo({
       getWorker().catch(() => {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aberto, isMobile]);
+  }, [aberto]);
 
   // Limpa câmera ao trocar de aba
   useEffect(() => {
@@ -645,7 +652,7 @@ export function ModalLeitorCodigo({
   if (!aberto) return null;
 
   const abas: { id: Aba; label: string; icon: typeof Camera }[] = [];
-  if (isMobile) abas.push({ id: 'camera', label: 'Câmera', icon: Camera });
+  if (APARELHO_DE_TOQUE) abas.push({ id: 'camera', label: 'Câmera', icon: Camera });
   abas.push({ id: 'imagem', label: 'Imagem', icon: Image });
   abas.push({ id: 'pdf', label: 'PDF', icon: FileText });
 
