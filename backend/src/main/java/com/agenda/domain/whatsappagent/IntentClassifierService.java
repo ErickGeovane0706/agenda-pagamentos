@@ -53,12 +53,41 @@ public class IntentClassifierService {
     private static final int CONNECT_TIMEOUT_MS = 5_000;
     private static final int READ_TIMEOUT_MS = 30_000;
 
+    /**
+     * Linha que separa a parte FIXA do prompt (instruções + exemplos, idêntica em
+     * toda mensagem de todo cliente) da parte que muda a cada chamada.
+     * <p>
+     * A divisão existe por causa do cache de prompt da Anthropic, que é um
+     * casamento de PREFIXO: qualquer byte que mude invalida tudo o que vem
+     * depois. Enquanto {@code {{DATA_HOJE}}} e {@code {{FILTROS_ANTERIORES}}}
+     * estavam no MEIO do arquivo, o trecho estável antes deles tinha 3.277
+     * tokens — abaixo do mínimo cacheável do Haiku 4.5, que é 4.096. Ou seja:
+     * o cache não pegava, e nem dava erro; falhava calado. Com as variáveis no
+     * fim, o bloco fixo tem 6.825 tokens e passa a ser cacheável.
+     * <p>
+     * <b>Se você mover qualquer variável de volta para cima deste marcador, o
+     * cache morre em silêncio</b> e o custo por mensagem quadruplica.
+     */
+    private static final String MARCADOR_CONTEXTO = "=== CONTEXTO DESTA MENSAGEM ===";
+
     private final RestTemplate restTemplate = criarRestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final String promptTemplate;
+
+    /** Instruções + exemplos. Nunca muda — é o que vai para o cache. */
+    private final String blocoEstavel;
+    /** Data de hoje, filtros anteriores e a mensagem do cliente. Muda a cada chamada. */
+    private final String blocoVolatil;
 
     public IntentClassifierService() {
-        this.promptTemplate = carregarPromptTemplate();
+        String template = carregarPromptTemplate();
+        int corte = template.indexOf(MARCADOR_CONTEXTO);
+        if (corte < 0) {
+            throw new IllegalStateException(
+                    "O prompt " + PROMPT_RESOURCE + " não tem o marcador \"" + MARCADOR_CONTEXTO
+                            + "\", que separa o bloco cacheável do volátil.");
+        }
+        this.blocoEstavel = template.substring(0, corte).stripTrailing();
+        this.blocoVolatil = template.substring(corte);
     }
 
     /**
@@ -76,8 +105,8 @@ public class IntentClassifierService {
         }
 
         try {
-            String prompt = montarPrompt(mensagemCliente, filtrosAnteriores);
-            String respostaBruta = chamarApiAnthropic(prompt);
+            String contexto = montarContexto(mensagemCliente, filtrosAnteriores);
+            String respostaBruta = chamarApiAnthropic(contexto);
             return parsearResposta(respostaBruta);
         } catch (Exception e) {
             log.error("[WHATSAPP-AGENTE] Falha ao classificar mensagem '{}': {}", mensagemCliente, e.getMessage(), e);
@@ -85,9 +114,10 @@ public class IntentClassifierService {
         }
     }
 
-    private String montarPrompt(String mensagemCliente, FiltrosAgente filtrosAnteriores) {
+    /** Só o pedaço que muda a cada mensagem — o bloco estável vai separado, no cache. */
+    private String montarContexto(String mensagemCliente, FiltrosAgente filtrosAnteriores) {
         String hoje = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
-        return promptTemplate
+        return blocoVolatil
                 .replace("{{DATA_HOJE}}", hoje)
                 .replace("{{FILTROS_ANTERIORES}}", formatarFiltrosAnteriores(filtrosAnteriores))
                 .replace("{{MENSAGEM_CLIENTE}}", sanitizarParaPrompt(mensagemCliente));
@@ -122,7 +152,16 @@ public class IntentClassifierService {
         return texto.replace("\"\"\"", "'''").trim();
     }
 
-    private String chamarApiAnthropic(String prompt) {
+    /**
+     * O bloco fixo vai no {@code system} com um {@code cache_control}, e só o
+     * contexto da mensagem vai no turno do usuário. A ordem em que a API monta o
+     * prompt é {@code tools → system → messages}, então marcar o fim do system
+     * cacheia exatamente as instruções + exemplos — que são idênticos para todos
+     * os clientes, já que o prompt não carrega nenhum dado de ninguém. Na prática
+     * o cache é compartilhado por toda a base: a pergunta de um cliente esquenta
+     * o cache para os outros.
+     */
+    private String chamarApiAnthropic(String contexto) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set("x-api-key", apiKey);
@@ -131,8 +170,13 @@ public class IntentClassifierService {
         Map<String, Object> body = Map.of(
                 "model", model,
                 "max_tokens", MAX_TOKENS_RESPOSTA,
+                "system", List.of(Map.of(
+                        "type", "text",
+                        "text", blocoEstavel,
+                        "cache_control", Map.of("type", "ephemeral")
+                )),
                 "messages", List.of(
-                        Map.of("role", "user", "content", prompt)
+                        Map.of("role", "user", "content", contexto)
                 )
         );
 
@@ -143,9 +187,25 @@ public class IntentClassifierService {
                     new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {}
             );
 
-            return extrairTexto(response.getBody());
+            Map<String, Object> corpo = response.getBody();
+            logarUsoDeCache(corpo);
+            return extrairTexto(corpo);
         } catch (RestClientException e) {
             throw new IllegalStateException("Erro ao chamar API da Anthropic: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Único jeito de saber, em produção, se o cache está realmente pegando: se
+     * {@code cache_read} ficar sempre em zero, algum byte do bloco estável está
+     * mudando entre as chamadas e o cache está sendo escrito e jogado fora.
+     */
+    private void logarUsoDeCache(Map<String, Object> resposta) {
+        if (resposta != null && resposta.get("usage") instanceof Map<?, ?> uso) {
+            log.info("[WHATSAPP-AGENTE] Cache do prompt — escrito: {} | lido: {} | sem cache: {}",
+                    uso.get("cache_creation_input_tokens"),
+                    uso.get("cache_read_input_tokens"),
+                    uso.get("input_tokens"));
         }
     }
 

@@ -76,10 +76,6 @@ REGRAS PARA OS FILTROS:
 
 - Nunca corrija, complete ou explique nada — apenas extraia o que está explícito na mensagem.
 
-A data de hoje, para referência de "hoje"/"amanhã"/"semana", é: {{DATA_HOJE}}.
-
-O filtro resolvido da consulta anterior (se houver), para casos de REFINAR_ULTIMA_CONSULTA, é: {{FILTROS_ANTERIORES}}.
-
 EXEMPLOS:
 
 Mensagem: "cheque aurora utilidades"
@@ -171,6 +167,12 @@ Mensagem: "e da loja centro?" (após consulta anterior: periodo=SEMANA, tipoPaga
 
 Mensagem: "e de boleto?" (após consulta anterior: periodo=SEMANA)
 {"intencao":"REFINAR_ULTIMA_CONSULTA","filtros":{"loja":null,"tipoPagamento":"BOLETO","periodo":"SEM_FILTRO","diaSemanaAlvo":null,"posicaoQuinzena":null,"diaDoMes":null,"mesReferencia":null,"dataInicio":null,"dataFim":null,"fornecedor":null,"filtroStatus":"PENDENTE"}}
+
+=== CONTEXTO DESTA MENSAGEM ===
+
+A data de hoje, para referência de "hoje"/"amanhã"/"semana", é: {{DATA_HOJE}}.
+
+O filtro resolvido da consulta anterior (se houver), para casos de REFINAR_ULTIMA_CONSULTA, é: {{FILTROS_ANTERIORES}}.
 
 Mensagem do cliente:
 """
