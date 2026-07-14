@@ -249,6 +249,9 @@ export function ModalLeitorCodigo({
   const [paginaCarregando, setPaginaCarregando] = useState<number | null>(null);
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [cameraStarted, setCameraStarted] = useState(false);
+  // Só vira true quando o ZXing já está decodificando — distinto de
+  // cameraStarted, que sobe antes, assim que a tela cheia aparece.
+  const [escaneando, setEscaneando] = useState(false);
   // Safari/iPhone não implementa screen.orientation.lock() — quando o lock
   // falha, o giro passa a ser manual (o usuário vira o aparelho e a interface
   // acompanha pelo botão de girar).
@@ -341,6 +344,7 @@ export function ModalLeitorCodigo({
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     setGiroManual(false);
     setGirado(false);
+    setEscaneando(false);
     setCameraStarted(false);
   }, []);
 
@@ -356,6 +360,30 @@ export function ModalLeitorCodigo({
     mq.addEventListener('change', atualizar);
     return () => mq.removeEventListener('change', atualizar);
   }, []);
+
+  const iniciarCameraRef = useRef<() => void>(() => {});
+  useEffect(() => { iniciarCameraRef.current = iniciarCamera; });
+
+  /**
+   * Girar com o leitor JÁ rodando (o caso do iPhone, onde o giro é manual)
+   * corrompe a leitura: o ZXing dimensiona o canvas de captura uma única vez,
+   * no início do scan, e depois desenha cada quadro sem escalar — girando, o
+   * quadro fica maior que o canvas e o código de barras é cortado fora.
+   * Reiniciar o leitor recria o canvas no tamanho novo.
+   *
+   * Escuta só enquanto está escaneando, não desde cameraStarted: o giro que nós
+   * mesmos forçamos acontece ANTES de o scan começar, e reiniciar por causa dele
+   * seria um laço.
+   */
+  useEffect(() => {
+    if (!escaneando) return;
+    const aoGirar = () => {
+      log('Orientação mudou — reiniciando o leitor');
+      iniciarCameraRef.current();
+    };
+    window.addEventListener('orientationchange', aoGirar);
+    return () => window.removeEventListener('orientationchange', aoGirar);
+  }, [escaneando]);
 
   useEffect(() => {
     if (!aberto) {
@@ -411,6 +439,17 @@ export function ModalLeitorCodigo({
     setLendo(true);
     log('Iniciando câmera...');
     try {
+      // Deita a tela ANTES de abrir a câmera — a ordem é o que faz a leitura
+      // funcionar. O ZXing dimensiona o canvas de captura no instante em que o
+      // scan começa e nunca mais o redimensiona (desenha cada quadro sem
+      // escalar): girar depois deixava o canvas mais estreito que o quadro e
+      // cortava fora justamente o miolo, onde está o código. De quebra, o
+      // fullscreen é pedido logo após o clique, enquanto o gesto do usuário
+      // ainda vale — depois da permissão da câmera ele já pode ter expirado.
+      setCameraStarted(true);
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      await entrarModoPaisagem();
+
       const hints = new Map();
       hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.ITF, BarcodeFormat.CODE_128]);
       hints.set(DecodeHintType.TRY_HARDER, true);
@@ -455,13 +494,14 @@ export function ModalLeitorCodigo({
           }
       );
       scannerControlsRef.current = controls;
-      setCameraStarted(true);
       cameraRunningRef.current = true;
-      await entrarModoPaisagem();
+      setEscaneando(true);
       log('Câmera iniciada com sucesso');
     } catch (err: any) {
       log(`ERRO câmera: ${err?.name} - ${err?.message}`);
-      setCameraStarted(false);
+      // Falhou depois de já termos entrado em tela cheia e travado a orientação
+      // — pararCamera desfaz os dois.
+      pararCamera();
       if (err?.name === 'NotAllowedError') {
         addToast('error', 'Permissão de câmera negada. Vá em Configurações do navegador e permita o acesso à câmera.');
       } else if (err?.name === 'NotFoundError') {
