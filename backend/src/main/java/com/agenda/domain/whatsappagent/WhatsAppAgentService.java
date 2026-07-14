@@ -22,14 +22,17 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 /**
  * Ponto de entrada do agente conversacional: recebe o telefone + texto de
@@ -56,6 +59,7 @@ public class WhatsAppAgentService {
     private final RespostaFormatterService respostaFormatter;
     private final WhatsAppService whatsAppService;
     private final RateLimiterService rateLimiter;
+    private final PlatformTransactionManager transactionManager;
 
     /**
      * Teto de mensagens por REMETENTE (telefone): 15 a cada 5 minutos.
@@ -81,9 +85,10 @@ public class WhatsAppAgentService {
      * (poucos segundos) e este método pode levar mais que isso (chamada à
      * LLM + consultas ao banco). Roda na thread pool assíncrona padrão do
      * Spring (ver {@code @EnableAsync} em {@code AgendaApplication}).
+     * <p>
+     * <b>Sem {@code @Transactional}</b> — de propósito. Ver {@link #processar}.
      */
     @Async
-    @Transactional(readOnly = true)
     public void processarMensagem(String telefoneOrigem, String textoMensagem) {
         if (!rateLimiter.tentarConsumir("wa:" + telefoneOrigem, WEBHOOK_MAX_MENSAGENS, WEBHOOK_JANELA)) {
             // Teto por remetente atingido: descarta em silêncio (sem chamar a IA
@@ -107,7 +112,6 @@ public class WhatsAppAgentService {
      * como perceber o porquê.
      */
     @Async
-    @Transactional(readOnly = true)
     public void processarTranscricao(String telefoneOrigem, String transcricao) {
         processar(telefoneOrigem, transcricao, true);
     }
@@ -117,37 +121,83 @@ public class WhatsAppAgentService {
      * transcrito). Não lança exceção — toda falha interna resulta numa mensagem
      * de erro amigável ao cliente, para nunca deixar o WhatsApp "no vácuo"
      * depois de uma pergunta.
+     * <p>
+     * <b>As transações são curtas e explícitas, e a chamada à LLM fica FORA
+     * delas.</b> Isso não é estilo, é o que impede o app inteiro de travar: o
+     * Hibernate pega uma conexão do pool na primeira query e só a devolve no
+     * fim da transação. Com um {@code @Transactional} envolvendo o método
+     * todo, a conexão ficava presa durante a chamada à Anthropic — que tem
+     * read timeout de 30s. O pool tem 5 conexões e o pool assíncrono do Spring
+     * tem 8 threads: numa lentidão da LLM, as 5 conexões acabavam, e as
+     * requisições web normais e o scheduler ficavam sem banco. Não é o bot que
+     * cai — é o sistema. O {@link WhatsAppAudioService} já se estruturou para
+     * fugir exatamente disso; aqui o caminho de texto fazia o oposto.
      */
     private void processar(String telefoneOrigem, String textoMensagem, boolean origemAudio) {
-        Optional<PreferenciaNotificacao> preferenciaOpt = buscarPreferenciaPorTelefone(telefoneOrigem);
+        // 1) Transação curta: só identifica quem mandou a mensagem.
+        Remetente remetente = emTransacaoDeLeitura(
+                () -> buscarPreferenciaPorTelefone(telefoneOrigem).map(Remetente::de).orElse(null));
 
-        if (preferenciaOpt.isEmpty()) {
+        if (remetente == null) {
             log.info("[WHATSAPP-AGENTE] Telefone {} não reconhecido, ignorando consulta.", mascarar(telefoneOrigem));
             whatsAppService.enviarMensagemTexto(telefoneOrigem,
                     "Não localizei esse número no nosso cadastro. Fale com o administrador da sua empresa para vincular seu WhatsApp.");
             return;
         }
 
-        PreferenciaNotificacao pref = preferenciaOpt.get();
-        UUID empresaId = pref.getUsuario().getEmpresa().getId();
-
         try {
-            FiltrosAgente filtrosAnteriores = ultimaConsultaPorUsuario.get(pref.getUsuario().getId());
+            // 2) Sem transação nenhuma aberta: a chamada paga e lenta à LLM.
+            FiltrosAgente filtrosAnteriores = ultimaConsultaPorUsuario.get(remetente.usuarioId());
             ResultadoClassificacao resultado = classifierService.classificar(textoMensagem, filtrosAnteriores);
-            log.info("[WHATSAPP-AGENTE] Usuário {} | intenção classificada: {}", pref.getUsuario().getId(), resultado.getIntencao());
+            log.info("[WHATSAPP-AGENTE] Usuário {} | intenção classificada: {}", remetente.usuarioId(), resultado.getIntencao());
 
-            String resposta = rotear(empresaId, pref, resultado);
+            // 3) Transação nova, também curta: as consultas financeiras.
+            String resposta = emTransacaoDeLeitura(() -> rotear(remetente.empresaId(), remetente, resultado));
+
             if (origemAudio) {
                 resposta = "🎧 Entendi: \"" + textoMensagem + "\"\n\n" + resposta;
             }
+            // Envio ao WhatsApp também é HTTP — fica fora da transação pelo mesmo motivo.
             whatsAppService.enviarMensagemTexto(telefoneOrigem, resposta);
 
         } catch (Exception e) {
             log.error("[WHATSAPP-AGENTE] Erro ao processar mensagem do usuário {}: {}",
-                    pref.getUsuario().getId(), e.getMessage(), e);
+                    remetente.usuarioId(), e.getMessage(), e);
             whatsAppService.enviarMensagemTexto(telefoneOrigem,
                     "Tive um problema para consultar isso agora. Tenta de novo em alguns instantes.");
         }
+    }
+
+    /**
+     * O que precisamos saber do remetente, já extraído da entidade JPA DENTRO
+     * da transação que a carregou.
+     * <p>
+     * Existe justamente para o resto do fluxo não depender de uma entidade
+     * viva: fora da transação ela estaria destacada, e o primeiro acesso a um
+     * campo lazy ({@code usuario}, {@code lojaIds}) estouraria
+     * {@code LazyInitializationException}. Com um record imutável, o problema
+     * não tem como acontecer.
+     */
+    private record Remetente(UUID usuarioId, UUID empresaId, Set<UUID> lojaIds) {
+        static Remetente de(PreferenciaNotificacao p) {
+            return new Remetente(
+                    p.getUsuario().getId(),
+                    p.getUsuario().getEmpresa().getId(),
+                    Set.copyOf(p.getLojaIds())); // copyOf força o carregamento da coleção lazy
+        }
+    }
+
+    /**
+     * Abre uma transação de leitura só pelo tempo da consulta e a fecha em
+     * seguida — devolvendo a conexão ao pool antes de qualquer chamada HTTP.
+     * Um {@code TransactionTemplate} em vez de {@code @Transactional} porque
+     * este método é chamado de dentro da própria classe, e aí o proxy do Spring
+     * seria contornado: a anotação simplesmente não valeria.
+     */
+    private <T> T emTransacaoDeLeitura(Supplier<T> consulta) {
+        var template = new TransactionTemplate(transactionManager);
+        template.setReadOnly(true);
+        return template.execute(status -> consulta.get());
     }
 
     /**
@@ -196,7 +246,7 @@ public class WhatsAppAgentService {
         return variantes;
     }
 
-    private String rotear(UUID empresaId, PreferenciaNotificacao pref, ResultadoClassificacao resultado) {
+    private String rotear(UUID empresaId, Remetente remetente, ResultadoClassificacao resultado) {
         FiltrosAgente filtros = resultado.getFiltros();
         UUID lojaId = resolverLoja(empresaId, filtros.getLoja());
 
@@ -206,7 +256,7 @@ public class WhatsAppAgentService {
         }
 
         // Loja mencionada existe, mas o usuário não tem acesso a ela via suas preferências.
-        if (lojaId != null && !pref.getLojaIds().isEmpty() && !pref.getLojaIds().contains(lojaId)) {
+        if (lojaId != null && !remetente.lojaIds().isEmpty() && !remetente.lojaIds().contains(lojaId)) {
             return "Você não tem acesso à loja \"" + filtros.getLoja() + "\" pelas suas permissões atuais.";
         }
 
@@ -220,13 +270,13 @@ public class WhatsAppAgentService {
                 // Precisa re-resolver a loja pois o merge pode ter trazido um nome de
                 // loja diferente do que já foi resolvido acima.
                 boolean refinamentoExplicito = resultado.getIntencao() == IntencaoAgente.REFINAR_ULTIMA_CONSULTA;
-                FiltrosAgente filtrosMesclados = mesclarComUltimaConsulta(pref.getUsuario().getId(), filtros, refinamentoExplicito);
+                FiltrosAgente filtrosMesclados = mesclarComUltimaConsulta(remetente.usuarioId(), filtros, refinamentoExplicito);
                 UUID lojaIdMesclada = filtrosMesclados == filtros ? lojaId : resolverLoja(empresaId, filtrosMesclados.getLoja());
-                yield consultarPendencias(empresaId, pref, lojaIdMesclada, filtrosMesclados);
+                yield consultarPendencias(empresaId, remetente, lojaIdMesclada, filtrosMesclados);
             }
-            case OBTER_DADOS_PAGAMENTO -> obterDadosPagamento(empresaId, pref, lojaId, filtros);
-            case OBTER_DADOS_CHEQUE -> obterDadosCheque(empresaId, pref, lojaId, filtros);
-            case DETALHAR_ULTIMA_CONSULTA -> detalharUltimaConsulta(empresaId, pref);
+            case OBTER_DADOS_PAGAMENTO -> obterDadosPagamento(empresaId, remetente, lojaId, filtros);
+            case OBTER_DADOS_CHEQUE -> obterDadosCheque(empresaId, remetente, lojaId, filtros);
+            case DETALHAR_ULTIMA_CONSULTA -> detalharUltimaConsulta(empresaId, remetente);
             case SAUDACAO_AJUDA -> respostaFormatter.mensagemAjuda();
             case NAO_ENTENDIDO -> respostaFormatter.mensagemNaoEntendido();
         };
@@ -239,8 +289,8 @@ public class WhatsAppAgentService {
     /** Acima desse total de itens, a resposta vira resumo por loja em vez de listar cada item. */
     private static final int LIMITE_ITENS_MODO_DETALHADO = 8;
 
-    private String consultarPendencias(UUID empresaId, PreferenciaNotificacao pref, UUID lojaId, FiltrosAgente filtros) {
-        return consultarPendencias(empresaId, pref, lojaId, filtros, false);
+    private String consultarPendencias(UUID empresaId, Remetente remetente, UUID lojaId, FiltrosAgente filtros) {
+        return consultarPendencias(empresaId, remetente, lojaId, filtros, false);
     }
 
     /**
@@ -248,7 +298,7 @@ public class WhatsAppAgentService {
      *        {@code DETALHAR_ULTIMA_CONSULTA} — força a lista completa
      *        mesmo que o volume normalmente cairia no modo resumido.
      */
-    private String consultarPendencias(UUID empresaId, PreferenciaNotificacao pref, UUID lojaId, FiltrosAgente filtros, boolean forcarDetalhado) {
+    private String consultarPendencias(UUID empresaId, Remetente remetente, UUID lojaId, FiltrosAgente filtros, boolean forcarDetalhado) {
         PeriodoResolvido periodo = resolverPeriodo(filtros);
         FiltroStatusAgente filtroStatus = filtros.getFiltroStatus() != null ? filtros.getFiltroStatus() : FiltroStatusAgente.PENDENTE;
         // "incluirPagos" (nome antigo do campo) só existe agora como conceito derivado,
@@ -270,19 +320,19 @@ public class WhatsAppAgentService {
             StatusBoleto status = precisaBuscarTudo ? null : StatusBoleto.PENDENTE;
             boletos = boletoRepository.findAll(BoletoSpecification.comFiltros(
                     empresaId, lojaId, status, periodo.de(), periodo.ate(), null));
-            boletos = filtrarPorLojasPermitidas(boletos, pref, Boleto::getLoja);
+            boletos = filtrarPorLojasPermitidas(boletos, remetente, Boleto::getLoja);
         }
         if (tipo == null || tipo == TipoPagamentoAgente.PIX) {
             StatusPix status = precisaBuscarTudo ? null : StatusPix.PENDENTE;
             pixs = pixRepository.findAll(PagamentoPixSpecification.comFiltros(
                     empresaId, lojaId, status, periodo.de(), periodo.ate(), null));
-            pixs = filtrarPorLojasPermitidas(pixs, pref, PagamentoPix::getLoja);
+            pixs = filtrarPorLojasPermitidas(pixs, remetente, PagamentoPix::getLoja);
         }
         if (tipo == null || tipo == TipoPagamentoAgente.CHEQUE) {
             StatusCheque status = precisaBuscarTudo ? null : StatusCheque.PENDENTE;
             cheques = chequeRepository.findAll(ChequeSpecification.comFiltros(
                     empresaId, lojaId, status, periodo.de(), periodo.ate(), null));
-            cheques = filtrarPorLojasPermitidas(cheques, pref, Cheque::getLoja);
+            cheques = filtrarPorLojasPermitidas(cheques, remetente, Cheque::getLoja);
         }
 
         if (filtroStatus == FiltroStatusAgente.PAGO) {
@@ -310,16 +360,16 @@ public class WhatsAppAgentService {
         // Guarda os filtros desta consulta (bem-sucedida) para uma eventual mensagem
         // curta de refinamento logo em seguida ("e da loja centro?") poder herdar
         // o restante dos filtros — ver mesclarComUltimaConsulta.
-        guardarUltimaConsulta(pref.getUsuario().getId(), filtros);
+        guardarUltimaConsulta(remetente.usuarioId(), filtros);
 
         if (modoResumido) {
             // Guarda também para o próximo "manda detalhado" poder reexecutar
             // exatamente a mesma busca, sem o cliente precisar repetir tudo.
-            guardarUltimaConsultaResumida(pref.getUsuario().getId(), filtros);
+            guardarUltimaConsultaResumida(remetente.usuarioId(), filtros);
             return respostaFormatter.formatarResumoPorLoja(boletos, pixs, cheques, periodo.descricao(), incluirPagos);
         }
 
-        limparUltimaConsultaResumida(pref.getUsuario().getId());
+        limparUltimaConsultaResumida(remetente.usuarioId());
 
         // "Detalhar" pode ter sido chamado sobre um resumo com muitos itens —
         // uma lista completa de, digamos, 143 itens ultrapassaria o limite de
@@ -501,8 +551,8 @@ public class WhatsAppAgentService {
                 .build();
     }
 
-    private String detalharUltimaConsulta(UUID empresaId, PreferenciaNotificacao pref) {
-        UUID usuarioId = pref.getUsuario().getId();
+    private String detalharUltimaConsulta(UUID empresaId, Remetente remetente) {
+        UUID usuarioId = remetente.usuarioId();
 
         // Detalhe congelado de um lembrete automático recente tem prioridade:
         // reproduz item a item exatamente o que o lembrete resumiu, sem
@@ -518,7 +568,7 @@ public class WhatsAppAgentService {
         }
 
         UUID lojaId = resolverLoja(empresaId, filtrosAnteriores.getLoja());
-        String resposta = consultarPendencias(empresaId, pref, lojaId, filtrosAnteriores, true);
+        String resposta = consultarPendencias(empresaId, remetente, lojaId, filtrosAnteriores, true);
         limparUltimaConsultaResumida(usuarioId);
         return resposta;
     }
@@ -527,7 +577,7 @@ public class WhatsAppAgentService {
     // OBTER_DADOS_PAGAMENTO (código de barras / chave PIX)
     // ---------------------------------------------------------------
 
-    private String obterDadosPagamento(UUID empresaId, PreferenciaNotificacao pref, UUID lojaId, FiltrosAgente filtros) {
+    private String obterDadosPagamento(UUID empresaId, Remetente remetente, UUID lojaId, FiltrosAgente filtros) {
         PeriodoResolvido periodo = resolverPeriodo(filtros);
         TipoPagamentoAgente tipo = filtros.getTipoPagamento();
 
@@ -537,12 +587,12 @@ public class WhatsAppAgentService {
         if (tipo == null || tipo == TipoPagamentoAgente.BOLETO) {
             boletosCandidatos = boletoRepository.findAll(BoletoSpecification.comFiltros(
                     empresaId, lojaId, StatusBoleto.PENDENTE, periodo.de(), periodo.ate(), filtros.getFornecedor()));
-            boletosCandidatos = filtrarPorLojasPermitidas(boletosCandidatos, pref, Boleto::getLoja);
+            boletosCandidatos = filtrarPorLojasPermitidas(boletosCandidatos, remetente, Boleto::getLoja);
         }
         if (tipo == null || tipo == TipoPagamentoAgente.PIX) {
             pixCandidatos = pixRepository.findAll(PagamentoPixSpecification.comFiltros(
                     empresaId, lojaId, StatusPix.PENDENTE, periodo.de(), periodo.ate(), filtros.getFornecedor()));
-            pixCandidatos = filtrarPorLojasPermitidas(pixCandidatos, pref, PagamentoPix::getLoja);
+            pixCandidatos = filtrarPorLojasPermitidas(pixCandidatos, remetente, PagamentoPix::getLoja);
         }
 
         int totalCandidatos = boletosCandidatos.size() + pixCandidatos.size();
@@ -564,12 +614,12 @@ public class WhatsAppAgentService {
     // OBTER_DADOS_CHEQUE
     // ---------------------------------------------------------------
 
-    private String obterDadosCheque(UUID empresaId, PreferenciaNotificacao pref, UUID lojaId, FiltrosAgente filtros) {
+    private String obterDadosCheque(UUID empresaId, Remetente remetente, UUID lojaId, FiltrosAgente filtros) {
         PeriodoResolvido periodo = resolverPeriodo(filtros);
 
         List<Cheque> candidatos = chequeRepository.findAll(ChequeSpecification.comFiltros(
                 empresaId, lojaId, null, periodo.de(), periodo.ate(), filtros.getFornecedor()));
-        candidatos = filtrarPorLojasPermitidas(candidatos, pref, Cheque::getLoja);
+        candidatos = filtrarPorLojasPermitidas(candidatos, remetente, Cheque::getLoja);
 
         if (candidatos.isEmpty()) {
             return "Não encontrei nenhum cheque com esses critérios.";
@@ -615,12 +665,12 @@ public class WhatsAppAgentService {
      * (mesma regra do {@code NotificacaoWhatsAppScheduler}: lojaIds vazio
      * = sem restrição adicional, igual ao comportamento já existente).
      */
-    private <T> List<T> filtrarPorLojasPermitidas(List<T> itens, PreferenciaNotificacao pref, java.util.function.Function<T, Loja> lojaExtractor) {
-        if (pref.getLojaIds().isEmpty()) {
+    private <T> List<T> filtrarPorLojasPermitidas(List<T> itens, Remetente remetente, java.util.function.Function<T, Loja> lojaExtractor) {
+        if (remetente.lojaIds().isEmpty()) {
             return itens;
         }
         return itens.stream()
-                .filter(item -> pref.getLojaIds().contains(lojaExtractor.apply(item).getId()))
+                .filter(item -> remetente.lojaIds().contains(lojaExtractor.apply(item).getId()))
                 .toList();
     }
 

@@ -18,7 +18,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
+import org.mockito.InOrder;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
@@ -54,6 +56,10 @@ class WhatsAppAgentServiceTest {
     @Mock private ChequeRepository chequeRepository;
     @Mock private IntentClassifierService classifierService;
     @Mock private WhatsAppService whatsAppService;
+    // O TransactionTemplate executa o callback direto quando o gerenciador é um
+    // mock — é só a fronteira da transação que some, e ela não é o objeto destes
+    // testes (aqui os repositórios já são mocks).
+    @Mock private PlatformTransactionManager transactionManager;
 
     private WhatsAppAgentService agentService;
     private RespostaFormatterService respostaFormatter;
@@ -67,7 +73,8 @@ class WhatsAppAgentServiceTest {
         respostaFormatter = new RespostaFormatterService();
         agentService = new WhatsAppAgentService(
                 preferenciaRepository, lojaRepository, boletoRepository, pixRepository,
-                chequeRepository, classifierService, respostaFormatter, whatsAppService, new RateLimiterService());
+                chequeRepository, classifierService, respostaFormatter, whatsAppService,
+                new RateLimiterService(), transactionManager);
 
         empresa = Empresa.builder().id(UUID.randomUUID()).nome("Empresa Teste").build();
         usuario = Usuario.builder().id(UUID.randomUUID()).nome("Maria").empresa(empresa).build();
@@ -107,6 +114,33 @@ class WhatsAppAgentServiceTest {
 
         verify(whatsAppService).enviarMensagemTexto(eq("5583999990000"), contains("Posso te ajudar"));
         verifyNoInteractions(boletoRepository, pixRepository, chequeRepository);
+    }
+
+    /**
+     * O teste que protege o app de cair inteiro. O Hibernate segura a conexão do
+     * pool (que tem 5) até o fim da transação; se a chamada à Anthropic — read
+     * timeout de 30s — acontecer DENTRO dela, uma lentidão da LLM esgota o pool e
+     * derruba também as requisições web e o scheduler. A ordem verificada aqui é
+     * a garantia de que a conexão já voltou pro pool antes de a IA ser chamada.
+     */
+    @Test
+    void chamadaAIA_deveAcontecerEntreAsTransacoes_nuncaDentroDeUma() {
+        when(preferenciaRepository.findByTelefoneNormalizadoIn(List.of("5583999990000", "558399990000"))).thenReturn(List.of(preferencia));
+        when(classifierService.classificar(any(), any())).thenReturn(
+                ResultadoClassificacao.builder()
+                        .intencao(IntencaoAgente.SAUDACAO_AJUDA)
+                        .filtros(FiltrosAgente.builder().periodo(TipoPeriodoAgente.SEM_FILTRO).build())
+                        .build()
+        );
+
+        agentService.processarMensagem("5583999990000", "oi");
+
+        InOrder ordem = inOrder(transactionManager, classifierService);
+        ordem.verify(transactionManager).getTransaction(any()); // 1ª transação: identifica o remetente
+        ordem.verify(transactionManager).commit(any());         // fecha — devolve a conexão ao pool
+        ordem.verify(classifierService).classificar(any(), any()); // IA chamada SEM conexão na mão
+        ordem.verify(transactionManager).getTransaction(any()); // 2ª transação: consultas financeiras
+        ordem.verify(transactionManager).commit(any());
     }
 
     @Test
