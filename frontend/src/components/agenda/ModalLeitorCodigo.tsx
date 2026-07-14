@@ -3,7 +3,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import Tesseract from 'tesseract.js';
 import { BrowserMultiFormatReader, IScannerControls } from '@zxing/browser';
 import { BarcodeFormat, DecodeHintType } from '@zxing/library';
-import { X, Camera, Image, FileText, Loader2 } from 'lucide-react';
+import { X, Camera, Image, FileText, Loader2, RotateCw } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useToastStore } from '../../store/toastStore';
@@ -242,9 +242,19 @@ export function ModalLeitorCodigo({
   const [paginaCarregando, setPaginaCarregando] = useState<number | null>(null);
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [cameraStarted, setCameraStarted] = useState(false);
+  // Safari/iPhone não implementa screen.orientation.lock() — quando o lock
+  // falha, o giro passa a ser manual (o usuário vira o aparelho e a interface
+  // acompanha pelo botão de girar).
+  const [giroManual, setGiroManual] = useState(false);
+  const [girado, setGirado] = useState(false);
+  const [paisagem, setPaisagem] = useState(false);
 
   const resultadoRef = useRef<string | null>(null);
   const scannerRef = useRef<HTMLDivElement>(null);
+  // Alvo do fullscreen. Precisa envolver o vídeo E o overlay: em fullscreen o
+  // navegador só renderiza o elemento e seus descendentes — pedir fullscreen só
+  // no container do vídeo faria a moldura e o botão de fechar sumirem.
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scannerControlsRef = useRef<IScannerControls | null>(null);
   const cameraRunningRef = useRef(false);
@@ -288,6 +298,29 @@ export function ModalLeitorCodigo({
   }
 
   // ─── Câmera ───────────────────────────────────────────────────────────────
+
+  /**
+   * Deita a tela ao ligar a câmera. O ganho real não é estético: com o celular
+   * em pé a lente enxerga um retângulo alto e estreito, e o código de barras
+   * (largo) só cabe se o usuário se afastar — de longe, cada barra recebe
+   * poucos pixels e a leitura falha. Deitado, o código atravessa o lado longo
+   * do sensor e dá pra encostar no boleto.
+   *
+   * O lock só é permitido em fullscreen de verdade (daí o requestFullscreen
+   * antes) e não existe no Safari/iPhone — lá caímos no giro manual.
+   */
+  const entrarModoPaisagem = useCallback(async () => {
+    try {
+      await wrapperRef.current?.requestFullscreen();
+    } catch (_) {}
+    try {
+      await (screen.orientation as any).lock('landscape');
+      setGiroManual(false);
+    } catch (_) {
+      setGiroManual(true);
+    }
+  }, []);
+
   const pararCamera = useCallback(() => {
     cameraRunningRef.current = false;
     if (scannerControlsRef.current) {
@@ -298,7 +331,23 @@ export function ModalLeitorCodigo({
       scannerRef.current.innerHTML = '';
     }
     try { (screen.orientation as any).unlock(); } catch (_) {}
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    setGiroManual(false);
+    setGirado(false);
     setCameraStarted(false);
+  }, []);
+
+  // Se a página girar sozinha (Android, ou iPhone sem trava de rotação), a
+  // rotação manual por CSS viraria giro em dobro — desliga.
+  useEffect(() => {
+    const mq = window.matchMedia('(orientation: landscape)');
+    const atualizar = () => {
+      setPaisagem(mq.matches);
+      if (mq.matches) setGirado(false);
+    };
+    atualizar();
+    mq.addEventListener('change', atualizar);
+    return () => mq.removeEventListener('change', atualizar);
   }, []);
 
   useEffect(() => {
@@ -401,7 +450,7 @@ export function ModalLeitorCodigo({
       scannerControlsRef.current = controls;
       setCameraStarted(true);
       cameraRunningRef.current = true;
-      try { await (screen.orientation as any).lock('landscape'); } catch (_) {}
+      await entrarModoPaisagem();
       log('Câmera iniciada com sucesso');
     } catch (err: any) {
       log(`ERRO câmera: ${err?.name} - ${err?.message}`);
@@ -831,51 +880,80 @@ export function ModalLeitorCodigo({
           </div>
         </div>
 
-        {/* Container da câmera (tela cheia) */}
+        {/* Câmera em tela cheia: vídeo + overlay no MESMO elemento, que é o
+            alvo do fullscreen — fora dele, nada é renderizado em fullscreen.
+            Quando o giro é manual (Safari), o conjunto todo é rotacionado 90°
+            para acompanhar o celular deitado na mão do usuário. */}
         <div
-            ref={scannerRef}
-            id="scanner-container"
+            ref={wrapperRef}
             style={{
               position: 'fixed',
-              inset: 0,
               zIndex: cameraStarted ? 70 : -1,
               opacity: cameraStarted ? 1 : 0,
               visibility: cameraStarted ? 'visible' : 'hidden',
               background: '#000',
+              ...(girado
+                  ? {
+                    top: 0,
+                    left: 0,
+                    width: '100vh',
+                    height: '100vw',
+                    transformOrigin: 'top left',
+                    transform: 'rotate(90deg) translateY(-100%)',
+                  }
+                  : { inset: 0 }),
             }}
-        />
+        >
+          <div ref={scannerRef} id="scanner-container" className="absolute inset-0" />
 
-        {/* Overlay da câmera */}
-        {cameraStarted && (
-            <div className="fixed inset-0 z-[71]" style={{ pointerEvents: 'none' }}>
-              <button
-                  onClick={pararCamera}
-                  className="absolute top-4 right-4 z-10 pointer-events-auto p-2 rounded-full bg-black/50 text-white"
-              >
-                <X className="w-6 h-6" />
-              </button>
+          {cameraStarted && (
+              <div className="absolute inset-0 z-[71]" style={{ pointerEvents: 'none' }}>
+                <button
+                    onClick={pararCamera}
+                    className="absolute top-4 right-4 z-10 pointer-events-auto p-2 rounded-full bg-black/50 text-white"
+                >
+                  <X className="w-6 h-6" />
+                </button>
 
-              <div className="absolute top-0 left-0 right-0 px-4 py-3 bg-gradient-to-b from-black/60 to-transparent pointer-events-auto">
-                <span className="text-white text-sm">Alinhe o código na linha vermelha</span>
+                <div className="absolute top-0 left-0 right-0 px-4 py-3 bg-gradient-to-b from-black/60 to-transparent pointer-events-auto">
+                  <span className="text-white text-sm">
+                    {giroManual && !paisagem && !girado
+                        ? 'Vire o celular na horizontal para chegar mais perto do código'
+                        : 'Alinhe o código na linha vermelha'}
+                  </span>
+                </div>
+
+                <div className="absolute inset-0">
+                  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '35%', background: 'rgba(0,0,0,0.55)' }} />
+                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '35%', background: 'rgba(0,0,0,0.55)' }} />
+                  <div style={{ position: 'absolute', top: '35%', left: 0, width: '5%', height: '30%', background: 'rgba(0,0,0,0.55)' }} />
+                  <div style={{ position: 'absolute', top: '35%', right: 0, width: '5%', height: '30%', background: 'rgba(0,0,0,0.55)' }} />
+                  <div style={{ position: 'absolute', top: '35%', left: '5%', width: '90%', height: '30%', border: '2px solid #22c55e', borderRadius: 6, boxSizing: 'border-box' }} />
+                  <div style={{ position: 'absolute', top: '50%', left: '5%', width: '90%', height: '2px', background: '#ef4444', zIndex: 10 }} />
+                </div>
+
+                {/* Só aparece onde o giro automático não é possível (Safari) e a
+                    página continua em pé — ou seja, com a trava de rotação do
+                    iOS ligada, único caso em que virar o aparelho não basta. */}
+                {giroManual && !paisagem && (
+                    <button
+                        onClick={() => setGirado((g) => !g)}
+                        className="absolute bottom-6 left-1/2 -translate-x-1/2 pointer-events-auto flex items-center gap-2 px-4 py-2.5 rounded-full bg-white/90 text-slate-900 text-sm font-medium"
+                    >
+                      <RotateCw className="w-4 h-4" />
+                      {girado ? 'Desgirar tela' : 'Girar tela'}
+                    </button>
+                )}
+
+                {lendo && (
+                    <div className="absolute bottom-16 left-0 right-0 flex items-center justify-center gap-2 text-white text-sm">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Aguardando código...
+                    </div>
+                )}
               </div>
-
-              <div className="absolute inset-0">
-                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '35%', background: 'rgba(0,0,0,0.55)' }} />
-                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '35%', background: 'rgba(0,0,0,0.55)' }} />
-                <div style={{ position: 'absolute', top: '35%', left: 0, width: '5%', height: '30%', background: 'rgba(0,0,0,0.55)' }} />
-                <div style={{ position: 'absolute', top: '35%', right: 0, width: '5%', height: '30%', background: 'rgba(0,0,0,0.55)' }} />
-                <div style={{ position: 'absolute', top: '35%', left: '5%', width: '90%', height: '30%', border: '2px solid #22c55e', borderRadius: 6, boxSizing: 'border-box' }} />
-                <div style={{ position: 'absolute', top: '50%', left: '5%', width: '90%', height: '2px', background: '#ef4444', zIndex: 10 }} />
-              </div>
-
-              {lendo && (
-                  <div className="absolute bottom-16 left-0 right-0 flex items-center justify-center gap-2 text-white text-sm">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Aguardando código...
-                  </div>
-              )}
-            </div>
-        )}
+          )}
+        </div>
       </>
   );
 }
