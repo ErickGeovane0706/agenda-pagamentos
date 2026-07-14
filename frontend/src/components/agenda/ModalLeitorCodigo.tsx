@@ -3,7 +3,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import Tesseract from 'tesseract.js';
 import { BrowserMultiFormatReader, IScannerControls } from '@zxing/browser';
 import { BarcodeFormat, DecodeHintType } from '@zxing/library';
-import { X, Camera, Image, FileText, Loader2, RotateCw } from 'lucide-react';
+import { X, Camera, Image, FileText, Loader2, RotateCw, Check } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useToastStore } from '../../store/toastStore';
 
@@ -252,6 +252,9 @@ export function ModalLeitorCodigo({
   // Só vira true quando o ZXing já está decodificando — distinto de
   // cameraStarted, que sobe antes, assim que a tela cheia aparece.
   const [escaneando, setEscaneando] = useState(false);
+  // Código lido pela câmera, segurando o painel de sucesso até o celular voltar
+  // a ficar em pé — ver handleCodigoCamera.
+  const [codigoLido, setCodigoLido] = useState<string | null>(null);
   // Safari/iPhone não implementa screen.orientation.lock() — quando o lock
   // falha, o giro passa a ser manual (o usuário vira o aparelho e a interface
   // acompanha pelo botão de girar).
@@ -389,6 +392,7 @@ export function ModalLeitorCodigo({
     if (!aberto) {
       pararCamera();
       resultadoRef.current = null;
+      setCodigoLido(null);
       setPreviewUrl(null);
       setPaginasPDF([]);
       setPdfRef(null);
@@ -432,6 +436,43 @@ export function ModalLeitorCodigo({
     onCodigoLido(limpo);
     onFechar();
   }
+
+  /**
+   * Sucesso na leitura pela CÂMERA. Diferente das abas de imagem e PDF, aqui o
+   * celular está deitado na mão do usuário — e, fora do fullscreen, o navegador
+   * obedece ao aparelho: não há como forçar a página de volta a retrato. Fechar
+   * o modal agora descobriria o app em paisagem, onde as tabelas viram tabela de
+   * desktop e o formulário vira um cartão centralizado.
+   *
+   * Então o campo é preenchido na hora, mas um painel de sucesso fica por cima
+   * até o usuário endireitar o celular — o gesto natural depois de ler. Se o
+   * aparelho já estiver em pé (trava de rotação ligada), o painel fecha sozinho
+   * no mesmo instante e ninguém vê etapa nenhuma.
+   */
+  function handleCodigoCamera(codigo: string) {
+    const { tipo, valido } = identificarTipoDocumento(codigo);
+
+    if (!valido) {
+      handleCodigo(codigo); // cai no aviso + "Usar mesmo assim", dentro do modal
+      return;
+    }
+
+    addToast('success', `${tipo} lido com sucesso!`);
+    onCodigoLido(codigo);
+    setCodigoLido(codigo);
+  }
+
+  function concluirLeitura() {
+    setCodigoLido(null);
+    onFechar();
+  }
+
+  useEffect(() => {
+    if (codigoLido && !paisagem) {
+      concluirLeitura();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [codigoLido, paisagem]);
 
   async function iniciarCamera() {
     if (!scannerRef.current) return;
@@ -489,7 +530,7 @@ export function ModalLeitorCodigo({
               resultadoRef.current = apenasDigitos;
               controls.stop();
               pararCamera();
-              handleCodigo(apenasDigitos);
+              handleCodigoCamera(apenasDigitos);
             }
           }
       );
@@ -1001,6 +1042,25 @@ export function ModalLeitorCodigo({
               </div>
           )}
         </div>
+
+        {/* Painel de sucesso: cobre o app enquanto o celular ainda está deitado,
+            para que o layout de desktop nunca apareça. Fecha sozinho quando o
+            aparelho volta a ficar em pé. */}
+        {codigoLido && (
+            <div className="fixed inset-0 z-[80] bg-[#0c4a6e] text-white flex flex-col items-center justify-center gap-3 px-8 text-center">
+              <div className="w-16 h-16 rounded-full bg-white/15 flex items-center justify-center">
+                <Check className="w-9 h-9" />
+              </div>
+              <p className="text-xl font-bold">Código lido!</p>
+              <p className="text-sm text-white/70">Endireite o celular para continuar</p>
+              <button
+                  onClick={concluirLeitura}
+                  className="mt-3 px-6 py-2.5 rounded-xl bg-white text-[#0c4a6e] text-sm font-medium"
+              >
+                Continuar
+              </button>
+            </div>
+        )}
       </>
   );
 }
