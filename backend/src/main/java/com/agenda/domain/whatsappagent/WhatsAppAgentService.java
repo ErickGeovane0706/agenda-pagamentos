@@ -64,14 +64,17 @@ public class WhatsAppAgentService {
      * de IA com um flood. Keado por telefone (infalsificável, dentro do
      * payload já validado por HMAC no webhook), não por IP: o webhook chega
      * todo dos IPs da Meta, então IP aqui não distingue remetentes.
+     * <p>
+     * Visibilidade de pacote (não {@code private}) porque o
+     * {@link WhatsAppAudioService} consome o MESMO bucket, antes de pagar pela
+     * transcrição — ver {@link #processarTranscricao}.
      */
-    private static final int WEBHOOK_MAX_MENSAGENS = 15;
-    private static final Duration WEBHOOK_JANELA = Duration.ofMinutes(5);
+    static final int WEBHOOK_MAX_MENSAGENS = 15;
+    static final Duration WEBHOOK_JANELA = Duration.ofMinutes(5);
 
     /**
-     * Processa uma mensagem recebida do webhook. Não lança exceção — toda
-     * falha interna resulta numa mensagem de erro amigável ao cliente, para
-     * nunca deixar o WhatsApp "no vácuo" depois de uma pergunta.
+     * Processa uma mensagem de TEXTO recebida do webhook. Consome 1 token do
+     * teto por remetente.
      * <p>
      * {@code @Async}: o controller do webhook já respondeu HTTP 200 para a
      * Meta antes de chamar este método — a Meta exige resposta rápida
@@ -88,7 +91,34 @@ public class WhatsAppAgentService {
             log.warn("[WHATSAPP-AGENTE] Teto de mensagens por remetente atingido, ignorando: {}", mascarar(telefoneOrigem));
             return;
         }
+        processar(telefoneOrigem, textoMensagem, false);
+    }
 
+    /**
+     * Processa o TEXTO JÁ TRANSCRITO de uma mensagem de voz. Chamado pelo
+     * {@link WhatsAppAudioService} depois de baixar e transcrever o áudio.
+     * <p>
+     * NÃO consome o teto por remetente de novo: o {@code WhatsAppAudioService}
+     * já consumiu o token do mesmo bucket antes de pagar pela transcrição.
+     * Cada mensagem — texto ou áudio — custa exatamente 1 token.
+     * <p>
+     * A resposta sai com a transcrição ecoada na frente: uma transcrição errada
+     * faria o agente responder outra pergunta, e sem o eco o cliente não teria
+     * como perceber o porquê.
+     */
+    @Async
+    @Transactional(readOnly = true)
+    public void processarTranscricao(String telefoneOrigem, String transcricao) {
+        processar(telefoneOrigem, transcricao, true);
+    }
+
+    /**
+     * Corpo compartilhado pelos dois fluxos (texto digitado e áudio já
+     * transcrito). Não lança exceção — toda falha interna resulta numa mensagem
+     * de erro amigável ao cliente, para nunca deixar o WhatsApp "no vácuo"
+     * depois de uma pergunta.
+     */
+    private void processar(String telefoneOrigem, String textoMensagem, boolean origemAudio) {
         Optional<PreferenciaNotificacao> preferenciaOpt = buscarPreferenciaPorTelefone(telefoneOrigem);
 
         if (preferenciaOpt.isEmpty()) {
@@ -107,6 +137,9 @@ public class WhatsAppAgentService {
             log.info("[WHATSAPP-AGENTE] Usuário {} | intenção classificada: {}", pref.getUsuario().getId(), resultado.getIntencao());
 
             String resposta = rotear(empresaId, pref, resultado);
+            if (origemAudio) {
+                resposta = "🎧 Entendi: \"" + textoMensagem + "\"\n\n" + resposta;
+            }
             whatsAppService.enviarMensagemTexto(telefoneOrigem, resposta);
 
         } catch (Exception e) {

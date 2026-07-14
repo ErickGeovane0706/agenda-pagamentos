@@ -69,9 +69,10 @@ public class WhatsAppWebhookPayload {
         private String id;
         /** Número de quem enviou a mensagem, só dígitos (ex.: "5583999999999"). */
         private String from;
-        /** "text", "audio", "image", "button", etc. — só "text" é tratado na v1. */
+        /** "text", "audio", "image", "button", etc. — só "text" e "audio" são tratados. */
         private String type;
         private TextBody text;
+        private AudioBody audio;
     }
 
     @Getter
@@ -79,5 +80,18 @@ public class WhatsAppWebhookPayload {
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class TextBody {
         private String body;
+    }
+
+    /**
+     * Bloco presente quando {@code type == "audio"} (mensagem de voz). A Meta
+     * NÃO manda o áudio no webhook — só um ID de mídia, que precisa ser
+     * trocado pelos bytes em duas chamadas à Graph API (ver
+     * {@code WhatsAppMediaDownloader}).
+     */
+    @Getter
+    @Setter
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class AudioBody {
+        private String id;
     }
 }

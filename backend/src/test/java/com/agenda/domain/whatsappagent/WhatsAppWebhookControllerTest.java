@@ -24,6 +24,7 @@ class WhatsAppWebhookControllerTest {
     private MockMvc mockMvc;
 
     @MockBean private WhatsAppAgentService agentService;
+    @MockBean private WhatsAppAudioService audioService;
     @MockBean private WhatsAppSignatureValidator signatureValidator;
     @MockBean private WebhookIdempotencyService idempotencyService;
     @MockBean private JwtService jwtService;
@@ -32,6 +33,17 @@ class WhatsAppWebhookControllerTest {
     private static final String PAYLOAD =
         "{\"entry\":[{\"changes\":[{\"field\":\"messages\",\"value\":{\"messages\":["
         + "{\"id\":\"wamid.ABC\",\"from\":\"5583999999999\",\"type\":\"text\",\"text\":{\"body\":\"oi\"}}"
+        + "]}}]}]}";
+
+    private static final String PAYLOAD_AUDIO =
+        "{\"entry\":[{\"changes\":[{\"field\":\"messages\",\"value\":{\"messages\":["
+        + "{\"id\":\"wamid.AUD\",\"from\":\"5583999999999\",\"type\":\"audio\","
+        + "\"audio\":{\"id\":\"media-123\",\"mime_type\":\"audio/ogg; codecs=opus\",\"voice\":true}}"
+        + "]}}]}]}";
+
+    private static final String PAYLOAD_IMAGEM =
+        "{\"entry\":[{\"changes\":[{\"field\":\"messages\",\"value\":{\"messages\":["
+        + "{\"id\":\"wamid.IMG\",\"from\":\"5583999999999\",\"type\":\"image\",\"image\":{\"id\":\"media-999\"}}"
         + "]}}]}]}";
 
     @Test
@@ -76,5 +88,55 @@ class WhatsAppWebhookControllerTest {
                 .andExpect(status().isOk());
 
         verify(agentService, never()).processarMensagem(any(), any());
+    }
+
+    @Test
+    void post_MensagemDeAudio_DeveDelegarParaOAudioServiceComOMediaId() throws Exception {
+        when(signatureValidator.isConfigurado()).thenReturn(true);
+        when(signatureValidator.assinaturaValida(any(), any())).thenReturn(true);
+        when(idempotencyService.registrarSeNovo("WHATSAPP", "wamid.AUD")).thenReturn(true);
+
+        mockMvc.perform(post("/webhook/whatsapp")
+                        .with(user("webhook")).with(csrf())
+                        .header("X-Hub-Signature-256", "sha256=qualquer")
+                        .contentType(MediaType.APPLICATION_JSON).content(PAYLOAD_AUDIO))
+                .andExpect(status().isOk());
+
+        verify(audioService).processarAudio("5583999999999", "media-123");
+        verify(agentService, never()).processarMensagem(any(), any());
+    }
+
+    /**
+     * Reentrega da Meta não pode disparar download + transcrição de novo —
+     * ambos são pagos. O dedup roda antes do roteamento por tipo.
+     */
+    @Test
+    void post_AudioDuplicado_NaoDeveBaixarNemTranscreverDeNovo() throws Exception {
+        when(signatureValidator.isConfigurado()).thenReturn(true);
+        when(signatureValidator.assinaturaValida(any(), any())).thenReturn(true);
+        when(idempotencyService.registrarSeNovo("WHATSAPP", "wamid.AUD")).thenReturn(false);
+
+        mockMvc.perform(post("/webhook/whatsapp")
+                        .with(user("webhook")).with(csrf())
+                        .header("X-Hub-Signature-256", "sha256=qualquer")
+                        .contentType(MediaType.APPLICATION_JSON).content(PAYLOAD_AUDIO))
+                .andExpect(status().isOk());
+
+        verify(audioService, never()).processarAudio(any(), any());
+    }
+
+    @Test
+    void post_TipoNaoSuportado_DeveResponder200ESerIgnorado() throws Exception {
+        when(signatureValidator.isConfigurado()).thenReturn(true);
+        when(signatureValidator.assinaturaValida(any(), any())).thenReturn(true);
+
+        mockMvc.perform(post("/webhook/whatsapp")
+                        .with(user("webhook")).with(csrf())
+                        .header("X-Hub-Signature-256", "sha256=qualquer")
+                        .contentType(MediaType.APPLICATION_JSON).content(PAYLOAD_IMAGEM))
+                .andExpect(status().isOk());
+
+        verify(agentService, never()).processarMensagem(any(), any());
+        verify(audioService, never()).processarAudio(any(), any());
     }
 }

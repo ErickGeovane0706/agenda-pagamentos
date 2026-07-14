@@ -41,6 +41,7 @@ public class WhatsAppWebhookController {
     private static final String ORIGEM = "WHATSAPP";
 
     private final WhatsAppAgentService agentService;
+    private final WhatsAppAudioService audioService;
     private final WhatsAppSignatureValidator signatureValidator;
     private final WebhookIdempotencyService idempotencyService;
     private final ObjectMapper objectMapper;
@@ -98,7 +99,7 @@ public class WhatsAppWebhookController {
 
         try {
             var payload = objectMapper.readValue(corpo, WhatsAppWebhookPayload.class);
-            extrairMensagensDeTexto(payload).forEach(this::processarSeNova);
+            extrairMensagensSuportadas(payload).forEach(this::processarSeNova);
         } catch (Exception e) {
             // Mesmo em erro de parsing/roteamento, respondemos 200 — devolver erro
             // para a Meta só causaria reenvios repetidos do mesmo payload malformado.
@@ -110,6 +111,10 @@ public class WhatsAppWebhookController {
     /**
      * Processa a mensagem só se ainda não foi vista (dedup por {@code id}).
      * Sem {@code id} (payload atípico), processa — não há como deduplicar.
+     * <p>
+     * O dedup vem ANTES do roteamento por tipo de propósito: uma reentrega da
+     * Meta de um áudio não pode disparar download + transcrição (ambos pagos)
+     * de novo.
      */
     private void processarSeNova(WhatsAppWebhookPayload.IncomingMessage msg) {
         String id = msg.getId();
@@ -117,10 +122,16 @@ public class WhatsAppWebhookController {
             log.info("[WHATSAPP-WEBHOOK] Mensagem duplicada ignorada: {}", id);
             return;
         }
-        agentService.processarMensagem(msg.getFrom(), msg.getText().getBody());
+
+        if (TIPO_TEXTO.equals(msg.getType())) {
+            agentService.processarMensagem(msg.getFrom(), msg.getText().getBody());
+        } else {
+            // Já filtrado por suportada(): só sobra áudio.
+            audioService.processarAudio(msg.getFrom(), msg.getAudio().getId());
+        }
     }
 
-    private List<WhatsAppWebhookPayload.IncomingMessage> extrairMensagensDeTexto(WhatsAppWebhookPayload payload) {
+    private List<WhatsAppWebhookPayload.IncomingMessage> extrairMensagensSuportadas(WhatsAppWebhookPayload payload) {
         if (payload.getEntry() == null) {
             return List.of();
         }
@@ -131,9 +142,24 @@ public class WhatsAppWebhookController {
                 .map(WhatsAppWebhookPayload.Change::getValue)
                 .filter(value -> value.getMessages() != null)
                 .flatMap(value -> value.getMessages().stream())
-                // Só "text" é suportado na v1 — áudio/imagem/botão são ignorados
-                // (poderiam, no futuro, virar uma etapa de transcrição antes do classificador).
-                .filter(msg -> "text".equals(msg.getType()) && msg.getText() != null && msg.getText().getBody() != null)
+                .filter(this::suportada)
                 .toList();
+    }
+
+    private static final String TIPO_TEXTO = "text";
+    private static final String TIPO_AUDIO = "audio";
+
+    /**
+     * Texto e áudio são tratados; imagem, botão, localização, etc. ainda são
+     * ignorados em silêncio (a Meta não reenvia por isso — só espera o 200).
+     */
+    private boolean suportada(WhatsAppWebhookPayload.IncomingMessage msg) {
+        if (TIPO_TEXTO.equals(msg.getType())) {
+            return msg.getText() != null && msg.getText().getBody() != null;
+        }
+        if (TIPO_AUDIO.equals(msg.getType())) {
+            return msg.getAudio() != null && msg.getAudio().getId() != null;
+        }
+        return false;
     }
 }
