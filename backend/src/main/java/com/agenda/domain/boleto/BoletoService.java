@@ -167,8 +167,9 @@ public class BoletoService {
 
     /**
      * Exclui o boleto fisicamente (DELETE).
-     * Nota: o arquivo vinculado (se existir) não é removido do storage aqui;
-     * a deleção do arquivo deve ser chamada explicitamente pelo controller.
+     * Remove o arquivo anexo do storage antes, se houver: sem isso o documento
+     * (que costuma trazer dado bancário) sobreviveria para sempre no bucket
+     * depois de o cliente apagar o boleto achando que apagou tudo.
      */
     @Transactional
     public void excluir(UUID id) {
@@ -176,6 +177,9 @@ public class BoletoService {
         var boleto = boletoRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Boleto não encontrado"));
         if (!boleto.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
+        if (boleto.getArquivoKey() != null) {
+            arquivoService.deletar(boleto.getArquivoKey());
+        }
         boletoRepository.delete(boleto);
         auditoriaService.registrar("EXCLUIR", "BOLETO", id, "Fornecedor: " + boleto.getFornecedor());
     }
