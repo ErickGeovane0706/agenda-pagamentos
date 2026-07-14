@@ -122,6 +122,34 @@ class ArquivoServiceTest {
         assertThat(key).endsWith(".pdf");
     }
 
+    /** A especificação do PDF permite lixo antes do %PDF- — scanners antigos usam isso. */
+    @Test
+    void aceitaPdfComLixoAntesDoCabecalho() throws Exception {
+        byte[] miolo = pdf();
+        byte[] comLixo = new byte[300 + miolo.length];
+        System.arraycopy(miolo, 0, comLixo, 300, miolo.length);
+
+        var arquivo = new MockMultipartFile("arquivo", "scan.pdf", "application/pdf", comLixo);
+
+        String key = service.upload(arquivo, TipoDocumento.BOLETO, LOJA);
+
+        assertThat(key).endsWith(".pdf");
+    }
+
+    /** Mas o cabeçalho não pode estar depois dos 1024 bytes iniciais. */
+    @Test
+    void recusaArquivoComPdfEscondidoLaAdiante() {
+        byte[] miolo = pdf();
+        byte[] escondido = new byte[2000 + miolo.length];
+        System.arraycopy(miolo, 0, escondido, 2000, miolo.length);
+
+        var arquivo = new MockMultipartFile("arquivo", "x.pdf", "application/pdf", escondido);
+
+        assertThatThrownBy(() -> service.upload(arquivo, TipoDocumento.BOLETO, LOJA))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("não permitido");
+    }
+
     @Test
     void barraUploadAcimaDoTetoPorEmpresa() throws Exception {
         for (int i = 0; i < 60; i++) {

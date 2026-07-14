@@ -161,11 +161,37 @@ public class ArquivoService {
                 && b[8] == 'W' && b[9] == 'E' && b[10] == 'B' && b[11] == 'P') {
             return "image/webp";
         }
-        if (b.length >= 5
-                && b[0] == '%' && b[1] == 'P' && b[2] == 'D' && b[3] == 'F' && b[4] == '-') {
+        if (temAssinaturaPdf(b)) {
             return "application/pdf";
         }
         return null;
+    }
+
+    /**
+     * Procura o cabeçalho {@code %PDF-} nos primeiros 1024 bytes, e não apenas
+     * no começo: a especificação do PDF permite lixo antes dele, e alguns
+     * scanners e geradores antigos aproveitam isso. Exigir a assinatura no byte
+     * zero recusaria PDFs legítimos que abrem normalmente em qualquer leitor.
+     * <p>
+     * Continua seguro: nenhum dos formatos perigosos (SVG, HTML, executável)
+     * ganha passe por aqui — eles não têm essa assinatura em lugar nenhum. E o
+     * arquivo é servido com {@code application/pdf}, tipo que o navegador
+     * entrega ao visualizador de PDF, nunca ao motor de HTML.
+     */
+    private boolean temAssinaturaPdf(byte[] b) {
+        byte[] assinatura = {'%', 'P', 'D', 'F', '-'};
+        int limite = Math.min(b.length, 1024) - assinatura.length;
+        for (int i = 0; i <= limite; i++) {
+            boolean bate = true;
+            for (int j = 0; j < assinatura.length; j++) {
+                if (b[i + j] != assinatura[j]) {
+                    bate = false;
+                    break;
+                }
+            }
+            if (bate) return true;
+        }
+        return false;
     }
 
     private String tipoPelaExtensao(String key) {
