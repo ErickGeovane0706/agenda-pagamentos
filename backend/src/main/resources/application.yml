@@ -60,6 +60,15 @@ anthropic:
   api-key: ${ANTHROPIC_API_KEY:}
   model: ${ANTHROPIC_MODEL:claude-haiku-4-5}
 
+# Modelo de cobrança: produto único, preço por loja (base inclui 1 loja).
+# preco-base e preco-loja-adicional ainda não são lidos pelo código — são a
+# fonte única do valor cobrado no Payment Link manual (Fase 1) e serão usados
+# pela integração com o gateway (Fase 2). Ver PLANO-MONETIZACAO.md.
+assinatura:
+  preco-base: ${ASSINATURA_PRECO_BASE:79.00}
+  preco-loja-adicional: ${ASSINATURA_PRECO_LOJA_ADICIONAL:29.00}
+  carencia-dias: ${ASSINATURA_CARENCIA_DIAS:5}
+
 # Transcrição de mensagens de voz do WhatsApp. Fornecedor separado da Anthropic
 # porque os modelos Claude não aceitam áudio como entrada — ver TranscricaoAudioService.
 openai:

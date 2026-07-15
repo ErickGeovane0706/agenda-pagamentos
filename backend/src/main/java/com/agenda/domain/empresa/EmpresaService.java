@@ -1,5 +1,6 @@
 package com.agenda.domain.empresa;
 
+import com.agenda.domain.assinatura.AssinaturaService;
 import com.agenda.domain.banco.BancoRepository;
 import com.agenda.domain.loja.LojaRepository;
 import com.agenda.domain.usuario.UsuarioRepository;
@@ -25,6 +26,7 @@ public class EmpresaService {
     private final UsuarioRepository usuarioRepository;
     private final LojaRepository lojaRepository;
     private final BancoRepository bancoRepository;
+    private final AssinaturaService assinaturaService;
 
     @Transactional(readOnly = true)
     public List<EmpresaDTO> listar() {
@@ -39,6 +41,9 @@ public class EmpresaService {
             .nome(req.nome())
             .build();
         empresa = empresaRepository.save(empresa);
+        // Toda empresa nasce com assinatura TRIAL (1 loja) — sem ela, os gates
+        // de assinatura bloqueariam a empresa antes da primeira loja existir.
+        assinaturaService.criarTrial(empresa);
         return EmpresaDTO.from(empresa);
     }
 
