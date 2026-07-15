@@ -1,9 +1,11 @@
 package com.agenda.domain.loja;
 
 import com.agenda.auditoria.AuditoriaService;
+import com.agenda.domain.assinatura.AssinaturaService;
 import com.agenda.domain.empresa.Empresa;
 import com.agenda.domain.empresa.EmpresaRepository;
 import com.agenda.shared.TenantContext;
+import com.agenda.shared.exception.PagamentoRequeridoException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,13 +26,14 @@ class LojaServiceTest {
     @Mock private LojaRepository lojaRepository;
     @Mock private EmpresaRepository empresaRepository;
     @Mock private AuditoriaService auditoriaService;
+    @Mock private AssinaturaService assinaturaService;
 
     private LojaService lojaService;
     private Empresa empresa;
 
     @BeforeEach
     void setUp() {
-        lojaService = new LojaService(lojaRepository, empresaRepository, auditoriaService);
+        lojaService = new LojaService(lojaRepository, empresaRepository, auditoriaService, assinaturaService);
         empresa = Empresa.builder().id(UUID.randomUUID()).nome("Empresa Teste").build();
         TenantContext.setEmpresaId(empresa.getId());
     }
@@ -50,6 +53,8 @@ class LojaServiceTest {
     @Test
     void criar_DeveSalvarLoja() {
         var req = new CriarLojaRequest("Loja Nova", null, null, "#065f46");
+        when(lojaRepository.countByEmpresaId(empresa.getId())).thenReturn(0L);
+        when(assinaturaService.podeCriarLoja(empresa.getId(), 0L)).thenReturn(true);
         when(empresaRepository.getReferenceById(empresa.getId())).thenReturn(empresa);
         when(lojaRepository.save(any())).thenAnswer(i -> {
             var l = i.getArgument(0, Loja.class);
@@ -63,6 +68,16 @@ class LojaServiceTest {
         assertEquals("Loja Nova", result.nome());
         assertEquals("#065f46", result.cor());
         verify(auditoriaService).registrar(eq("CRIAR"), eq("LOJA"), any(), anyString());
+    }
+
+    @Test
+    void criar_DeveRetornar402QuandoAssinaturaNaoCobreMaisLojas() {
+        var req = new CriarLojaRequest("Loja Extra", null, null, "#065f46");
+        when(lojaRepository.countByEmpresaId(empresa.getId())).thenReturn(1L);
+        when(assinaturaService.podeCriarLoja(empresa.getId(), 1L)).thenReturn(false);
+
+        assertThrows(PagamentoRequeridoException.class, () -> lojaService.criar(req));
+        verify(lojaRepository, never()).save(any());
     }
 
     @Test

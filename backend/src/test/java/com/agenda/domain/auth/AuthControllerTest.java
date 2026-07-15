@@ -1,5 +1,6 @@
 package com.agenda.domain.auth;
 
+import com.agenda.domain.assinatura.AssinaturaService;
 import com.agenda.domain.usuario.PerfilUsuario;
 import com.agenda.domain.usuario.UsuarioDTO;
 import com.agenda.security.JwtService;
@@ -33,6 +34,8 @@ class AuthControllerTest {
     @MockBean private AuthService authService;
     @MockBean private JwtService jwtService;
     @MockBean private JpaMetamodelMappingContext jpaMappingContext;
+    // Exigido pelo AssinaturaGateFilter (@Component Filter, escaneado pelo @WebMvcTest).
+    @MockBean private AssinaturaService assinaturaService;
 
     @Test
     void login_ComCookieSecureLigado_DeveEmitirCookiesComFlagSecure() throws Exception {

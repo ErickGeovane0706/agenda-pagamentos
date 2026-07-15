@@ -1,10 +1,12 @@
 package com.agenda.domain.loja;
 
 import com.agenda.auditoria.AuditoriaService;
+import com.agenda.domain.assinatura.AssinaturaService;
 import com.agenda.domain.empresa.EmpresaRepository;
 import com.agenda.shared.TenantContext;
 import com.agenda.shared.exception.AccessDeniedException;
 import com.agenda.shared.exception.NotFoundException;
+import com.agenda.shared.exception.PagamentoRequeridoException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +26,7 @@ public class LojaService {
     private final LojaRepository lojaRepository;
     private final EmpresaRepository empresaRepository;
     private final AuditoriaService auditoriaService;
+    private final AssinaturaService assinaturaService;
 
     @Transactional(readOnly = true)
     public List<LojaDTO> listar() {
@@ -46,6 +49,16 @@ public class LojaService {
     @Transactional
     public LojaDTO criar(CriarLojaRequest req) {
         UUID empresaId = TenantContext.getEmpresaId();
+
+        // Gate de assinatura: conta TODAS as lojas (ativas ou não — desativar
+        // não libera vaga) contra o contratado. Única porta de criação de loja.
+        long lojasExistentes = lojaRepository.countByEmpresaId(empresaId);
+        if (!assinaturaService.podeCriarLoja(empresaId, lojasExistentes)) {
+            throw new PagamentoRequeridoException(
+                "Sua assinatura não cobre mais lojas (você já tem " + lojasExistentes
+                    + "). Ajuste a assinatura para adicionar outra.");
+        }
+
         var empresa = empresaRepository.getReferenceById(empresaId);
 
         var loja = Loja.builder()

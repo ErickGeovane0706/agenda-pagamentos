@@ -46,6 +46,15 @@ public class RestExceptionHandler {
     }
 
     /**
+     * Assinatura insuficiente ou bloqueada → 402 PAYMENT_REQUIRED.
+     * Ex.: criar loja além do contratado na assinatura.
+     */
+    @ExceptionHandler(PagamentoRequeridoException.class)
+    public ResponseEntity<ErrorResponse> handlePagamentoRequerido(PagamentoRequeridoException ex) {
+        return error(HttpStatus.PAYMENT_REQUIRED, ex.getMessage());
+    }
+
+    /**
      * Argumento inválido → 400 BAD_REQUEST.
      * Ex.: UUID mal formatado, parâmetro obrigatório ausente.
      */

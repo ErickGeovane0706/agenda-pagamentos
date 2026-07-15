@@ -1,5 +1,6 @@
 package com.agenda.domain.loja;
 
+import com.agenda.domain.assinatura.AssinaturaService;
 import com.agenda.security.JwtService;
 import com.agenda.shared.exception.NotFoundException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -38,6 +39,10 @@ class LojaControllerTest {
 
     @MockBean
     private JpaMetamodelMappingContext jpaMappingContext;
+
+    // Exigido pelo AssinaturaGateFilter (@Component Filter, escaneado pelo @WebMvcTest).
+    @MockBean
+    private AssinaturaService assinaturaService;
 
     @Test
     void listar_DeveRetornar200() throws Exception {

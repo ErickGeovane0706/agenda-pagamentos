@@ -1,6 +1,7 @@
 package com.agenda.domain.boleto;
 
 import com.agenda.domain.arquivo.ArquivoService;
+import com.agenda.domain.assinatura.AssinaturaService;
 import com.agenda.security.JwtService;
 import com.agenda.shared.exception.NotFoundException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -46,6 +47,10 @@ class BoletoControllerTest {
 
     @MockBean
     private ArquivoService arquivoService;
+
+    // Exigido pelo AssinaturaGateFilter (@Component Filter, escaneado pelo @WebMvcTest).
+    @MockBean
+    private AssinaturaService assinaturaService;
 
     @Test
     void listar_DeveRetornar200() throws Exception {

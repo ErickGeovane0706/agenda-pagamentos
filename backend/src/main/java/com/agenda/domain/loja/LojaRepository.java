@@ -10,4 +10,5 @@ import java.util.UUID;
  */
 public interface LojaRepository extends JpaRepository<Loja, UUID> {
     List<Loja> findByEmpresaIdOrderByNome(UUID empresaId);
+    long countByEmpresaId(UUID empresaId);
 }
