@@ -1,5 +1,6 @@
 package com.agenda.domain.whatsappagent;
 
+import com.agenda.domain.assinatura.AssinaturaService;
 import com.agenda.domain.boleto.Boleto;
 import com.agenda.domain.boleto.BoletoRepository;
 import com.agenda.domain.cheque.ChequeRepository;
@@ -60,6 +61,7 @@ class WhatsAppAgentServiceTest {
     // mock — é só a fronteira da transação que some, e ela não é o objeto destes
     // testes (aqui os repositórios já são mocks).
     @Mock private PlatformTransactionManager transactionManager;
+    @Mock private AssinaturaService assinaturaService;
 
     private WhatsAppAgentService agentService;
     private RespostaFormatterService respostaFormatter;
@@ -74,7 +76,11 @@ class WhatsAppAgentServiceTest {
         agentService = new WhatsAppAgentService(
                 preferenciaRepository, lojaRepository, boletoRepository, pixRepository,
                 chequeRepository, classifierService, respostaFormatter, whatsAppService,
-                new RateLimiterService(), transactionManager);
+                new RateLimiterService(), transactionManager, assinaturaService);
+
+        // Assinatura acessável por padrão — lenient porque os testes de telefone
+        // não cadastrado terminam antes de chegar à checagem.
+        lenient().when(assinaturaService.podeAcessar(any())).thenReturn(true);
 
         empresa = Empresa.builder().id(UUID.randomUUID()).nome("Empresa Teste").build();
         usuario = Usuario.builder().id(UUID.randomUUID()).nome("Maria").empresa(empresa).build();
@@ -98,6 +104,17 @@ class WhatsAppAgentServiceTest {
 
         verifyNoInteractions(classifierService, boletoRepository, pixRepository, chequeRepository);
         verify(whatsAppService).enviarMensagemTexto(eq("5583988887777"), contains("Não localizei"));
+    }
+
+    @Test
+    void assinaturaSuspensa_naoDeveChamarLLMNemConsultarBanco() {
+        when(preferenciaRepository.findByTelefoneNormalizadoIn(List.of("5583999990000", "558399990000"))).thenReturn(List.of(preferencia));
+        when(assinaturaService.podeAcessar(empresa.getId())).thenReturn(false);
+
+        agentService.processarMensagem("5583999990000", "quanto tenho pra pagar hoje");
+
+        verifyNoInteractions(classifierService, boletoRepository, pixRepository, chequeRepository);
+        verify(whatsAppService).enviarMensagemTexto(eq("5583999990000"), contains("suspenso"));
     }
 
     @Test

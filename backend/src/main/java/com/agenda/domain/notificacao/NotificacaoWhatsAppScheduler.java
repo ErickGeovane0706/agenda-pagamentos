@@ -1,5 +1,6 @@
 package com.agenda.domain.notificacao;
 
+import com.agenda.domain.assinatura.AssinaturaService;
 import com.agenda.domain.boleto.Boleto;
 import com.agenda.domain.boleto.BoletoRepository;
 import com.agenda.domain.cheque.Cheque;
@@ -41,6 +42,7 @@ public class NotificacaoWhatsAppScheduler {
     private final ChequeRepository chequeRepository;
     private final WhatsAppService whatsAppService;
     private final WhatsAppAgentService whatsAppAgentService;
+    private final AssinaturaService assinaturaService;
     private final MensagemNotificacaoBuilder mensagemBuilder = new MensagemNotificacaoBuilder();
 
     /**
@@ -103,6 +105,16 @@ public class NotificacaoWhatsAppScheduler {
      */
     private void processarNotificacao(PreferenciaNotificacao pref, LocalTime agora, LocalDate hoje) {
         UUID empresaId = pref.getUsuario().getEmpresa().getId();
+
+        // Gate de assinatura: roda por cron, sem JWT — checagem explícita.
+        // Antes até das consultas de pendência: empresa suspensa não gasta
+        // query nem template (template é dinheiro).
+        if (!assinaturaService.podeAcessar(empresaId)) {
+            log.info("Empresa {} com assinatura suspensa — lembrete não enviado para o usuário {}.",
+                    empresaId, pref.getUsuario().getId());
+            return;
+        }
+
         Set<UUID> lojaIds = pref.getLojaIds();
 
         if (lojaIds.isEmpty()) {

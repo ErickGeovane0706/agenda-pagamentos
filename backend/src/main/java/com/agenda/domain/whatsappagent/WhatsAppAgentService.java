@@ -1,5 +1,6 @@
 package com.agenda.domain.whatsappagent;
 
+import com.agenda.domain.assinatura.AssinaturaService;
 import com.agenda.domain.boleto.Boleto;
 import com.agenda.domain.boleto.BoletoRepository;
 import com.agenda.domain.boleto.BoletoSpecification;
@@ -60,6 +61,7 @@ public class WhatsAppAgentService {
     private final WhatsAppService whatsAppService;
     private final RateLimiterService rateLimiter;
     private final PlatformTransactionManager transactionManager;
+    private final AssinaturaService assinaturaService;
 
     /**
      * Teto de mensagens por REMETENTE (telefone): 15 a cada 5 minutos.
@@ -142,6 +144,18 @@ public class WhatsAppAgentService {
             log.info("[WHATSAPP-AGENTE] Telefone {} não reconhecido, ignorando consulta.", mascarar(telefoneOrigem));
             whatsAppService.enviarMensagemTexto(telefoneOrigem,
                     "Não localizei esse número no nosso cadastro. Fale com o administrador da sua empresa para vincular seu WhatsApp.");
+            return;
+        }
+
+        // Gate de assinatura ANTES da chamada paga à LLM. Não há JWT neste
+        // caminho, então a checagem é explícita aqui. É uma query própria e
+        // curta (transação do próprio AssinaturaService) — não segura conexão
+        // durante a chamada à IA nem reabre o problema da conexão presa.
+        if (!assinaturaService.podeAcessar(remetente.empresaId())) {
+            log.info("[WHATSAPP-AGENTE] Empresa {} com assinatura suspensa — mensagem não processada.",
+                    remetente.empresaId());
+            whatsAppService.enviarMensagemTexto(telefoneOrigem,
+                    "O acesso da sua empresa está suspenso — fale com o administrador.");
             return;
         }
 

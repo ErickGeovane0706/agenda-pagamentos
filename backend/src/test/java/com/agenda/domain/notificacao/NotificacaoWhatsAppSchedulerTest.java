@@ -1,5 +1,6 @@
 package com.agenda.domain.notificacao;
 
+import com.agenda.domain.assinatura.AssinaturaService;
 import com.agenda.domain.boleto.Boleto;
 import com.agenda.domain.boleto.BoletoRepository;
 import com.agenda.domain.boleto.StatusBoleto;
@@ -36,6 +37,7 @@ class NotificacaoWhatsAppSchedulerTest {
     @Mock private ChequeRepository chequeRepository;
     @Mock private WhatsAppService whatsAppService;
     @Mock private WhatsAppAgentService whatsAppAgentService;
+    @Mock private AssinaturaService assinaturaService;
 
     private NotificacaoWhatsAppScheduler scheduler;
 
@@ -49,7 +51,10 @@ class NotificacaoWhatsAppSchedulerTest {
     void setUp() {
         scheduler = new NotificacaoWhatsAppScheduler(
                 preferenciaRepository, boletoRepository, pixRepository, chequeRepository,
-                whatsAppService, whatsAppAgentService);
+                whatsAppService, whatsAppAgentService, assinaturaService);
+        // Assinatura acessável por padrão — lenient porque nem todo teste
+        // chega até a checagem (ex.: sem preferência ativa no horário).
+        lenient().when(assinaturaService.podeAcessar(any())).thenReturn(true);
         // Fixa o relógio do job para o dia/horário simulado — sem isso, o
         // scheduler usaria LocalTime.now() do relógio de parede e os stubs
         // de findAtivosComHorario(horário fixo) nunca casariam.
@@ -215,6 +220,18 @@ class NotificacaoWhatsAppSchedulerTest {
 
         verifyNoInteractions(whatsAppService);
         verifyNoInteractions(boletoRepository);
+    }
+
+    @Test
+    void assinaturaSuspensa_NaoDeveConsultarPendenciasNemEnviarTemplate() {
+        var pref = preferencia(horario);
+        when(preferenciaRepository.findAtivosComHorario(horario)).thenReturn(List.of(pref));
+        when(assinaturaService.podeAcessar(empresa.getId())).thenReturn(false);
+
+        scheduler.verificarEEnviarNotificacoes();
+
+        verify(whatsAppService, never()).enviarTemplate(anyString(), anyString(), anyList());
+        verifyNoInteractions(boletoRepository, pixRepository, chequeRepository);
     }
 
     @Test
