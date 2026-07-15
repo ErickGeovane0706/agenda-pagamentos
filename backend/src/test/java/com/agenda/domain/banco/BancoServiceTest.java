@@ -4,6 +4,7 @@ import com.agenda.auditoria.AuditoriaService;
 import com.agenda.domain.empresa.Empresa;
 import com.agenda.domain.empresa.EmpresaRepository;
 import com.agenda.shared.TenantContext;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,6 +34,11 @@ class BancoServiceTest {
         bancoService = new BancoService(bancoRepository, empresaRepository, auditoriaService);
         empresa = Empresa.builder().id(UUID.randomUUID()).nome("Empresa Teste").build();
         TenantContext.setEmpresaId(empresa.getId());
+    }
+
+    @AfterEach
+    void tearDown() {
+        TenantContext.clear();
     }
 
     @Test

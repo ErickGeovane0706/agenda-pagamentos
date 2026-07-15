@@ -2,6 +2,7 @@ package com.agenda.domain.coluna;
 
 import com.agenda.auditoria.AuditoriaService;
 import com.agenda.shared.TenantContext;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,6 +33,11 @@ class ColunaExtraServiceTest {
         colunaExtraService = new ColunaExtraService(colunaExtraRepository, valorExtraRepository, auditoriaService);
         empresaId = UUID.randomUUID();
         TenantContext.setEmpresaId(empresaId);
+    }
+
+    @AfterEach
+    void tearDown() {
+        TenantContext.clear();
     }
 
     @Test

@@ -10,6 +10,7 @@ import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Root;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -51,6 +52,11 @@ class PixServiceTest {
         empresa = Empresa.builder().id(UUID.randomUUID()).build();
         loja = Loja.builder().id(UUID.randomUUID()).empresa(empresa).nome("Loja Teste").cor("#3B82F6").build();
         TenantContext.setEmpresaId(empresa.getId());
+    }
+
+    @AfterEach
+    void tearDown() {
+        TenantContext.clear();
     }
 
     @Test

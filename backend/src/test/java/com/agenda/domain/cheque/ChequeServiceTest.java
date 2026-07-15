@@ -7,6 +7,7 @@ import com.agenda.domain.empresa.Empresa;
 import com.agenda.domain.loja.Loja;
 import com.agenda.domain.loja.LojaRepository;
 import com.agenda.shared.TenantContext;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -44,6 +45,11 @@ class ChequeServiceTest {
         empresa = Empresa.builder().id(UUID.randomUUID()).build();
         loja = Loja.builder().id(UUID.randomUUID()).empresa(empresa).nome("Loja Teste").cor("#3B82F6").build();
         TenantContext.setEmpresaId(empresa.getId());
+    }
+
+    @AfterEach
+    void tearDown() {
+        TenantContext.clear();
     }
 
     @Test

@@ -6,6 +6,7 @@ import com.agenda.domain.empresa.Empresa;
 import com.agenda.domain.empresa.EmpresaRepository;
 import com.agenda.shared.TenantContext;
 import com.agenda.shared.exception.PagamentoRequeridoException;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,6 +37,11 @@ class LojaServiceTest {
         lojaService = new LojaService(lojaRepository, empresaRepository, auditoriaService, assinaturaService);
         empresa = Empresa.builder().id(UUID.randomUUID()).nome("Empresa Teste").build();
         TenantContext.setEmpresaId(empresa.getId());
+    }
+
+    @AfterEach
+    void tearDown() {
+        TenantContext.clear();
     }
 
     @Test

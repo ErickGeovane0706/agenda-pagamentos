@@ -1,6 +1,7 @@
 package com.agenda.auditoria;
 
 import com.agenda.shared.TenantContext;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,6 +25,11 @@ class AuditoriaServiceTest {
         auditoriaService = new AuditoriaService(auditoriaRepository);
         empresaId = UUID.randomUUID();
         TenantContext.setEmpresaId(empresaId);
+    }
+
+    @AfterEach
+    void tearDown() {
+        TenantContext.clear();
     }
 
     @Test
