@@ -2,7 +2,9 @@ package com.agenda.domain.assinatura;
 
 import com.agenda.domain.empresa.Empresa;
 import com.agenda.shared.exception.NotFoundException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +22,7 @@ import java.util.UUID;
  * nunca claim no JWT: se o plano vivesse no token, o cliente pagaria e
  * continuaria bloqueado até relogar.
  */
+@Slf4j
 @Service
 public class AssinaturaService {
 
@@ -105,6 +108,69 @@ public class AssinaturaService {
         assinatura.setStatus(req.status());
         assinatura.setLojasContratadas(req.lojasContratadas());
         assinatura.setVigenteAte(req.vigenteAte());
+        if (req.gatewayCustomerId() != null && !req.gatewayCustomerId().isBlank()) {
+            assinatura.setGatewayCustomerId(req.gatewayCustomerId());
+        }
         return AssinaturaDTO.from(assinaturaRepository.save(assinatura));
+    }
+
+    /**
+     * Pagamento confirmado no gateway (webhook): ativa e estende a vigência
+     * em 1 mês — a partir do fim da vigência atual se ela ainda está no
+     * futuro (pagou adiantado), ou de hoje se já venceu/nunca teve.
+     * Retorna false se nenhuma assinatura está vinculada a esse customer
+     * (o chamador loga; o vínculo é feito pelo MASTER via PUT).
+     */
+    @Transactional
+    public boolean registrarPagamentoConfirmado(String gatewayCustomerId) {
+        return assinaturaRepository.findByGatewayCustomerId(gatewayCustomerId)
+            .map(a -> {
+                var hoje = LocalDate.now();
+                var base = a.getVigenteAte() != null && a.getVigenteAte().isAfter(hoje)
+                    ? a.getVigenteAte() : hoje;
+                a.setVigenteAte(base.plusMonths(1));
+                a.setStatus(StatusAssinatura.ATIVA);
+                assinaturaRepository.save(a);
+                log.info("Pagamento confirmado: empresa {} ativa até {}", a.getEmpresa().getId(), a.getVigenteAte());
+                return true;
+            })
+            .orElse(false);
+    }
+
+    /**
+     * Cobrança vencida no gateway (webhook): rebaixa para INADIMPLENTE.
+     * Cancelada não regride (cancelamento é decisão deliberada do MASTER).
+     */
+    @Transactional
+    public boolean registrarInadimplencia(String gatewayCustomerId) {
+        return assinaturaRepository.findByGatewayCustomerId(gatewayCustomerId)
+            .map(a -> {
+                if (a.getStatus() != StatusAssinatura.CANCELADA) {
+                    a.setStatus(StatusAssinatura.INADIMPLENTE);
+                    assinaturaRepository.save(a);
+                    log.info("Cobrança vencida: empresa {} marcada INADIMPLENTE", a.getEmpresa().getId());
+                }
+                return true;
+            })
+            .orElse(false);
+    }
+
+    /**
+     * Dunning mínimo: job diário que rebaixa para INADIMPLENTE as assinaturas
+     * TRIAL/ATIVA cuja vigência estourou a carência. O bloqueio de acesso já
+     * acontece antes disso via {@code podeAcessar} — este job só torna o
+     * status visível/consistente (listagem do MASTER, webhook não entregue).
+     */
+    @Transactional
+    @Scheduled(cron = "0 10 3 * * *")
+    public void rebaixarVencidas() {
+        var limite = LocalDate.now().minusDays(carenciaDias);
+        var vencidas = assinaturaRepository.findByStatusInAndVigenteAteBefore(
+            List.of(StatusAssinatura.TRIAL, StatusAssinatura.ATIVA), limite);
+        for (var a : vencidas) {
+            a.setStatus(StatusAssinatura.INADIMPLENTE);
+            assinaturaRepository.save(a);
+            log.info("Assinatura da empresa {} vencida além da carência — INADIMPLENTE", a.getEmpresa().getId());
+        }
     }
 }

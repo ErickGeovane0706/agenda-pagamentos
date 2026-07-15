@@ -68,6 +68,14 @@ assinatura:
   preco-base: ${ASSINATURA_PRECO_BASE:79.00}
   preco-loja-adicional: ${ASSINATURA_PRECO_LOJA_ADICIONAL:29.00}
   carencia-dias: ${ASSINATURA_CARENCIA_DIAS:5}
+  trial-dias: ${ASSINATURA_TRIAL_DIAS:30}
+
+# Gateway de pagamento (Asaas). O webhook-token autentica o POST /webhook/asaas
+# (header asaas-access-token, definido ao cadastrar o webhook no painel).
+# ASAAS_API_KEY entra quando a criação de customer/subscription via API for
+# implementada (Fase 2 item 4 do PLANO-MONETIZACAO.md). Usar o sandbox primeiro.
+asaas:
+  webhook-token: ${ASAAS_WEBHOOK_TOKEN:}
 
 # Transcrição de mensagens de voz do WhatsApp. Fornecedor separado da Anthropic
 # porque os modelos Claude não aceitam áudio como entrada — ver TranscricaoAudioService.

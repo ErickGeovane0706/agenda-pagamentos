@@ -9,7 +9,8 @@ public record AssinaturaDTO(
     String empresaNome,
     StatusAssinatura status,
     int lojasContratadas,
-    LocalDate vigenteAte
+    LocalDate vigenteAte,
+    String gatewayCustomerId
 ) {
     public static AssinaturaDTO from(Assinatura a) {
         return new AssinaturaDTO(
@@ -18,6 +19,7 @@ public record AssinaturaDTO(
             a.getEmpresa().getNome(),
             a.getStatus(),
             a.getLojasContratadas(),
-            a.getVigenteAte());
+            a.getVigenteAte(),
+            a.getGatewayCustomerId());
     }
 }
