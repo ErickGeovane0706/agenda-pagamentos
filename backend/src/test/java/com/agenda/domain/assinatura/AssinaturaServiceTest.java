@@ -8,6 +8,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
@@ -22,13 +23,15 @@ class AssinaturaServiceTest {
     private static final int CARENCIA_DIAS = 5;
 
     @Mock private AssinaturaRepository assinaturaRepository;
+    @Mock private AsaasClient asaasClient;
 
     private AssinaturaService assinaturaService;
     private Empresa empresa;
 
     @BeforeEach
     void setUp() {
-        assinaturaService = new AssinaturaService(assinaturaRepository, CARENCIA_DIAS);
+        assinaturaService = new AssinaturaService(assinaturaRepository, asaasClient, CARENCIA_DIAS,
+            new BigDecimal("79.00"), new BigDecimal("29.00"));
         empresa = Empresa.builder().id(UUID.randomUUID()).nome("Empresa Teste").build();
     }
 
@@ -213,6 +216,125 @@ class AssinaturaServiceTest {
 
         assertEquals(StatusAssinatura.CANCELADA, a.getStatus());
         verify(assinaturaRepository, never()).save(any());
+    }
+
+    // ---------------------------------------------------------------
+    // Assinar / cancelar via API do gateway (passo 4)
+    // ---------------------------------------------------------------
+
+    @Test
+    void calcularValor_UmaLoja_DeveSerSoABase() {
+        assertEquals(new BigDecimal("79.00"), assinaturaService.calcularValor(1));
+    }
+
+    @Test
+    void calcularValor_TresLojas_DeveSomarAdicionais() {
+        assertEquals(new BigDecimal("137.00"), assinaturaService.calcularValor(3));
+    }
+
+    @Test
+    void assinar_DeveCriarCustomerESubscriptionEGuardarIds() {
+        empresa.setCpfCnpj("12345678901");
+        empresa.setTelefone("11999999999");
+        var a = assinatura(StatusAssinatura.TRIAL, null);
+        a.setLojasContratadas(3);
+        mockAssinatura(a);
+        when(asaasClient.criarCustomer(any(), any(), any(), any(), eq(empresa.getId().toString())))
+            .thenReturn("cus_new");
+        when(asaasClient.criarAssinatura(eq("cus_new"), eq(new BigDecimal("137.00")), any(),
+                eq(empresa.getId().toString()))).thenReturn("sub_new");
+        when(asaasClient.buscarUrlPagamento("sub_new")).thenReturn("https://asaas/i/1");
+        when(assinaturaRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        var result = assinaturaService.assinar(empresa.getId());
+
+        assertEquals("sub_new", result.subscriptionId());
+        assertEquals("https://asaas/i/1", result.urlPagamento());
+        assertEquals("cus_new", a.getGatewayCustomerId());
+        assertEquals("sub_new", a.getGatewaySubscriptionId());
+        assertEquals(StatusAssinatura.TRIAL, a.getStatus()); // não ativa antes do pagamento
+    }
+
+    @Test
+    void assinar_SemCpfCnpj_DeveLancarIllegalArgumentSemChamarGateway() {
+        empresa.setTelefone("11999999999"); // sem cpfCnpj
+        mockAssinatura(assinatura(StatusAssinatura.TRIAL, null));
+
+        assertThrows(IllegalArgumentException.class, () -> assinaturaService.assinar(empresa.getId()));
+        verify(asaasClient, never()).criarCustomer(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void assinar_JaTemSubscription_NaoDeveCriarOutra() {
+        var a = assinatura(StatusAssinatura.ATIVA, null);
+        a.setGatewaySubscriptionId("sub_exist");
+        mockAssinatura(a);
+        when(asaasClient.buscarUrlPagamento("sub_exist")).thenReturn("https://asaas/i/exist");
+
+        var result = assinaturaService.assinar(empresa.getId());
+
+        assertEquals("sub_exist", result.subscriptionId());
+        verify(asaasClient, never()).criarCustomer(any(), any(), any(), any(), any());
+        verify(asaasClient, never()).criarAssinatura(any(), any(), any(), any());
+    }
+
+    @Test
+    void assinar_ReusaCustomerExistente() {
+        empresa.setCpfCnpj("12345678901");
+        empresa.setTelefone("11999999999");
+        var a = assinatura(StatusAssinatura.INADIMPLENTE, null);
+        a.setGatewayCustomerId("cus_exist");
+        mockAssinatura(a);
+        when(asaasClient.criarAssinatura(eq("cus_exist"), any(), any(), any())).thenReturn("sub_2");
+        when(asaasClient.buscarUrlPagamento("sub_2")).thenReturn("https://asaas/i/2");
+        when(assinaturaRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        var result = assinaturaService.assinar(empresa.getId());
+
+        assertEquals("sub_2", result.subscriptionId());
+        verify(asaasClient, never()).criarCustomer(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void cancelarAssinatura_DeveChamarGatewayEMarcarCancelada() {
+        var a = assinatura(StatusAssinatura.ATIVA, null);
+        a.setGatewaySubscriptionId("sub_x");
+        mockAssinatura(a);
+        when(assinaturaRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        assinaturaService.cancelarAssinatura(empresa.getId());
+
+        verify(asaasClient).cancelarAssinatura("sub_x");
+        assertEquals(StatusAssinatura.CANCELADA, a.getStatus());
+        assertNull(a.getGatewaySubscriptionId());
+    }
+
+    @Test
+    void registrarPagamentoConfirmadoPorEmpresa_DeveAtivarEEstender() {
+        var a = assinatura(StatusAssinatura.INADIMPLENTE, LocalDate.now().minusDays(3));
+        mockAssinatura(a);
+        when(assinaturaRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        assertTrue(assinaturaService.registrarPagamentoConfirmadoPorEmpresa(empresa.getId()));
+
+        assertEquals(StatusAssinatura.ATIVA, a.getStatus());
+        assertEquals(LocalDate.now().plusMonths(1), a.getVigenteAte());
+    }
+
+    @Test
+    void registrarPagamentoConfirmadoPorEmpresa_SemAssinatura_DeveRetornarFalse() {
+        mockAssinatura(null);
+        assertFalse(assinaturaService.registrarPagamentoConfirmadoPorEmpresa(empresa.getId()));
+    }
+
+    @Test
+    void registrarInadimplenciaPorEmpresa_DeveRebaixarAtiva() {
+        var a = assinatura(StatusAssinatura.ATIVA, null);
+        mockAssinatura(a);
+        when(assinaturaRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        assertTrue(assinaturaService.registrarInadimplenciaPorEmpresa(empresa.getId()));
+        assertEquals(StatusAssinatura.INADIMPLENTE, a.getStatus());
     }
 
     @Test

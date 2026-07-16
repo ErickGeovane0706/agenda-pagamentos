@@ -64,6 +64,16 @@ public class RestExceptionHandler {
     }
 
     /**
+     * Falha na comunicação com o gateway de pagamento → 502 BAD_GATEWAY.
+     * A mensagem do AsaasException já vem sanitizada (sem api-key nem PII).
+     */
+    @ExceptionHandler(com.agenda.domain.assinatura.AsaasException.class)
+    public ResponseEntity<ErrorResponse> handleAsaas(com.agenda.domain.assinatura.AsaasException ex) {
+        log.warn("Falha no gateway de pagamento: {}", ex.getMessage());
+        return error(HttpStatus.BAD_GATEWAY, ex.getMessage());
+    }
+
+    /**
      * Erro de validação Bean Validation → 422 UNPROCESSABLE_ENTITY.
      * Agrega todos os erros de campo em uma única string separada por ";".
      */

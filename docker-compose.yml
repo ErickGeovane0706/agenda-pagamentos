@@ -34,6 +34,12 @@ services:
       R2_BUCKET: agenda-pagamentos-arquivos
       WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID}
       WHATSAPP_TOKEN: ${WHATSAPP_TOKEN}
+      PORT: 8080
+    # Passa o .env inteiro ao container SEM interpolar (a chave Asaas começa com
+    # '$', que a substituição do compose quebraria). O bloco environment acima
+    # tem precedência sobre estas (mantém DB/porta fixos no docker).
+    env_file:
+      - .env
     depends_on:
       db:
         condition: service_healthy

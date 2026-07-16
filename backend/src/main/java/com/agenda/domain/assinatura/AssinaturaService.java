@@ -8,6 +8,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -27,6 +28,7 @@ import java.util.UUID;
 public class AssinaturaService {
 
     private final AssinaturaRepository assinaturaRepository;
+    private final AsaasClient asaasClient;
 
     /**
      * Dias de tolerância após vigenteAte antes de bloquear o acesso.
@@ -35,10 +37,20 @@ public class AssinaturaService {
      */
     private final int carenciaDias;
 
+    /** Preço-base (inclui 1 loja) e valor por loja adicional — fonte do valor cobrado. */
+    private final BigDecimal precoBase;
+    private final BigDecimal precoLojaAdicional;
+
     public AssinaturaService(AssinaturaRepository assinaturaRepository,
-                             @Value("${assinatura.carencia-dias}") int carenciaDias) {
+                             AsaasClient asaasClient,
+                             @Value("${assinatura.carencia-dias}") int carenciaDias,
+                             @Value("${assinatura.preco-base}") BigDecimal precoBase,
+                             @Value("${assinatura.preco-loja-adicional}") BigDecimal precoLojaAdicional) {
         this.assinaturaRepository = assinaturaRepository;
+        this.asaasClient = asaasClient;
         this.carenciaDias = carenciaDias;
+        this.precoBase = precoBase;
+        this.precoLojaAdicional = precoLojaAdicional;
     }
 
     /**
@@ -115,6 +127,78 @@ public class AssinaturaService {
     }
 
     /**
+     * Inicia a assinatura recorrente da empresa no gateway: cria (ou reusa) o
+     * customer e cria a subscription mensal amarrada à empresa pelo
+     * {@code externalReference}. NÃO ativa a assinatura — isso acontece quando o
+     * pagamento é confirmado pelo webhook. Idempotente: se já existe subscription,
+     * devolve a URL de pagamento existente em vez de criar outra (evita cobrança
+     * duplicada). Retorna o id da subscription e a URL de pagamento (Pix/boleto).
+     */
+    @Transactional
+    public AssinaturaCheckoutDTO assinar(UUID empresaId) {
+        var assinatura = assinaturaRepository.findByEmpresaId(empresaId)
+            .orElseThrow(() -> new NotFoundException("Assinatura não encontrada para a empresa"));
+
+        if (preenchido(assinatura.getGatewaySubscriptionId())) {
+            var urlExistente = asaasClient.buscarUrlPagamento(assinatura.getGatewaySubscriptionId());
+            return new AssinaturaCheckoutDTO(assinatura.getGatewaySubscriptionId(), urlExistente);
+        }
+
+        var empresa = assinatura.getEmpresa();
+        exigirDadosDeCobranca(empresa);
+
+        var customerId = assinatura.getGatewayCustomerId();
+        if (!preenchido(customerId)) {
+            customerId = asaasClient.criarCustomer(empresa.getNome(), empresa.getCpfCnpj(),
+                empresa.getTelefone(), null, empresaId.toString());
+            assinatura.setGatewayCustomerId(customerId);
+        }
+
+        var valor = calcularValor(assinatura.getLojasContratadas());
+        var subscriptionId = asaasClient.criarAssinatura(customerId, valor,
+            LocalDate.now(), empresaId.toString());
+        assinatura.setGatewaySubscriptionId(subscriptionId);
+        assinaturaRepository.save(assinatura);
+
+        log.info("Assinatura criada no gateway para empresa {} (valor {})", empresaId, valor);
+        return new AssinaturaCheckoutDTO(subscriptionId, asaasClient.buscarUrlPagamento(subscriptionId));
+    }
+
+    /**
+     * Cancela a assinatura no gateway (para de cobrar) e marca CANCELADA. Usado
+     * para encerrar a assinatura e para limpar assinaturas de teste em produção.
+     */
+    @Transactional
+    public void cancelarAssinatura(UUID empresaId) {
+        var assinatura = assinaturaRepository.findByEmpresaId(empresaId)
+            .orElseThrow(() -> new NotFoundException("Assinatura não encontrada para a empresa"));
+        if (preenchido(assinatura.getGatewaySubscriptionId())) {
+            asaasClient.cancelarAssinatura(assinatura.getGatewaySubscriptionId());
+            assinatura.setGatewaySubscriptionId(null);
+        }
+        assinatura.setStatus(StatusAssinatura.CANCELADA);
+        assinaturaRepository.save(assinatura);
+        log.info("Assinatura da empresa {} cancelada", empresaId);
+    }
+
+    /** Valor mensal: base (inclui 1 loja) + adicional por loja além da primeira. */
+    BigDecimal calcularValor(int lojasContratadas) {
+        int adicionais = Math.max(0, lojasContratadas - 1);
+        return precoBase.add(precoLojaAdicional.multiply(BigDecimal.valueOf(adicionais)));
+    }
+
+    private void exigirDadosDeCobranca(Empresa empresa) {
+        if (!preenchido(empresa.getCpfCnpj()) || !preenchido(empresa.getTelefone())) {
+            throw new IllegalArgumentException(
+                "Para assinar é preciso ter CPF/CNPJ e telefone cadastrados na empresa.");
+        }
+    }
+
+    private boolean preenchido(String valor) {
+        return valor != null && !valor.isBlank();
+    }
+
+    /**
      * Pagamento confirmado no gateway (webhook): ativa e estende a vigência
      * em 1 mês — a partir do fim da vigência atual se ela ainda está no
      * futuro (pagou adiantado), ou de hoje se já venceu/nunca teve.
@@ -124,17 +208,31 @@ public class AssinaturaService {
     @Transactional
     public boolean registrarPagamentoConfirmado(String gatewayCustomerId) {
         return assinaturaRepository.findByGatewayCustomerId(gatewayCustomerId)
-            .map(a -> {
-                var hoje = LocalDate.now();
-                var base = a.getVigenteAte() != null && a.getVigenteAte().isAfter(hoje)
-                    ? a.getVigenteAte() : hoje;
-                a.setVigenteAte(base.plusMonths(1));
-                a.setStatus(StatusAssinatura.ATIVA);
-                assinaturaRepository.save(a);
-                log.info("Pagamento confirmado: empresa {} ativa até {}", a.getEmpresa().getId(), a.getVigenteAte());
-                return true;
-            })
+            .map(this::aplicarPagamentoConfirmado)
             .orElse(false);
+    }
+
+    /**
+     * Igual a {@link #registrarPagamentoConfirmado}, mas resolve a assinatura
+     * pela empresa (externalReference do webhook = empresaId) — o caminho
+     * preferido, que não depende do customer estar pré-vinculado.
+     */
+    @Transactional
+    public boolean registrarPagamentoConfirmadoPorEmpresa(UUID empresaId) {
+        return assinaturaRepository.findByEmpresaId(empresaId)
+            .map(this::aplicarPagamentoConfirmado)
+            .orElse(false);
+    }
+
+    private boolean aplicarPagamentoConfirmado(Assinatura a) {
+        var hoje = LocalDate.now();
+        var base = a.getVigenteAte() != null && a.getVigenteAte().isAfter(hoje)
+            ? a.getVigenteAte() : hoje;
+        a.setVigenteAte(base.plusMonths(1));
+        a.setStatus(StatusAssinatura.ATIVA);
+        assinaturaRepository.save(a);
+        log.info("Pagamento confirmado: empresa {} ativa até {}", a.getEmpresa().getId(), a.getVigenteAte());
+        return true;
     }
 
     /**
@@ -144,15 +242,25 @@ public class AssinaturaService {
     @Transactional
     public boolean registrarInadimplencia(String gatewayCustomerId) {
         return assinaturaRepository.findByGatewayCustomerId(gatewayCustomerId)
-            .map(a -> {
-                if (a.getStatus() != StatusAssinatura.CANCELADA) {
-                    a.setStatus(StatusAssinatura.INADIMPLENTE);
-                    assinaturaRepository.save(a);
-                    log.info("Cobrança vencida: empresa {} marcada INADIMPLENTE", a.getEmpresa().getId());
-                }
-                return true;
-            })
+            .map(this::aplicarInadimplencia)
             .orElse(false);
+    }
+
+    /** Igual a {@link #registrarInadimplencia}, mas resolve pela empresa (externalReference). */
+    @Transactional
+    public boolean registrarInadimplenciaPorEmpresa(UUID empresaId) {
+        return assinaturaRepository.findByEmpresaId(empresaId)
+            .map(this::aplicarInadimplencia)
+            .orElse(false);
+    }
+
+    private boolean aplicarInadimplencia(Assinatura a) {
+        if (a.getStatus() != StatusAssinatura.CANCELADA) {
+            a.setStatus(StatusAssinatura.INADIMPLENTE);
+            assinaturaRepository.save(a);
+            log.info("Cobrança vencida: empresa {} marcada INADIMPLENTE", a.getEmpresa().getId());
+        }
+        return true;
     }
 
     /**

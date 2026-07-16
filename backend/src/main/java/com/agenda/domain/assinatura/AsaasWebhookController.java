@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.UUID;
 
 /**
  * Endpoint público que recebe os webhooks de cobrança do Asaas.
@@ -76,25 +77,71 @@ public class AsaasWebhookController {
             return;
         }
 
-        String customer = payload.payment() != null ? payload.payment().customer() : null;
-        if (payload.event() == null || customer == null) {
-            log.info("[ASAAS-WEBHOOK] Evento sem event/customer, ignorado: {}", payload.id());
+        var pagamento = payload.payment();
+        if (payload.event() == null || pagamento == null) {
+            log.info("[ASAAS-WEBHOOK] Evento sem event/payment, ignorado: {}", payload.id());
             return;
         }
 
         switch (payload.event()) {
-            case "PAYMENT_CONFIRMED", "PAYMENT_RECEIVED" -> {
-                if (!assinaturaService.registrarPagamentoConfirmado(customer)) {
-                    log.warn("[ASAAS-WEBHOOK] Pagamento do customer {} sem assinatura vinculada — "
-                            + "vincular via PUT /api/assinaturas (gatewayCustomerId).", customer);
-                }
-            }
-            case "PAYMENT_OVERDUE" -> {
-                if (!assinaturaService.registrarInadimplencia(customer)) {
-                    log.warn("[ASAAS-WEBHOOK] Cobrança vencida do customer {} sem assinatura vinculada.", customer);
-                }
-            }
+            case "PAYMENT_CONFIRMED", "PAYMENT_RECEIVED" -> ativar(pagamento);
+            case "PAYMENT_OVERDUE" -> marcarInadimplente(pagamento);
             default -> log.debug("[ASAAS-WEBHOOK] Evento {} não tratado, ignorado.", payload.event());
+        }
+    }
+
+    /**
+     * Ativa a assinatura. Prefere o {@code externalReference} (= empresaId,
+     * setado ao criar a assinatura via API) — caminho robusto que independe do
+     * customer estar pré-vinculado. Cai no customer id como fallback (assinaturas
+     * antigas vinculadas na mão pelo MASTER).
+     */
+    private void ativar(AsaasWebhookPayload.Payment p) {
+        var empresaId = empresaIdDe(p);
+        if (empresaId != null) {
+            if (!assinaturaService.registrarPagamentoConfirmadoPorEmpresa(empresaId)) {
+                log.warn("[ASAAS-WEBHOOK] Pagamento sem assinatura para empresa {} (externalReference).", empresaId);
+            }
+            return;
+        }
+        if (p.customer() != null) {
+            if (!assinaturaService.registrarPagamentoConfirmado(p.customer())) {
+                log.warn("[ASAAS-WEBHOOK] Pagamento do customer {} sem assinatura vinculada — "
+                        + "vincular via PUT /api/assinaturas (gatewayCustomerId).", p.customer());
+            }
+            return;
+        }
+        log.warn("[ASAAS-WEBHOOK] Pagamento sem externalReference nem customer — ignorado.");
+    }
+
+    private void marcarInadimplente(AsaasWebhookPayload.Payment p) {
+        var empresaId = empresaIdDe(p);
+        if (empresaId != null) {
+            if (!assinaturaService.registrarInadimplenciaPorEmpresa(empresaId)) {
+                log.warn("[ASAAS-WEBHOOK] Cobrança vencida sem assinatura para empresa {} (externalReference).", empresaId);
+            }
+            return;
+        }
+        if (p.customer() != null) {
+            if (!assinaturaService.registrarInadimplencia(p.customer())) {
+                log.warn("[ASAAS-WEBHOOK] Cobrança vencida do customer {} sem assinatura vinculada.", p.customer());
+            }
+            return;
+        }
+        log.warn("[ASAAS-WEBHOOK] Cobrança vencida sem externalReference nem customer — ignorada.");
+    }
+
+    /** empresaId a partir do externalReference; null se ausente ou não for um UUID. */
+    private UUID empresaIdDe(AsaasWebhookPayload.Payment p) {
+        var ref = p.externalReference();
+        if (ref == null || ref.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(ref.trim());
+        } catch (IllegalArgumentException e) {
+            log.warn("[ASAAS-WEBHOOK] externalReference '{}' não é UUID de empresa — usando customer.", ref);
+            return null;
         }
     }
 }

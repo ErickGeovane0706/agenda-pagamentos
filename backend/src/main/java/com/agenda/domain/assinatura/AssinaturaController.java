@@ -33,4 +33,21 @@ public class AssinaturaController {
                                                    @RequestBody @Valid AtualizarAssinaturaRequest req) {
         return ResponseEntity.ok(assinaturaService.atualizar(empresaId, req));
     }
+
+    /**
+     * Inicia a assinatura recorrente da empresa no gateway e devolve a URL de
+     * pagamento (Pix/boleto). A ativação em si vem depois, pelo webhook, quando
+     * o pagamento é confirmado. Idempotente no service (não duplica cobrança).
+     */
+    @PostMapping("/{empresaId}/assinar")
+    public ResponseEntity<AssinaturaCheckoutDTO> assinar(@PathVariable UUID empresaId) {
+        return ResponseEntity.ok(assinaturaService.assinar(empresaId));
+    }
+
+    /** Cancela a assinatura no gateway e marca CANCELADA. */
+    @DeleteMapping("/{empresaId}/assinar")
+    public ResponseEntity<Void> cancelar(@PathVariable UUID empresaId) {
+        assinaturaService.cancelarAssinatura(empresaId);
+        return ResponseEntity.noContent().build();
+    }
 }

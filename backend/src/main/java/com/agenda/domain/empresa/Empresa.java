@@ -21,6 +21,18 @@ public class Empresa {
     @Column(nullable = false, length = 200)
     private String nome;
 
+    /**
+     * CPF ou CNPJ do responsável, SOMENTE dígitos (11=CPF, 14=CNPJ). Exigido pelo
+     * Asaas para criar o customer e emitir Pix/boleto. Nullable: só é preenchido
+     * ao assinar via API. PII/LGPD — não logar nem expor fora do tenant/MASTER.
+     */
+    @Column(name = "cpf_cnpj", length = 14)
+    private String cpfCnpj;
+
+    /** Telefone de contato com DDD, somente dígitos. Usado como mobilePhone no Asaas. */
+    @Column(name = "telefone", length = 20)
+    private String telefone;
+
     @Column(nullable = false)
     @Builder.Default
     private Boolean ativo = true;

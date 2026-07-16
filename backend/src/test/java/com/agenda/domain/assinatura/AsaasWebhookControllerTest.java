@@ -70,6 +70,38 @@ class AsaasWebhookControllerTest {
     }
 
     @Test
+    void pagamentoConfirmado_ComExternalReference_DeveAtivarPorEmpresa() throws Exception {
+        var empresaId = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
+        var payload = "{\"id\":\"evt_010\",\"event\":\"PAYMENT_CONFIRMED\",\"payment\":"
+            + "{\"customer\":\"cus_123\",\"externalReference\":\"" + empresaId + "\"}}";
+        when(idempotencyService.registrarSeNovo("ASAAS", "evt_010")).thenReturn(true);
+        when(assinaturaService.registrarPagamentoConfirmadoPorEmpresa(java.util.UUID.fromString(empresaId)))
+            .thenReturn(true);
+
+        mockMvc.perform(postEvento(payload, "tok-teste"))
+            .andExpect(status().isOk());
+
+        verify(assinaturaService).registrarPagamentoConfirmadoPorEmpresa(java.util.UUID.fromString(empresaId));
+        verify(assinaturaService, never()).registrarPagamentoConfirmado(any());
+    }
+
+    @Test
+    void cobrancaVencida_ComExternalReference_DeveMarcarInadimplentePorEmpresa() throws Exception {
+        var empresaId = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
+        var payload = "{\"id\":\"evt_011\",\"event\":\"PAYMENT_OVERDUE\",\"payment\":"
+            + "{\"customer\":\"cus_123\",\"externalReference\":\"" + empresaId + "\"}}";
+        when(idempotencyService.registrarSeNovo("ASAAS", "evt_011")).thenReturn(true);
+        when(assinaturaService.registrarInadimplenciaPorEmpresa(java.util.UUID.fromString(empresaId)))
+            .thenReturn(true);
+
+        mockMvc.perform(postEvento(payload, "tok-teste"))
+            .andExpect(status().isOk());
+
+        verify(assinaturaService).registrarInadimplenciaPorEmpresa(java.util.UUID.fromString(empresaId));
+        verify(assinaturaService, never()).registrarInadimplencia(any());
+    }
+
+    @Test
     void tokenInvalido_DeveRetornar401ENaoProcessar() throws Exception {
         mockMvc.perform(postEvento(PAYLOAD_CONFIRMADO, "tok-errado"))
             .andExpect(status().isUnauthorized());

@@ -72,10 +72,28 @@ assinatura:
 
 # Gateway de pagamento (Asaas). O webhook-token autentica o POST /webhook/asaas
 # (header asaas-access-token, definido ao cadastrar o webhook no painel).
-# ASAAS_API_KEY entra quando a criação de customer/subscription via API for
-# implementada (Fase 2 item 4 do PLANO-MONETIZACAO.md). Usar o sandbox primeiro.
+# base-url aponta para o SANDBOX por padrão — trocar para https://api.asaas.com/v3
+# em produção. api-key é a chave da API (sandbox primeiro); sem ela a criação de
+# customer/subscription via API não funciona (Fase 2 item 4 do PLANO-MONETIZACAO.md).
 asaas:
+  base-url: ${ASAAS_BASE_URL:https://api-sandbox.asaas.com/v3}
+  api-key: ${ASAAS_API_KEY:}
   webhook-token: ${ASAAS_WEBHOOK_TOKEN:}
+
+# Envio de email transacional (Resend) — reset de senha (e, adiante, confirmação
+# de cadastro). Sem RESEND_API_KEY o EmailService apenas loga o email (dev local:
+# o link aparece no log). Em produção, "from" precisa ser remetente de um domínio
+# verificado no Resend.
+resend:
+  api-key: ${RESEND_API_KEY:}
+  from: ${RESEND_FROM:Agenda de Pagamentos <onboarding@resend.dev>}
+
+# URL pública do frontend, usada para montar links enviados por email.
+app:
+  frontend-url: ${APP_FRONTEND_URL:http://localhost:5173}
+
+senha-reset:
+  ttl-horas: ${SENHA_RESET_TTL_HORAS:2}
 
 # Transcrição de mensagens de voz do WhatsApp. Fornecedor separado da Anthropic
 # porque os modelos Claude não aceitam áudio como entrada — ver TranscricaoAudioService.
