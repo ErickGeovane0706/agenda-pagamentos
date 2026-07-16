@@ -50,6 +50,12 @@ class AssinaturaServiceTest {
             .thenReturn(Optional.ofNullable(assinatura));
     }
 
+    /** O assinar lê pela query com JOIN FETCH — precisa da empresa fora de transação. */
+    private void mockAssinaturaComEmpresa(Assinatura assinatura) {
+        when(assinaturaRepository.findByEmpresaIdComEmpresa(empresa.getId()))
+            .thenReturn(Optional.ofNullable(assinatura));
+    }
+
     @Test
     void podeAcessar_AtivaSemVigencia_DevePermitir() {
         mockAssinatura(assinatura(StatusAssinatura.ATIVA, null));
@@ -204,7 +210,7 @@ class AssinaturaServiceTest {
         var a = assinaturaComGateway(StatusAssinatura.ATIVA, null);
         when(assinaturaRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        assertTrue(assinaturaService.registrarInadimplencia("cus_123"));
+        assertTrue(assinaturaService.registrarInadimplencia("cus_123", "Cobrança vencida"));
         assertEquals(StatusAssinatura.INADIMPLENTE, a.getStatus());
     }
 
@@ -212,7 +218,7 @@ class AssinaturaServiceTest {
     void registrarInadimplencia_Cancelada_NaoDeveRegredirStatus() {
         var a = assinaturaComGateway(StatusAssinatura.CANCELADA, null);
 
-        assertTrue(assinaturaService.registrarInadimplencia("cus_123"));
+        assertTrue(assinaturaService.registrarInadimplencia("cus_123", "Cobrança vencida"));
 
         assertEquals(StatusAssinatura.CANCELADA, a.getStatus());
         verify(assinaturaRepository, never()).save(any());
@@ -238,27 +244,27 @@ class AssinaturaServiceTest {
         empresa.setTelefone("11999999999");
         var a = assinatura(StatusAssinatura.TRIAL, null);
         a.setLojasContratadas(3);
-        mockAssinatura(a);
+        mockAssinaturaComEmpresa(a);
         when(asaasClient.criarCustomer(any(), any(), any(), any(), eq(empresa.getId().toString())))
             .thenReturn("cus_new");
         when(asaasClient.criarAssinatura(eq("cus_new"), eq(new BigDecimal("137.00")), any(),
                 eq(empresa.getId().toString()))).thenReturn("sub_new");
         when(asaasClient.buscarUrlPagamento("sub_new")).thenReturn("https://asaas/i/1");
-        when(assinaturaRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(assinaturaRepository.vincularSubscriptionSeAusente(empresa.getId(), "sub_new", "cus_new"))
+            .thenReturn(1);
 
         var result = assinaturaService.assinar(empresa.getId());
 
         assertEquals("sub_new", result.subscriptionId());
         assertEquals("https://asaas/i/1", result.urlPagamento());
-        assertEquals("cus_new", a.getGatewayCustomerId());
-        assertEquals("sub_new", a.getGatewaySubscriptionId());
+        verify(assinaturaRepository).vincularSubscriptionSeAusente(empresa.getId(), "sub_new", "cus_new");
         assertEquals(StatusAssinatura.TRIAL, a.getStatus()); // não ativa antes do pagamento
     }
 
     @Test
     void assinar_SemCpfCnpj_DeveLancarIllegalArgumentSemChamarGateway() {
         empresa.setTelefone("11999999999"); // sem cpfCnpj
-        mockAssinatura(assinatura(StatusAssinatura.TRIAL, null));
+        mockAssinaturaComEmpresa(assinatura(StatusAssinatura.TRIAL, null));
 
         assertThrows(IllegalArgumentException.class, () -> assinaturaService.assinar(empresa.getId()));
         verify(asaasClient, never()).criarCustomer(any(), any(), any(), any(), any());
@@ -268,7 +274,7 @@ class AssinaturaServiceTest {
     void assinar_JaTemSubscription_NaoDeveCriarOutra() {
         var a = assinatura(StatusAssinatura.ATIVA, null);
         a.setGatewaySubscriptionId("sub_exist");
-        mockAssinatura(a);
+        mockAssinaturaComEmpresa(a);
         when(asaasClient.buscarUrlPagamento("sub_exist")).thenReturn("https://asaas/i/exist");
 
         var result = assinaturaService.assinar(empresa.getId());
@@ -284,15 +290,97 @@ class AssinaturaServiceTest {
         empresa.setTelefone("11999999999");
         var a = assinatura(StatusAssinatura.INADIMPLENTE, null);
         a.setGatewayCustomerId("cus_exist");
-        mockAssinatura(a);
+        mockAssinaturaComEmpresa(a);
         when(asaasClient.criarAssinatura(eq("cus_exist"), any(), any(), any())).thenReturn("sub_2");
         when(asaasClient.buscarUrlPagamento("sub_2")).thenReturn("https://asaas/i/2");
-        when(assinaturaRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(assinaturaRepository.vincularSubscriptionSeAusente(any(), any(), any())).thenReturn(1);
 
         var result = assinaturaService.assinar(empresa.getId());
 
         assertEquals("sub_2", result.subscriptionId());
         verify(asaasClient, never()).criarCustomer(any(), any(), any(), any(), any());
+    }
+
+    /**
+     * Dois cliques simultâneos: o UPDATE condicional só deixa um vincular. Quem
+     * perde PRECISA cancelar a subscription que criou no gateway — senão o
+     * cliente fica com duas cobranças recorrentes, uma delas invisível ao sistema.
+     */
+    @Test
+    void assinar_PerdendoACorrida_DeveCancelarASubscriptionOrfaEDevolverAVencedora() {
+        empresa.setCpfCnpj("12345678901");
+        empresa.setTelefone("11999999999");
+        var a = assinatura(StatusAssinatura.TRIAL, null);
+        a.setGatewayCustomerId("cus_exist");
+        mockAssinaturaComEmpresa(a);
+        when(asaasClient.criarAssinatura(any(), any(), any(), any())).thenReturn("sub_perdedora");
+        when(assinaturaRepository.vincularSubscriptionSeAusente(any(), any(), any())).thenReturn(0);
+
+        var vencedora = assinatura(StatusAssinatura.TRIAL, null);
+        vencedora.setGatewaySubscriptionId("sub_vencedora");
+        mockAssinatura(vencedora);
+        when(asaasClient.buscarUrlPagamento("sub_vencedora")).thenReturn("https://asaas/i/vencedora");
+
+        var result = assinaturaService.assinar(empresa.getId());
+
+        assertEquals("sub_vencedora", result.subscriptionId());
+        verify(asaasClient).cancelarAssinatura("sub_perdedora");
+    }
+
+    /**
+     * O customer precisa ser gravado assim que nasce. Se a subscription falhar
+     * logo depois e o customer não tiver sido persistido, a retentativa cria
+     * outro no gateway — foi assim que a base de sandbox ficou com dois customers
+     * para o mesmo CPF.
+     */
+    @Test
+    void assinar_FalhaAoCriarSubscription_DeveTerGravadoOCustomerParaARetentativa() {
+        empresa.setCpfCnpj("12345678901");
+        empresa.setTelefone("11999999999");
+        mockAssinaturaComEmpresa(assinatura(StatusAssinatura.TRIAL, null));
+        when(asaasClient.criarCustomer(any(), any(), any(), any(), any())).thenReturn("cus_novo");
+        when(asaasClient.criarAssinatura(any(), any(), any(), any()))
+            .thenThrow(new AsaasException("gateway fora"));
+
+        assertThrows(AsaasException.class, () -> assinaturaService.assinar(empresa.getId()));
+
+        verify(assinaturaRepository).vincularCustomerSeAusente(empresa.getId(), "cus_novo");
+    }
+
+    @Test
+    void assinar_CustomerJaGravado_NaoDeveCriarOutroNoGateway() {
+        empresa.setCpfCnpj("12345678901");
+        empresa.setTelefone("11999999999");
+        var a = assinatura(StatusAssinatura.TRIAL, null);
+        a.setGatewayCustomerId("cus_exist");
+        mockAssinaturaComEmpresa(a);
+        when(asaasClient.criarAssinatura(any(), any(), any(), any())).thenReturn("sub_1");
+        when(assinaturaRepository.vincularSubscriptionSeAusente(any(), any(), any())).thenReturn(1);
+
+        assinaturaService.assinar(empresa.getId());
+
+        verify(asaasClient, never()).criarCustomer(any(), any(), any(), any(), any());
+        verify(assinaturaRepository, never()).vincularCustomerSeAusente(any(), any());
+    }
+
+    /**
+     * Subscription criada no gateway mas não registrada aqui: sem compensar, o
+     * Asaas cobraria o cliente por algo que o sistema desconhece.
+     */
+    @Test
+    void assinar_FalhaAoVincular_DeveCancelarNoGatewayEPropagar() {
+        empresa.setCpfCnpj("12345678901");
+        empresa.setTelefone("11999999999");
+        var a = assinatura(StatusAssinatura.TRIAL, null);
+        a.setGatewayCustomerId("cus_exist");
+        mockAssinaturaComEmpresa(a);
+        when(asaasClient.criarAssinatura(any(), any(), any(), any())).thenReturn("sub_orfa");
+        when(assinaturaRepository.vincularSubscriptionSeAusente(any(), any(), any()))
+            .thenThrow(new RuntimeException("banco fora"));
+
+        assertThrows(RuntimeException.class, () -> assinaturaService.assinar(empresa.getId()));
+
+        verify(asaasClient).cancelarAssinatura("sub_orfa");
     }
 
     @Test
@@ -333,7 +421,7 @@ class AssinaturaServiceTest {
         mockAssinatura(a);
         when(assinaturaRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        assertTrue(assinaturaService.registrarInadimplenciaPorEmpresa(empresa.getId()));
+        assertTrue(assinaturaService.registrarInadimplenciaPorEmpresa(empresa.getId(), "Pagamento estornado"));
         assertEquals(StatusAssinatura.INADIMPLENTE, a.getStatus());
     }
 

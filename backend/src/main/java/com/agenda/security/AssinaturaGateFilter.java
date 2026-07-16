@@ -32,6 +32,8 @@ import java.util.UUID;
  * Passam sem checagem:
  * - /api/auth/** (login/refresh/logout sempre funcionam);
  * - /api/lgpd/** (direito legal independe de pagamento);
+ * - /api/assinaturas/** (é por onde se paga: bloquear o inadimplente aqui o
+ *   impediria de assinar e o prenderia no bloqueio para sempre);
  * - usuário MASTER (por papel, não por path — senão não reativa ninguém);
  * - requisição sem tenant (sem JWT: o Spring Security responde 401);
  * - tudo fora de /api/** (ex.: /webhook/**, que não tem JWT e é gateado
@@ -68,7 +70,8 @@ public class AssinaturaGateFilter extends OncePerRequestFilter {
             return false;
         }
         String uri = request.getRequestURI();
-        if (!uri.startsWith("/api/") || uri.startsWith("/api/auth/") || uri.startsWith("/api/lgpd/")) {
+        if (!uri.startsWith("/api/") || uri.startsWith("/api/auth/")
+                || uri.startsWith("/api/lgpd/") || uri.startsWith("/api/assinaturas")) {
             return false;
         }
         if (UserContext.isMaster()) {

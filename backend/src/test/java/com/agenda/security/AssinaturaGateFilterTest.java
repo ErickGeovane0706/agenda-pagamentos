@@ -59,6 +59,20 @@ class AssinaturaGateFilterTest {
         assertTrue(response.getContentAsString().contains("suspenso"));
     }
 
+    /**
+     * O inadimplente PRECISA alcançar o endpoint de assinar — é por onde ele
+     * paga. Bloqueá-lo aqui o prenderia no bloqueio para sempre.
+     */
+    @Test
+    void inadimplente_DevePoderChamarAssinar() throws Exception {
+        TenantContext.setEmpresaId(empresaId);
+
+        var response = executar("POST", "/api/assinaturas/" + empresaId + "/assinar");
+
+        assertEquals(200, response.getStatus());
+        verify(assinaturaService, never()).podeAcessar(any());
+    }
+
     @Test
     void leituraComAssinaturaBloqueada_DevePassar() throws Exception {
         TenantContext.setEmpresaId(empresaId);

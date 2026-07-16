@@ -102,7 +102,7 @@ public class AssinaturaService {
 
     @Transactional(readOnly = true)
     public List<AssinaturaDTO> listar() {
-        return assinaturaRepository.findAll().stream()
+        return assinaturaRepository.findAllComEmpresa().stream()
             .map(AssinaturaDTO::from)
             .toList();
     }
@@ -130,18 +130,27 @@ public class AssinaturaService {
      * Inicia a assinatura recorrente da empresa no gateway: cria (ou reusa) o
      * customer e cria a subscription mensal amarrada à empresa pelo
      * {@code externalReference}. NÃO ativa a assinatura — isso acontece quando o
-     * pagamento é confirmado pelo webhook. Idempotente: se já existe subscription,
-     * devolve a URL de pagamento existente em vez de criar outra (evita cobrança
-     * duplicada). Retorna o id da subscription e a URL de pagamento (Pix/boleto).
+     * pagamento é confirmado pelo webhook. Retorna o id da subscription e a URL
+     * de pagamento (Pix/boleto).
+     * <p>
+     * <b>Sem {@code @Transactional} de propósito.</b> O método faz até três
+     * chamadas HTTP ao Asaas (até 20s cada); com uma transação aberta em volta,
+     * cada assinatura em curso seguraria uma conexão do pool (padrão: 5) durante
+     * toda a espera — um gateway lento derrubaria o sistema inteiro, não só o
+     * billing. Cada operação de banco aqui abre a sua própria transação curta.
+     * <p>
+     * Cobrança duplicada é evitada em dois níveis: o atalho para quem já tem
+     * subscription, e o UPDATE condicional
+     * ({@code vincularSubscriptionSeAusente}) que resolve a corrida entre dois
+     * cliques simultâneos. Quem perde a corrida cancela no gateway a subscription
+     * que criou — nada de cobrança órfã cobrando o cliente para sempre.
      */
-    @Transactional
     public AssinaturaCheckoutDTO assinar(UUID empresaId) {
-        var assinatura = assinaturaRepository.findByEmpresaId(empresaId)
+        var assinatura = assinaturaRepository.findByEmpresaIdComEmpresa(empresaId)
             .orElseThrow(() -> new NotFoundException("Assinatura não encontrada para a empresa"));
 
         if (preenchido(assinatura.getGatewaySubscriptionId())) {
-            var urlExistente = asaasClient.buscarUrlPagamento(assinatura.getGatewaySubscriptionId());
-            return new AssinaturaCheckoutDTO(assinatura.getGatewaySubscriptionId(), urlExistente);
+            return checkoutDe(assinatura.getGatewaySubscriptionId());
         }
 
         var empresa = assinatura.getEmpresa();
@@ -151,24 +160,65 @@ public class AssinaturaService {
         if (!preenchido(customerId)) {
             customerId = asaasClient.criarCustomer(empresa.getNome(), empresa.getCpfCnpj(),
                 empresa.getTelefone(), null, empresaId.toString());
-            assinatura.setGatewayCustomerId(customerId);
+            // Grava já: se a criação da subscription falhar logo abaixo, a retentativa
+            // reusa este customer em vez de criar mais um no gateway.
+            assinaturaRepository.vincularCustomerSeAusente(empresaId, customerId);
         }
 
         var valor = calcularValor(assinatura.getLojasContratadas());
         var subscriptionId = asaasClient.criarAssinatura(customerId, valor,
             LocalDate.now(), empresaId.toString());
-        assinatura.setGatewaySubscriptionId(subscriptionId);
-        assinaturaRepository.save(assinatura);
+
+        int vinculadas;
+        try {
+            vinculadas = assinaturaRepository.vincularSubscriptionSeAusente(empresaId, subscriptionId, customerId);
+        } catch (RuntimeException e) {
+            // A subscription existe no gateway mas não conseguimos registrá-la: sem
+            // compensar, o cliente seria cobrado por algo que o sistema não conhece.
+            compensarCancelando(subscriptionId, empresaId);
+            throw e;
+        }
+
+        if (vinculadas == 0) {
+            compensarCancelando(subscriptionId, empresaId);
+            var vencedora = assinaturaRepository.findByEmpresaId(empresaId)
+                .orElseThrow(() -> new NotFoundException("Assinatura não encontrada para a empresa"));
+            log.info("Assinatura concorrente já vinculada para empresa {} — mantida a existente", empresaId);
+            return checkoutDe(vencedora.getGatewaySubscriptionId());
+        }
 
         log.info("Assinatura criada no gateway para empresa {} (valor {})", empresaId, valor);
+        return checkoutDe(subscriptionId);
+    }
+
+    private AssinaturaCheckoutDTO checkoutDe(String subscriptionId) {
         return new AssinaturaCheckoutDTO(subscriptionId, asaasClient.buscarUrlPagamento(subscriptionId));
+    }
+
+    /**
+     * Desfaz no gateway uma subscription que não ficou registrada aqui. Se a
+     * compensação falhar, loga em ERROR e segue: a subscription órfã cobraria o
+     * cliente indevidamente e precisa de remoção manual no painel.
+     */
+    private void compensarCancelando(String subscriptionId, UUID empresaId) {
+        try {
+            asaasClient.cancelarAssinatura(subscriptionId);
+        } catch (RuntimeException e) {
+            log.error("[ASAAS] Subscription {} da empresa {} ficou ÓRFÃ no gateway (cobrará indevidamente) "
+                + "e o cancelamento automático falhou — remover no painel: {}", subscriptionId, empresaId, e.getMessage());
+        }
     }
 
     /**
      * Cancela a assinatura no gateway (para de cobrar) e marca CANCELADA. Usado
      * para encerrar a assinatura e para limpar assinaturas de teste em produção.
+     * <p>
+     * Sem {@code @Transactional} pelo mesmo motivo do {@code assinar}: a chamada
+     * ao gateway não pode segurar conexão do pool. O gateway vem primeiro de
+     * propósito — se ele parar de cobrar e a gravação falhar, o cliente fica com
+     * acesso sem pagar (recuperável); na ordem inversa ele ficaria bloqueado e
+     * ainda sendo cobrado.
      */
-    @Transactional
     public void cancelarAssinatura(UUID empresaId) {
         var assinatura = assinaturaRepository.findByEmpresaId(empresaId)
             .orElseThrow(() -> new NotFoundException("Assinatura não encontrada para a empresa"));
@@ -236,29 +286,32 @@ public class AssinaturaService {
     }
 
     /**
-     * Cobrança vencida no gateway (webhook): rebaixa para INADIMPLENTE.
+     * Pagamento não honrado no gateway (webhook): rebaixa para INADIMPLENTE.
+     * Serve tanto para cobrança vencida quanto para estorno/chargeback — em
+     * todos, o dinheiro não está mais lá. {@code motivo} entra no log porque é
+     * o que diferencia os casos numa investigação.
      * Cancelada não regride (cancelamento é decisão deliberada do MASTER).
      */
     @Transactional
-    public boolean registrarInadimplencia(String gatewayCustomerId) {
+    public boolean registrarInadimplencia(String gatewayCustomerId, String motivo) {
         return assinaturaRepository.findByGatewayCustomerId(gatewayCustomerId)
-            .map(this::aplicarInadimplencia)
+            .map(a -> aplicarInadimplencia(a, motivo))
             .orElse(false);
     }
 
     /** Igual a {@link #registrarInadimplencia}, mas resolve pela empresa (externalReference). */
     @Transactional
-    public boolean registrarInadimplenciaPorEmpresa(UUID empresaId) {
+    public boolean registrarInadimplenciaPorEmpresa(UUID empresaId, String motivo) {
         return assinaturaRepository.findByEmpresaId(empresaId)
-            .map(this::aplicarInadimplencia)
+            .map(a -> aplicarInadimplencia(a, motivo))
             .orElse(false);
     }
 
-    private boolean aplicarInadimplencia(Assinatura a) {
+    private boolean aplicarInadimplencia(Assinatura a, String motivo) {
         if (a.getStatus() != StatusAssinatura.CANCELADA) {
             a.setStatus(StatusAssinatura.INADIMPLENTE);
             assinaturaRepository.save(a);
-            log.info("Cobrança vencida: empresa {} marcada INADIMPLENTE", a.getEmpresa().getId());
+            log.info("{}: empresa {} marcada INADIMPLENTE", motivo, a.getEmpresa().getId());
         }
         return true;
     }

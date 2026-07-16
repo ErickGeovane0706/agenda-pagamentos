@@ -1,6 +1,5 @@
 package com.agenda.domain.assinatura;
 
-import com.agenda.domain.webhook.WebhookIdempotencyService;
 import com.agenda.security.JwtService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,13 +10,18 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
-import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * Cobre o que é responsabilidade do controller: autenticar o evento e traduzir
+ * o resultado em status HTTP. O roteamento e a idempotência são do
+ * {@link AsaasWebhookProcessor} — ver AsaasWebhookProcessorTest.
+ */
 @WebMvcTest(AsaasWebhookController.class)
 @TestPropertySource(properties = "asaas.webhook-token=tok-teste")
 class AsaasWebhookControllerTest {
@@ -25,16 +29,14 @@ class AsaasWebhookControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @MockBean private AssinaturaService assinaturaService;
-    @MockBean private WebhookIdempotencyService idempotencyService;
+    @MockBean private AsaasWebhookProcessor processor;
     @MockBean private JwtService jwtService;
     @MockBean private JpaMetamodelMappingContext jpaMappingContext;
+    /** Não usado aqui, mas o AssinaturaGateFilter entra no contexto e exige o bean. */
+    @MockBean private AssinaturaService assinaturaService;
 
     private static final String PAYLOAD_CONFIRMADO =
-        "{\"id\":\"evt_001\",\"event\":\"PAYMENT_CONFIRMED\",\"payment\":{\"customer\":\"cus_123\",\"value\":137.00}}";
-
-    private static final String PAYLOAD_VENCIDO =
-        "{\"id\":\"evt_002\",\"event\":\"PAYMENT_OVERDUE\",\"payment\":{\"customer\":\"cus_123\"}}";
+        "{\"id\":\"evt_001\",\"event\":\"PAYMENT_CONFIRMED\",\"payment\":{\"id\":\"pay_1\",\"customer\":\"cus_123\"}}";
 
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder postEvento(String payload, String token) {
         var req = post("/webhook/asaas")
@@ -48,57 +50,11 @@ class AsaasWebhookControllerTest {
     }
 
     @Test
-    void pagamentoConfirmado_ComTokenValido_DeveAtivarAssinatura() throws Exception {
-        when(idempotencyService.registrarSeNovo("ASAAS", "evt_001")).thenReturn(true);
-        when(assinaturaService.registrarPagamentoConfirmado("cus_123")).thenReturn(true);
-
+    void tokenValido_DeveProcessarEResponder200() throws Exception {
         mockMvc.perform(postEvento(PAYLOAD_CONFIRMADO, "tok-teste"))
             .andExpect(status().isOk());
 
-        verify(assinaturaService).registrarPagamentoConfirmado("cus_123");
-    }
-
-    @Test
-    void cobrancaVencida_DeveMarcarInadimplencia() throws Exception {
-        when(idempotencyService.registrarSeNovo("ASAAS", "evt_002")).thenReturn(true);
-        when(assinaturaService.registrarInadimplencia("cus_123")).thenReturn(true);
-
-        mockMvc.perform(postEvento(PAYLOAD_VENCIDO, "tok-teste"))
-            .andExpect(status().isOk());
-
-        verify(assinaturaService).registrarInadimplencia("cus_123");
-    }
-
-    @Test
-    void pagamentoConfirmado_ComExternalReference_DeveAtivarPorEmpresa() throws Exception {
-        var empresaId = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
-        var payload = "{\"id\":\"evt_010\",\"event\":\"PAYMENT_CONFIRMED\",\"payment\":"
-            + "{\"customer\":\"cus_123\",\"externalReference\":\"" + empresaId + "\"}}";
-        when(idempotencyService.registrarSeNovo("ASAAS", "evt_010")).thenReturn(true);
-        when(assinaturaService.registrarPagamentoConfirmadoPorEmpresa(java.util.UUID.fromString(empresaId)))
-            .thenReturn(true);
-
-        mockMvc.perform(postEvento(payload, "tok-teste"))
-            .andExpect(status().isOk());
-
-        verify(assinaturaService).registrarPagamentoConfirmadoPorEmpresa(java.util.UUID.fromString(empresaId));
-        verify(assinaturaService, never()).registrarPagamentoConfirmado(any());
-    }
-
-    @Test
-    void cobrancaVencida_ComExternalReference_DeveMarcarInadimplentePorEmpresa() throws Exception {
-        var empresaId = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
-        var payload = "{\"id\":\"evt_011\",\"event\":\"PAYMENT_OVERDUE\",\"payment\":"
-            + "{\"customer\":\"cus_123\",\"externalReference\":\"" + empresaId + "\"}}";
-        when(idempotencyService.registrarSeNovo("ASAAS", "evt_011")).thenReturn(true);
-        when(assinaturaService.registrarInadimplenciaPorEmpresa(java.util.UUID.fromString(empresaId)))
-            .thenReturn(true);
-
-        mockMvc.perform(postEvento(payload, "tok-teste"))
-            .andExpect(status().isOk());
-
-        verify(assinaturaService).registrarInadimplenciaPorEmpresa(java.util.UUID.fromString(empresaId));
-        verify(assinaturaService, never()).registrarInadimplencia(any());
+        verify(processor).processar(any());
     }
 
     @Test
@@ -106,46 +62,35 @@ class AsaasWebhookControllerTest {
         mockMvc.perform(postEvento(PAYLOAD_CONFIRMADO, "tok-errado"))
             .andExpect(status().isUnauthorized());
 
-        verifyNoInteractions(assinaturaService, idempotencyService);
+        verifyNoInteractions(processor);
     }
 
     @Test
-    void semToken_DeveRetornar401() throws Exception {
+    void semToken_DeveRetornar401ENaoProcessar() throws Exception {
         mockMvc.perform(postEvento(PAYLOAD_CONFIRMADO, null))
             .andExpect(status().isUnauthorized());
 
-        verifyNoInteractions(assinaturaService);
+        verifyNoInteractions(processor);
     }
 
+    /**
+     * Falha transitória (banco fora) tem de devolver não-200: o Asaas só reenvia
+     * o que não foi respondido com 200. Responder 200 aqui perderia o pagamento
+     * para sempre — o cliente pagaria e ficaria bloqueado.
+     */
     @Test
-    void eventoDuplicado_NaoDeveProcessarDeNovo() throws Exception {
-        when(idempotencyService.registrarSeNovo("ASAAS", "evt_001")).thenReturn(false);
+    void falhaNoProcessamento_DeveResponder500ParaOAsaasReenviar() throws Exception {
+        doThrow(new RuntimeException("banco fora")).when(processor).processar(any());
 
         mockMvc.perform(postEvento(PAYLOAD_CONFIRMADO, "tok-teste"))
-            .andExpect(status().isOk());
-
-        verifyNoInteractions(assinaturaService);
+            .andExpect(status().isInternalServerError());
     }
 
     @Test
-    void eventoNaoTratado_DeveResponder200SemProcessar() throws Exception {
-        when(idempotencyService.registrarSeNovo(any(), any())).thenReturn(true);
-        var payload = "{\"id\":\"evt_003\",\"event\":\"PAYMENT_CREATED\",\"payment\":{\"customer\":\"cus_123\"}}";
-
-        mockMvc.perform(postEvento(payload, "tok-teste"))
+    void payloadIncompleto_NaoImpedeAutenticacao_EResponde200() throws Exception {
+        mockMvc.perform(postEvento("{\"id\":\"evt_x\"}", "tok-teste"))
             .andExpect(status().isOk());
 
-        verifyNoInteractions(assinaturaService);
-    }
-
-    @Test
-    void erroInternoNoProcessamento_DeveResponder200MesmoAssim() throws Exception {
-        when(idempotencyService.registrarSeNovo(any(), any())).thenReturn(true);
-        when(assinaturaService.registrarPagamentoConfirmado(any()))
-            .thenThrow(new RuntimeException("erro simulado"));
-
-        // 200 mesmo em erro: não-200 faz o Asaas interromper a fila de webhooks.
-        mockMvc.perform(postEvento(PAYLOAD_CONFIRMADO, "tok-teste"))
-            .andExpect(status().isOk());
+        verify(processor).processar(any());
     }
 }
