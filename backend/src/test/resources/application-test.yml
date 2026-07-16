@@ -1,0 +1,27 @@
+# Perfil usado só pelo ApplicationContextSmokeTest. As envs do application.yml
+# (JWT_SECRET, R2_*, WHATSAPP_*) não têm default e o contexto não sobe sem elas;
+# aqui elas recebem valores de fachada. Nenhum bean faz rede ao subir — o S3Client
+# do R2 é construído preguiçosamente e o segredo do JWT só é decodificado ao assinar
+# —, então nada aqui precisa ser credencial de verdade.
+#
+# O banco vem do Testcontainer via @ServiceConnection, que tem precedência sobre o
+# spring.datasource abaixo; os valores existem apenas para o placeholder ${DATABASE_URL}
+# do application.yml resolver.
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/substituido-pelo-testcontainer
+    username: test
+    password: test
+
+jwt:
+  secret: c21va2UtdGVzdC1uYW8tZS1zZWdyZWRvLXJlYWwtMDAw
+
+r2:
+  account-id: teste
+  access-key: teste
+  secret-key: teste
+  bucket: teste
+
+whatsapp:
+  phone-number-id: teste
+  token: teste
