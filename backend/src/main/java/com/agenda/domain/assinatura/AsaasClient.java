@@ -101,6 +101,23 @@ public class AsaasClient {
     }
 
     /**
+     * Altera o valor mensal de uma assinatura já existente — usado quando muda a
+     * quantidade de lojas contratadas. Sem isso o cliente seguiria pagando o preço
+     * do dia em que assinou, por mais lojas que ganhasse.
+     * <p>
+     * O PUT do Asaas é parcial: enviar só {@code value} preserva ciclo, forma de
+     * pagamento e vencimento. {@code updatePendingPayments=true} estende a mudança
+     * à cobrança pendente já gerada — sem isso, o mês corrente ficaria no preço
+     * antigo (ou, num downgrade, o cliente pagaria a mais por este mês).
+     */
+    public void atualizarValorAssinatura(String subscriptionId, BigDecimal valor) {
+        var body = new LinkedHashMap<String, Object>();
+        body.put("value", valor);
+        body.put("updatePendingPayments", true);
+        put("/subscriptions/" + subscriptionId, body);
+    }
+
+    /**
      * URL da página de pagamento ({@code invoiceUrl}) da primeira cobrança gerada
      * pela assinatura — é para onde o cliente é redirecionado para pagar.
      * Retorna {@code null} se ainda não houver cobrança gerada.
@@ -135,6 +152,16 @@ public class AsaasClient {
         garantirConfigurado();
         try {
             return restTemplate.exchange(baseUrl + path, HttpMethod.POST,
+                    new HttpEntity<>(body, headers()), JsonNode.class).getBody();
+        } catch (RestClientException e) {
+            throw falha(path, e);
+        }
+    }
+
+    private JsonNode put(String path, Object body) {
+        garantirConfigurado();
+        try {
+            return restTemplate.exchange(baseUrl + path, HttpMethod.PUT,
                     new HttpEntity<>(body, headers()), JsonNode.class).getBody();
         } catch (RestClientException e) {
             throw falha(path, e);

@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -37,6 +38,9 @@ public class AssinaturaService {
      */
     private final int carenciaDias;
 
+    /** Duração do trial de uma empresa nova, em dias. */
+    private final int trialDias;
+
     /** Preço-base (inclui 1 loja) e valor por loja adicional — fonte do valor cobrado. */
     private final BigDecimal precoBase;
     private final BigDecimal precoLojaAdicional;
@@ -44,11 +48,13 @@ public class AssinaturaService {
     public AssinaturaService(AssinaturaRepository assinaturaRepository,
                              AsaasClient asaasClient,
                              @Value("${assinatura.carencia-dias}") int carenciaDias,
+                             @Value("${assinatura.trial-dias}") int trialDias,
                              @Value("${assinatura.preco-base}") BigDecimal precoBase,
                              @Value("${assinatura.preco-loja-adicional}") BigDecimal precoLojaAdicional) {
         this.assinaturaRepository = assinaturaRepository;
         this.asaasClient = asaasClient;
         this.carenciaDias = carenciaDias;
+        this.trialDias = trialDias;
         this.precoBase = precoBase;
         this.precoLojaAdicional = precoLojaAdicional;
     }
@@ -87,9 +93,19 @@ public class AssinaturaService {
     }
 
     /**
-     * Assinatura inicial de uma empresa recém-criada: TRIAL com 1 loja.
-     * Sem isso a empresa nova nasceria sem assinatura e ficaria bloqueada
-     * antes mesmo de criar a primeira loja. O MASTER ajusta depois.
+     * Assinatura inicial de uma empresa recém-criada: TRIAL com 1 loja, vigente
+     * por {@code assinatura.trial-dias}. Sem isso a empresa nova nasceria sem
+     * assinatura e ficaria bloqueada antes mesmo de criar a primeira loja.
+     * <p>
+     * A vigência é obrigatória: {@code acessivel} trata vigência nula como
+     * "sem controle de prazo", então um trial sem data seria grátis para sempre
+     * e o {@code rebaixarVencidas} nunca o alcançaria (a query filtra por
+     * vigenteAte). Com o cadastro público isso viraria conta vitalícia para
+     * qualquer um que se registrasse.
+     * <p>
+     * Na prática o acesso dura {@code trial-dias + carencia-dias}: a carência é
+     * aplicada de forma uniforme por {@code acessivel}. São alguns dias a mais
+     * de cortesia, não um prazo indefinido.
      */
     @Transactional
     public Assinatura criarTrial(Empresa empresa) {
@@ -97,6 +113,7 @@ public class AssinaturaService {
             .empresa(empresa)
             .status(StatusAssinatura.TRIAL)
             .lojasContratadas(1)
+            .vigenteAte(LocalDate.now().plusDays(trialDias))
             .build());
     }
 
@@ -108,22 +125,49 @@ public class AssinaturaService {
     }
 
     /**
-     * "Virada de linha na mão" da Fase 1: o MASTER ativa/suspende/cancela e
-     * ajusta lojas contratadas e vigência após confirmar o pagamento do
-     * Payment Link. Na Fase 2 o webhook do gateway passa a fazer isso.
+     * Painel do MASTER: ajusta status, lojas contratadas e vigência na mão, e
+     * propaga ao gateway o que muda dinheiro. Não basta gravar aqui — a
+     * assinatura no Asaas tem vida própria e continuaria cobrando o valor antigo
+     * (ou cobrando uma assinatura "cancelada" só no nosso banco).
+     * <p>
+     * Sem {@code @Transactional}, como {@code assinar}: há chamadas de rede, que
+     * não podem segurar conexão do pool.
      */
-    @Transactional
     public AssinaturaDTO atualizar(UUID empresaId, AtualizarAssinaturaRequest req) {
-        var assinatura = assinaturaRepository.findByEmpresaId(empresaId)
+        var assinatura = assinaturaRepository.findByEmpresaIdComEmpresa(empresaId)
             .orElseThrow(() -> new NotFoundException("Assinatura não encontrada para a empresa"));
+
+        var subscriptionId = assinatura.getGatewaySubscriptionId();
+        var lojasMudaram = !Objects.equals(assinatura.getLojasContratadas(), req.lojasContratadas());
+
+        // Cancelar: GATEWAY PRIMEIRO. Se gravássemos antes, o id da subscription
+        // sumiria daqui e uma falha na chamada deixaria o Asaas cobrando para
+        // sempre uma assinatura que ninguém mais consegue localizar.
+        if (req.status() == StatusAssinatura.CANCELADA && preenchido(subscriptionId)) {
+            asaasClient.cancelarAssinatura(subscriptionId);
+            assinatura.setGatewaySubscriptionId(null);
+            subscriptionId = null;
+            log.info("Assinatura da empresa {} cancelada no gateway via painel", empresaId);
+        }
 
         assinatura.setStatus(req.status());
         assinatura.setLojasContratadas(req.lojasContratadas());
         assinatura.setVigenteAte(req.vigenteAte());
-        if (req.gatewayCustomerId() != null && !req.gatewayCustomerId().isBlank()) {
+        if (preenchido(req.gatewayCustomerId())) {
             assinatura.setGatewayCustomerId(req.gatewayCustomerId());
         }
-        return AssinaturaDTO.from(assinaturaRepository.save(assinatura));
+        assinaturaRepository.save(assinatura);
+
+        // Preço: BANCO PRIMEIRO. Se o gateway falhar, o MASTER recebe erro e repete
+        // o PUT (idempotente). Enquanto isso cobra-se a menos, o que é preferível a
+        // cobrar a mais por lojas que o banco ainda não liberou.
+        if (lojasMudaram && preenchido(subscriptionId)) {
+            var valor = calcularValor(req.lojasContratadas());
+            asaasClient.atualizarValorAssinatura(subscriptionId, valor);
+            log.info("Valor da assinatura da empresa {} atualizado para {} ({} lojas)",
+                empresaId, valor, req.lojasContratadas());
+        }
+        return AssinaturaDTO.from(assinatura);
     }
 
     /**
@@ -274,6 +318,17 @@ public class AssinaturaService {
             .orElse(false);
     }
 
+    /**
+     * Ativa sem checar CANCELADA de propósito — ao contrário do
+     * {@link #aplicarInadimplencia}, que protege o cancelamento. Não é
+     * esquecimento: {@code assinar} não mexe no status, então uma empresa
+     * CANCELADA que assina de novo só volta a ATIVA quando o pagamento chega
+     * aqui. Um guard travaria a re-assinatura — o cliente pagaria e continuaria
+     * bloqueado. Cancelar sempre remove a subscription do gateway (tanto pelo
+     * DELETE quanto pelo painel), então não há cobrança recorrente para
+     * ressuscitar quem cancelou; e se um boleto pendente for pago mesmo assim,
+     * liberar o acesso é o certo — o cliente pagou.
+     */
     private boolean aplicarPagamentoConfirmado(Assinatura a) {
         var hoje = LocalDate.now();
         var base = a.getVigenteAte() != null && a.getVigenteAte().isAfter(hoje)

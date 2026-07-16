@@ -21,6 +21,7 @@ import static org.mockito.Mockito.*;
 class AssinaturaServiceTest {
 
     private static final int CARENCIA_DIAS = 5;
+    private static final int TRIAL_DIAS = 30;
 
     @Mock private AssinaturaRepository assinaturaRepository;
     @Mock private AsaasClient asaasClient;
@@ -31,7 +32,7 @@ class AssinaturaServiceTest {
     @BeforeEach
     void setUp() {
         assinaturaService = new AssinaturaService(assinaturaRepository, asaasClient, CARENCIA_DIAS,
-            new BigDecimal("79.00"), new BigDecimal("29.00"));
+            TRIAL_DIAS, new BigDecimal("79.00"), new BigDecimal("29.00"));
         empresa = Empresa.builder().id(UUID.randomUUID()).nome("Empresa Teste").build();
     }
 
@@ -129,7 +130,7 @@ class AssinaturaServiceTest {
 
     @Test
     void atualizar_DeveAplicarStatusLojasEVigencia() {
-        mockAssinatura(assinatura(StatusAssinatura.TRIAL, null));
+        mockAssinaturaComEmpresa(assinatura(StatusAssinatura.TRIAL, null));
         when(assinaturaRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         var vigencia = LocalDate.now().plusMonths(1);
         var req = new AtualizarAssinaturaRequest(StatusAssinatura.ATIVA, 3, vigencia, "cus_123");
@@ -146,7 +147,7 @@ class AssinaturaServiceTest {
     void atualizar_SemGatewayCustomerId_NaoDeveLimparVinculoExistente() {
         var existente = assinatura(StatusAssinatura.ATIVA, null);
         existente.setGatewayCustomerId("cus_original");
-        mockAssinatura(existente);
+        mockAssinaturaComEmpresa(existente);
         when(assinaturaRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         var result = assinaturaService.atualizar(empresa.getId(),
@@ -157,7 +158,7 @@ class AssinaturaServiceTest {
 
     @Test
     void atualizar_SemAssinatura_DeveLancarNotFound() {
-        mockAssinatura(null);
+        mockAssinaturaComEmpresa(null);
         var req = new AtualizarAssinaturaRequest(StatusAssinatura.ATIVA, 1, null, null);
 
         assertThrows(NotFoundException.class,
@@ -222,6 +223,109 @@ class AssinaturaServiceTest {
 
         assertEquals(StatusAssinatura.CANCELADA, a.getStatus());
         verify(assinaturaRepository, never()).save(any());
+    }
+
+    // ---------------------------------------------------------------
+    // Trial
+    // ---------------------------------------------------------------
+
+    /**
+     * Trial sem vigência é grátis para sempre: acessivel() libera quando a
+     * vigência é nula e o rebaixarVencidas nunca o alcança. Com o cadastro
+     * público, seria conta vitalícia para qualquer um.
+     */
+    @Test
+    void criarTrial_DeveDefinirVigenciaPeloTrialDias() {
+        when(assinaturaRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        var trial = assinaturaService.criarTrial(empresa);
+
+        assertEquals(StatusAssinatura.TRIAL, trial.getStatus());
+        assertEquals(LocalDate.now().plusDays(TRIAL_DIAS), trial.getVigenteAte());
+    }
+
+    @Test
+    void podeAcessar_TrialVencidoAlemDaCarencia_DeveBloquear() {
+        mockAssinatura(assinatura(StatusAssinatura.TRIAL,
+            LocalDate.now().minusDays(CARENCIA_DIAS + 1)));
+
+        assertFalse(assinaturaService.podeAcessar(empresa.getId()));
+    }
+
+    // ---------------------------------------------------------------
+    // Painel do MASTER (atualizar)
+    // ---------------------------------------------------------------
+
+    /**
+     * Mudar lojas contratadas muda o preço: sem propagar ao gateway, o cliente
+     * ganha lojas e segue pagando o valor do dia em que assinou.
+     */
+    @Test
+    void atualizar_MudandoLojas_DevePropagarNovoValorAoGateway() {
+        var a = assinatura(StatusAssinatura.ATIVA, null);
+        a.setGatewaySubscriptionId("sub_1");
+        mockAssinaturaComEmpresa(a);
+
+        assinaturaService.atualizar(empresa.getId(),
+            new AtualizarAssinaturaRequest(StatusAssinatura.ATIVA, 3, null, null));
+
+        verify(asaasClient).atualizarValorAssinatura("sub_1", new BigDecimal("137.00"));
+    }
+
+    @Test
+    void atualizar_SemMudarLojas_NaoDeveChamarOGateway() {
+        var a = assinatura(StatusAssinatura.ATIVA, null);
+        a.setGatewaySubscriptionId("sub_1");
+        mockAssinaturaComEmpresa(a);
+
+        assinaturaService.atualizar(empresa.getId(),
+            new AtualizarAssinaturaRequest(StatusAssinatura.ATIVA, 1, null, null));
+
+        verify(asaasClient, never()).atualizarValorAssinatura(any(), any());
+    }
+
+    @Test
+    void atualizar_MudandoLojasSemSubscription_NaoDeveChamarOGateway() {
+        mockAssinaturaComEmpresa(assinatura(StatusAssinatura.TRIAL, null));
+
+        assinaturaService.atualizar(empresa.getId(),
+            new AtualizarAssinaturaRequest(StatusAssinatura.TRIAL, 3, null, null));
+
+        verify(asaasClient, never()).atualizarValorAssinatura(any(), any());
+    }
+
+    /**
+     * Cancelar pelo painel tem de parar a cobrança de verdade. Marcar CANCELADA
+     * só no banco deixaria o Asaas cobrando, e o pagamento seguinte reativaria
+     * a empresa.
+     */
+    @Test
+    void atualizar_ParaCancelada_DeveCancelarNoGatewayELimparASubscription() {
+        var a = assinatura(StatusAssinatura.ATIVA, null);
+        a.setGatewaySubscriptionId("sub_1");
+        mockAssinaturaComEmpresa(a);
+
+        assinaturaService.atualizar(empresa.getId(),
+            new AtualizarAssinaturaRequest(StatusAssinatura.CANCELADA, 1, null, null));
+
+        verify(asaasClient).cancelarAssinatura("sub_1");
+        assertNull(a.getGatewaySubscriptionId());
+        assertEquals(StatusAssinatura.CANCELADA, a.getStatus());
+    }
+
+    /** Falha ao cancelar no gateway não pode gravar CANCELADA: perderíamos o id da subscription. */
+    @Test
+    void atualizar_ParaCancelada_FalhaNoGateway_NaoDeveGravar() {
+        var a = assinatura(StatusAssinatura.ATIVA, null);
+        a.setGatewaySubscriptionId("sub_1");
+        mockAssinaturaComEmpresa(a);
+        doThrow(new AsaasException("gateway fora")).when(asaasClient).cancelarAssinatura("sub_1");
+
+        assertThrows(AsaasException.class, () -> assinaturaService.atualizar(empresa.getId(),
+            new AtualizarAssinaturaRequest(StatusAssinatura.CANCELADA, 1, null, null)));
+
+        verify(assinaturaRepository, never()).save(any());
+        assertEquals("sub_1", a.getGatewaySubscriptionId());
     }
 
     // ---------------------------------------------------------------
