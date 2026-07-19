@@ -8,6 +8,7 @@
 .env.development
 .env.staging
 *.env
+.mcp.json
 
 # ══════════════════════════════════════════════
 # IA / OPENCODE - ARQUIVOS INTERNOS
