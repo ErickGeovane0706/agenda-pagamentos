@@ -131,6 +131,7 @@ public class AuthService {
      * Retorna os dados do usuário autenticado a partir do contexto
      * da requisição.
      */
+    @Transactional(readOnly = true)
     public UsuarioDTO me() {
         var usuarioId = UserContext.getUsuarioId();
         var usuario = usuarioRepository.findById(usuarioId)
