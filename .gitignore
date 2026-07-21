@@ -94,3 +94,10 @@ temp/
 tmp/
 
 *.zip
+
+# ══════════════════════════════════════════════
+# SAIDA BRUTA DO SCANNER ZAP
+# (a analise destilada fica nos .md de relatorio)
+# ══════════════════════════════════════════════
+zap-report.html
+zap-report.json

@@ -1,3 +1,11 @@
+/* Inter auto-hospedada (@fontsource) — servida do proprio dominio, sem
+   depender de fonts.googleapis.com/fonts.gstatic.com. Subset latin cobre
+   os acentos do pt-BR. */
+@import '@fontsource/inter/latin-400.css';
+@import '@fontsource/inter/latin-500.css';
+@import '@fontsource/inter/latin-600.css';
+@import '@fontsource/inter/latin-700.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

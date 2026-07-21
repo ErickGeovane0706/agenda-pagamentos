@@ -2,12 +2,18 @@ package com.agenda.shared.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.LocalDateTime;
 import java.util.stream.Collectors;
@@ -114,6 +120,60 @@ public class RestExceptionHandler {
     @ExceptionHandler(TooManyRequestsException.class)
     public ResponseEntity<ErrorResponse> handleTooManyRequests(TooManyRequestsException ex) {
         return error(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage());
+    }
+
+    /**
+     * Método HTTP não suportado pela rota → 405 METHOD_NOT_ALLOWED.
+     * Ex.: GET em /api/auth/login (que só aceita POST).
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
+        return error(HttpStatus.METHOD_NOT_ALLOWED, "Método não permitido");
+    }
+
+    /**
+     * Corpo da requisição ilegível → 400 BAD_REQUEST.
+     * Ex.: JSON malformado ou corpo ausente onde é obrigatório.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleUnreadable(HttpMessageNotReadableException ex) {
+        return error(HttpStatus.BAD_REQUEST, "Requisição malformada");
+    }
+
+    /**
+     * Content-Type não suportado → 415 UNSUPPORTED_MEDIA_TYPE.
+     * Ex.: POST com text/plain em endpoint que espera application/json.
+     */
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMediaType(HttpMediaTypeNotSupportedException ex) {
+        return error(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Formato não suportado");
+    }
+
+    /**
+     * Tipo de parâmetro incompatível → 400 BAD_REQUEST.
+     * Ex.: UUID inválido no path ou query string.
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        return error(HttpStatus.BAD_REQUEST, "Parâmetro inválido");
+    }
+
+    /**
+     * Parâmetro obrigatório ausente → 400 BAD_REQUEST.
+     */
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ErrorResponse> handleMissingParam(MissingServletRequestParameterException ex) {
+        return error(HttpStatus.BAD_REQUEST, "Parâmetro obrigatório ausente");
+    }
+
+    /**
+     * Rota inexistente → 404 NOT_FOUND.
+     * Alcançável nos prefixos permitAll (ex.: /webhook/*), onde o Spring
+     * Security não barra antes do dispatcher.
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNoResource(NoResourceFoundException ex) {
+        return error(HttpStatus.NOT_FOUND, "Recurso não encontrado");
     }
 
     /**
