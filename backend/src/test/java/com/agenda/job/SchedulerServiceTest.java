@@ -1,5 +1,6 @@
 package com.agenda.job;
 
+import com.agenda.domain.auth.SenhaResetService;
 import com.agenda.domain.boleto.BoletoRepository;
 import com.agenda.domain.cheque.ChequeRepository;
 import com.agenda.domain.empresa.Empresa;
@@ -29,6 +30,7 @@ class SchedulerServiceTest {
     @Mock private BoletoRepository boletoRepository;
     @Mock private PagamentoPixRepository pagamentoPixRepository;
     @Mock private ChequeRepository chequeRepository;
+    @Mock private SenhaResetService senhaResetService;
 
     private SchedulerService schedulerService;
     private UUID empresaId;
@@ -36,7 +38,7 @@ class SchedulerServiceTest {
 
     @BeforeEach
     void setUp() {
-        schedulerService = new SchedulerService(usuarioRepository, empresaRepository, boletoRepository, pagamentoPixRepository, chequeRepository);
+        schedulerService = new SchedulerService(usuarioRepository, empresaRepository, boletoRepository, pagamentoPixRepository, chequeRepository, senhaResetService);
         empresaId = UUID.randomUUID();
         empresa = Empresa.builder().id(empresaId).nome("Empresa Teste").build();
     }

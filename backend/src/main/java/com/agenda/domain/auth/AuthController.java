@@ -26,6 +26,7 @@ import java.time.Duration;
 public class AuthController {
 
     private final AuthService authService;
+    private final SenhaResetService senhaResetService;
 
     /**
      * Flag {@code Secure} dos cookies de auth. Default {@code true} (produção,
@@ -88,6 +89,30 @@ public class AuthController {
     @GetMapping("/me")
     public ResponseEntity<UsuarioDTO> me() {
         return ResponseEntity.ok(authService.me());
+    }
+
+    /**
+     * Pede o link de redefinição de senha. Endpoint público.
+     * <p>
+     * Responde 204 SEMPRE — email cadastrado ou não. Distinguir os casos
+     * transformaria o endpoint num oráculo de quem é cliente do sistema.
+     * O 429 do rate limit é o único desvio, e vale igual para os dois casos.
+     */
+    @PostMapping("/senha/esqueci")
+    public ResponseEntity<Void> esqueciSenha(@Valid @RequestBody SenhaResetDTO.Solicitacao req,
+                                             HttpServletRequest request) {
+        senhaResetService.solicitar(req.email(), request.getRemoteAddr());
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Redefine a senha com o token recebido por email. Endpoint público.
+     * Token inválido, expirado ou já usado retornam a MESMA mensagem.
+     */
+    @PostMapping("/senha/redefinir")
+    public ResponseEntity<Void> redefinirSenha(@Valid @RequestBody SenhaResetDTO.Redefinicao req) {
+        senhaResetService.redefinir(req.token(), req.novaSenha());
+        return ResponseEntity.noContent().build();
     }
 
     private void setAuthCookies(HttpServletResponse response, AuthLoginResult result) {

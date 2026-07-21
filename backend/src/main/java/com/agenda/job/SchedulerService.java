@@ -1,5 +1,6 @@
 package com.agenda.job;
 
+import com.agenda.domain.auth.SenhaResetService;
 import com.agenda.domain.boleto.BoletoRepository;
 import com.agenda.domain.cheque.ChequeRepository;
 import com.agenda.domain.empresa.EmpresaRepository;
@@ -35,6 +36,17 @@ public class SchedulerService {
     private final BoletoRepository boletoRepository;
     private final PagamentoPixRepository pagamentoPixRepository;
     private final ChequeRepository chequeRepository;
+    private final SenhaResetService senhaResetService;
+
+    /**
+     * Remove tokens de redefinição de senha vencidos ou já usados.
+     * Roda 20 minutos depois das exclusões para não disputar a janela das 03:00.
+     */
+    @Scheduled(cron = "0 20 3 * * *")
+    public void limparTokensDeSenha() {
+        int removidos = senhaResetService.limparExpirados();
+        log.info("Tokens de redefinição de senha removidos: {}", removidos);
+    }
 
     @Transactional
     @Scheduled(cron = "0 0 3 * * *")

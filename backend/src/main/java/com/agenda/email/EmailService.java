@@ -49,7 +49,11 @@ public class EmailService {
     @Async
     public void enviar(String para, String assunto, String htmlCorpo) {
         if (apiKey == null || apiKey.isBlank()) {
-            log.warn("[EMAIL] RESEND_API_KEY não configurada — email '{}' para {} NÃO enviado (dev).", assunto, para);
+            // Corpo incluído de propósito: sem isso o link de confirmação/reset
+            // não existe em lugar nenhum (o banco só guarda o hash) e o fluxo
+            // fica impossível de testar em dev. Só ocorre sem API key.
+            log.warn("[EMAIL] RESEND_API_KEY não configurada — email '{}' para {} NÃO enviado (dev). Corpo:\n{}",
+                    assunto, para, htmlCorpo);
             return;
         }
         try {

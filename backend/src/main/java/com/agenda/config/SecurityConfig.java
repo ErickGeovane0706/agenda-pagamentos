@@ -59,6 +59,9 @@ public class SecurityConfig {
             )
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/login", "/api/auth/refresh").permitAll()
+                // Rota a rota, nunca /api/auth/** inteiro: liberar o prefixo
+                // abriria junto qualquer endpoint futuro criado ali dentro.
+                .requestMatchers("/api/auth/senha/esqueci", "/api/auth/senha/redefinir").permitAll()
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().permitAll()
             )
