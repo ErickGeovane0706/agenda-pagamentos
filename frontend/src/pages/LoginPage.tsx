@@ -87,7 +87,13 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p className="text-center text-xs text-slate-400 mt-6">
+          <p className="text-center text-sm text-slate-500 mt-5">
+            <Link to="/esqueci-senha" className="hover:text-[#0c4a6e] hover:underline">
+              Esqueci minha senha
+            </Link>
+          </p>
+
+          <p className="text-center text-xs text-slate-400 mt-4">
             <Link to="/privacidade" className="hover:underline">Política de Privacidade</Link>
           </p>
         </div>
