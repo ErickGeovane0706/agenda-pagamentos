@@ -63,4 +63,12 @@ public class Usuario {
     @Column(name = "onboarding_etapa", nullable = false, length = 30)
     @Builder.Default
     private EtapaOnboarding onboardingEtapa = EtapaOnboarding.CONCLUIDO;
+
+    /** Aceite dos termos e da política (LGPD) — evidência de consentimento, V24. */
+    @Column(name = "aceite_termos", nullable = false)
+    @Builder.Default
+    private Boolean aceiteTermos = false;
+
+    @Column(name = "aceite_termos_em")
+    private LocalDateTime aceiteTermosEm;
 }

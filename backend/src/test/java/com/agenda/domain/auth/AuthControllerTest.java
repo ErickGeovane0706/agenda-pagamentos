@@ -33,6 +33,7 @@ class AuthControllerTest {
 
     @MockBean private AuthService authService;
     @MockBean private SenhaResetService senhaResetService;
+    @MockBean private RegistroService registroService;
     @MockBean private JwtService jwtService;
     @MockBean private JpaMetamodelMappingContext jpaMappingContext;
     // Exigido pelo AssinaturaGateFilter (@Component Filter, escaneado pelo @WebMvcTest).

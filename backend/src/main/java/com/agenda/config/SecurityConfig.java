@@ -62,6 +62,7 @@ public class SecurityConfig {
                 // Rota a rota, nunca /api/auth/** inteiro: liberar o prefixo
                 // abriria junto qualquer endpoint futuro criado ali dentro.
                 .requestMatchers("/api/auth/senha/esqueci", "/api/auth/senha/redefinir").permitAll()
+                .requestMatchers("/api/auth/registro", "/api/auth/registro/confirmar").permitAll()
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().permitAll()
             )

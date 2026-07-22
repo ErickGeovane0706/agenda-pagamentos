@@ -59,19 +59,9 @@ public class UsuarioService {
             throw new AccessDeniedException("Apenas MASTER pode criar usuário MASTER");
         }
         passwordValidator.validar(req.senha());
-        UUID empresaId = TenantContext.getEmpresaId();
-        var empresa = empresaRepository.getReferenceById(empresaId);
-
-        var usuario = Usuario.builder()
-            .empresa(empresa)
-            .nome(req.nome())
-            .email(req.email())
-            .senhaHash(passwordEncoder.encode(req.senha()))
-            .perfil(req.perfil())
-            .build();
-        usuario = usuarioRepository.save(usuario);
-        auditoriaService.registrar("CRIAR", "USUARIO", usuario.getId(), "Email: " + req.email());
-        return UsuarioDTO.from(usuario);
+        var empresa = empresaRepository.getReferenceById(TenantContext.getEmpresaId());
+        return criarInterno(empresa, req.nome(), req.email(),
+            passwordEncoder.encode(req.senha()), req.perfil(), null);
     }
 
     @Transactional
@@ -79,16 +69,57 @@ public class UsuarioService {
         passwordValidator.validar(req.senha());
         var empresa = empresaRepository.findById(empresaId)
             .orElseThrow(() -> new NotFoundException("Empresa não encontrada"));
+        return criarInterno(empresa, req.nome(), req.email(),
+            passwordEncoder.encode(req.senha()), req.perfil(), null);
+    }
 
-        var usuario = Usuario.builder()
+    /**
+     * Cria o ADMIN de uma empresa recém-provisionada pelo cadastro público.
+     * <p>
+     * Recebe a senha <b>já hasheada</b> porque no cadastro verify-first a senha
+     * em claro só existe no momento do pedido — o banco guarda apenas o BCrypt
+     * em {@code registro_pendente}, e a confirmação acontece minutos depois, por
+     * um link. Validar e hashear no pedido também é o que impede um oráculo de
+     * tempo: sem isso, um email livre custaria o BCrypt e um já cadastrado não,
+     * e a diferença de latência revelaria quem é cliente.
+     * <p>
+     * O perfil é <b>fixado em ADMIN aqui</b>, não vem do DTO: é a defesa contra
+     * mass assignment do cadastro público.
+     */
+    @Transactional
+    public UsuarioDTO criarAdminDoRegistro(UUID empresaId, String nome, String email,
+                                           String senhaHash, EtapaOnboarding etapaInicial) {
+        var empresa = empresaRepository.getReferenceById(empresaId);
+        return criarInterno(empresa, nome, email, senhaHash, PerfilUsuario.ADMIN, etapaInicial);
+    }
+
+    /**
+     * Ponto único de construção de usuário. As três portas públicas acima
+     * divergem só em como resolvem a empresa e de onde vem o hash da senha —
+     * daqui para baixo a regra é a mesma, e é isso que impede que um campo novo
+     * em {@link Usuario} seja esquecido em uma delas.
+     *
+     * @param etapaInicial onboarding a percorrer, ou {@code null} para nenhum
+     *                     (quem o admin cadastra não faz tour de boas-vindas)
+     */
+    private UsuarioDTO criarInterno(Empresa empresa, String nome, String email,
+                                    String senhaHash, PerfilUsuario perfil,
+                                    EtapaOnboarding etapaInicial) {
+        var builder = Usuario.builder()
             .empresa(empresa)
-            .nome(req.nome())
-            .email(req.email())
-            .senhaHash(passwordEncoder.encode(req.senha()))
-            .perfil(req.perfil())
-            .build();
-        usuario = usuarioRepository.save(usuario);
-        auditoriaService.registrar("CRIAR", "USUARIO", usuario.getId(), "Email: " + req.email());
+            .nome(nome)
+            .email(email)
+            .senhaHash(senhaHash)
+            .perfil(perfil);
+
+        if (etapaInicial != null) {
+            builder.onboardingEtapa(etapaInicial)
+                .aceiteTermos(true)
+                .aceiteTermosEm(LocalDateTime.now());
+        }
+
+        var usuario = usuarioRepository.save(builder.build());
+        auditoriaService.registrar("CRIAR", "USUARIO", usuario.getId(), "Email: " + email);
         return UsuarioDTO.from(usuario);
     }
 

@@ -48,8 +48,22 @@ public class LojaService {
 
     @Transactional
     public LojaDTO criar(CriarLojaRequest req) {
-        UUID empresaId = TenantContext.getEmpresaId();
+        return criarNaEmpresa(TenantContext.getEmpresaId(), req);
+    }
 
+    /**
+     * Cria a loja de uma empresa informada explicitamente, em vez de tirá-la do
+     * {@code TenantContext}. Existe para o provisionamento do cadastro público,
+     * onde não há JWT e o ThreadLocal está — deliberadamente — vazio: mantê-lo
+     * nulo é o que faz a auditoria se abster durante a transação, já que ela
+     * roda em {@code REQUIRES_NEW} e não enxergaria a empresa ainda não
+     * commitada (a FK {@code auditoria.empresa_id} estouraria).
+     * <p>
+     * O gate de assinatura continua valendo igual — esta não é uma porta que
+     * escapa da regra, só uma que não depende do ThreadLocal.
+     */
+    @Transactional
+    public LojaDTO criarNaEmpresa(UUID empresaId, CriarLojaRequest req) {
         // Gate de assinatura: conta TODAS as lojas (ativas ou não — desativar
         // não libera vaga) contra o contratado. Única porta de criação de loja.
         long lojasExistentes = lojaRepository.countByEmpresaId(empresaId);

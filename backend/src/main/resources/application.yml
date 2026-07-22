@@ -95,6 +95,20 @@ app:
 senha-reset:
   ttl-horas: ${SENHA_RESET_TTL_HORAS:2}
 
+# Cadastro público. O TTL é maior que o do reset de senha (2h) de propósito: o
+# reset é pedido por quem está na tela querendo entrar agora, enquanto o cadastro
+# pode ser feito de noite e confirmado no dia seguinte, do computador da loja.
+registro:
+  ttl-horas: ${REGISTRO_TTL_HORAS:48}
+
+# Anti-bot do cadastro público (Cloudflare Turnstile). Sem a secret, a validação
+# é PULADA com aviso no log — é o que permite desenvolver e testar antes de
+# existir domínio próprio (a Cloudflare recusa hostname em up.railway.app).
+# Chaves de teste da Cloudflare: 1x0000000000000000000000000000000AA sempre
+# valida, 2x0000000000000000000000000000000AA sempre recusa.
+turnstile:
+  secret: ${TURNSTILE_SECRET:}
+
 # Teto mensal de consumo pago por empresa (ver LimiteUsoService). Existe porque
 # o trial é grátis e o cadastro é público: sem teto, cada tenant falso vira uma
 # fatura sem limite superior na Meta/Anthropic/OpenAI.

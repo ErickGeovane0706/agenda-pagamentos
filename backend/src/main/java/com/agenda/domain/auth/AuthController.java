@@ -27,6 +27,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final SenhaResetService senhaResetService;
+    private final RegistroService registroService;
 
     /**
      * Flag {@code Secure} dos cookies de auth. Default {@code true} (produção,
@@ -113,6 +114,38 @@ public class AuthController {
     public ResponseEntity<Void> redefinirSenha(@Valid @RequestBody SenhaResetDTO.Redefinicao req) {
         senhaResetService.redefinir(req.token(), req.novaSenha());
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Cadastro público. Endpoint público de ESCRITA — o primeiro do sistema.
+     * <p>
+     * Responde 204 SEMPRE quando o pedido é bem-formado, exista o email ou não:
+     * distinguir os casos transformaria o cadastro num oráculo de quem é cliente.
+     * O que muda é qual email a pessoa recebe — link de confirmação, ou aviso de
+     * que ela já tem conta.
+     * <p>
+     * Nada é criado aqui. O tenant só nasce no clique do link.
+     */
+    @PostMapping("/registro")
+    public ResponseEntity<Void> registrar(@Valid @RequestBody RegistroDTO.Solicitacao req,
+                                          HttpServletRequest request) {
+        registroService.solicitar(req, request.getRemoteAddr());
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Confirma o email e provisiona a empresa, a loja, o usuário ADMIN e o
+     * trial. Endpoint público — quem prova ser dono do email é o token.
+     * <p>
+     * Já devolve os cookies de sessão: o cliente cai no sistema logado, sem
+     * digitar de novo a senha que acabou de criar.
+     */
+    @PostMapping("/registro/confirmar")
+    public ResponseEntity<LoginResponse> confirmarRegistro(@Valid @RequestBody RegistroDTO.Confirmacao req,
+                                                           HttpServletResponse response) {
+        var result = registroService.confirmar(req.token());
+        setAuthCookies(response, result);
+        return ResponseEntity.ok(new LoginResponse(result.usuario()));
     }
 
     private void setAuthCookies(HttpServletResponse response, AuthLoginResult result) {

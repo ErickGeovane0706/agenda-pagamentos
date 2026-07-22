@@ -1,5 +1,6 @@
 package com.agenda.job;
 
+import com.agenda.domain.auth.RegistroService;
 import com.agenda.domain.auth.SenhaResetService;
 import com.agenda.domain.boleto.BoletoRepository;
 import com.agenda.domain.cheque.ChequeRepository;
@@ -37,6 +38,7 @@ public class SchedulerService {
     private final PagamentoPixRepository pagamentoPixRepository;
     private final ChequeRepository chequeRepository;
     private final SenhaResetService senhaResetService;
+    private final RegistroService registroService;
 
     /**
      * Remove tokens de redefinição de senha vencidos ou já usados.
@@ -46,6 +48,18 @@ public class SchedulerService {
     public void limparTokensDeSenha() {
         int removidos = senhaResetService.limparExpirados();
         log.info("Tokens de redefinição de senha removidos: {}", removidos);
+    }
+
+    /**
+     * Remove cadastros públicos que nunca foram confirmados. É o que mantém o
+     * lixo de bot contido: quem não confirma o email não vira tenant, só uma
+     * linha com prazo de validade. Às 03:40 para não disputar as janelas
+     * anteriores.
+     */
+    @Scheduled(cron = "0 40 3 * * *")
+    public void limparRegistrosPendentes() {
+        int removidos = registroService.limparExpirados();
+        log.info("Cadastros pendentes expirados removidos: {}", removidos);
     }
 
     @Transactional
