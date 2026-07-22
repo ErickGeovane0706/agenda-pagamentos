@@ -53,4 +53,14 @@ public class Usuario {
 
     @Column(name = "excluido_em")
     private LocalDateTime excluidoEm;
+
+    /**
+     * Etapa do onboarding guiado. Nasce CONCLUIDO (default da V23) — só o
+     * provisionamento do cadastro público inicia o wizard, para não jogar num
+     * tour de boas-vindas quem já usa o sistema ou quem o admin cadastrou.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "onboarding_etapa", nullable = false, length = 30)
+    @Builder.Default
+    private EtapaOnboarding onboardingEtapa = EtapaOnboarding.CONCLUIDO;
 }
