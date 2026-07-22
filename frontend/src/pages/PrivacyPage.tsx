@@ -62,7 +62,7 @@ export default function PrivacyPage() {
               <li>Solicitar exclusão dos seus dados pessoais</li>
               <li>Solicitar exportação dos seus dados</li>
             </ul>
-            <p className="mt-2">Para exercer seus direitos, entre em contato pelo e-mail: privacidade@agendapagamentos.com.br</p>
+            <p className="mt-2">Para exercer seus direitos, entre em contato pelo e-mail: erickgeovane2002@gmail.com</p>
           </section>
         </div>
       </main>
