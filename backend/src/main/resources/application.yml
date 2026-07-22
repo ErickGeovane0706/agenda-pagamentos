@@ -95,6 +95,25 @@ app:
 senha-reset:
   ttl-horas: ${SENHA_RESET_TTL_HORAS:2}
 
+# Teto mensal de consumo pago por empresa (ver LimiteUsoService). Existe porque
+# o trial é grátis e o cadastro é público: sem teto, cada tenant falso vira uma
+# fatura sem limite superior na Meta/Anthropic/OpenAI.
+#
+# Como os números do TRIAL foram tirados: 1 loja = 2 destinatários de lembrete,
+# 2 × 4 horários × 30 dias = 240 templates no pior caso legítimo, daí 300 de
+# folga. Teto de ATIVA é ~5× o do trial: alto o bastante para nunca incomodar
+# cliente real, mas finito — pega bug de loop, que é o outro jeito de a conta
+# explodir.
+uso:
+  trial:
+    templates: ${USO_TRIAL_TEMPLATES:300}
+    agente: ${USO_TRIAL_AGENTE:400}
+    audios: ${USO_TRIAL_AUDIOS:60}
+  ativa:
+    templates: ${USO_ATIVA_TEMPLATES:1500}
+    agente: ${USO_ATIVA_AGENTE:2000}
+    audios: ${USO_ATIVA_AUDIOS:300}
+
 # Transcrição de mensagens de voz do WhatsApp. Fornecedor separado da Anthropic
 # porque os modelos Claude não aceitam áudio como entrada — ver TranscricaoAudioService.
 openai:

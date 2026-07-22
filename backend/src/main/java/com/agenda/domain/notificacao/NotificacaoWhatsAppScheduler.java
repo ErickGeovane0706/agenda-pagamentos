@@ -8,6 +8,8 @@ import com.agenda.domain.cheque.ChequeRepository;
 import com.agenda.domain.loja.Loja;
 import com.agenda.domain.pix.PagamentoPix;
 import com.agenda.domain.pix.PagamentoPixRepository;
+import com.agenda.domain.uso.LimiteUsoService;
+import com.agenda.domain.uso.TipoUso;
 import com.agenda.domain.whatsappagent.WhatsAppAgentService;
 import com.agenda.whatsapp.WhatsAppService;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +45,7 @@ public class NotificacaoWhatsAppScheduler {
     private final WhatsAppService whatsAppService;
     private final WhatsAppAgentService whatsAppAgentService;
     private final AssinaturaService assinaturaService;
+    private final LimiteUsoService limiteUsoService;
     private final MensagemNotificacaoBuilder mensagemBuilder = new MensagemNotificacaoBuilder();
 
     /**
@@ -139,6 +142,17 @@ public class NotificacaoWhatsAppScheduler {
         if (!deveEnviarNesteHorario(maiorAtraso, pref, agora)) {
             log.info("Horário {} pulado para usuário {} (atraso de {} dias já está em frequência reduzida)",
                     agora, pref.getUsuario().getId(), maiorAtraso);
+            return;
+        }
+
+        // Teto mensal da empresa: última checagem antes do template, que é o
+        // item de custo direto. Fica aqui, e não junto do gate de assinatura,
+        // porque consumir uma unidade de quota só faz sentido quando o envio
+        // realmente aconteceria — mais acima ainda podia não haver pendência
+        // nenhuma para notificar.
+        if (!limiteUsoService.consumir(empresaId, TipoUso.TEMPLATE)) {
+            log.info("Empresa {} atingiu o teto mensal de lembretes — nada enviado para o usuário {}.",
+                    empresaId, pref.getUsuario().getId());
             return;
         }
 

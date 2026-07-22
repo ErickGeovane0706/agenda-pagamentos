@@ -8,6 +8,8 @@ import com.agenda.domain.cheque.ChequeRepository;
 import com.agenda.domain.empresa.Empresa;
 import com.agenda.domain.loja.Loja;
 import com.agenda.domain.pix.PagamentoPixRepository;
+import com.agenda.domain.uso.LimiteUsoService;
+import com.agenda.domain.uso.TipoUso;
 import com.agenda.domain.usuario.Usuario;
 import com.agenda.domain.whatsappagent.WhatsAppAgentService;
 import com.agenda.whatsapp.WhatsAppService;
@@ -38,6 +40,7 @@ class NotificacaoWhatsAppSchedulerTest {
     @Mock private WhatsAppService whatsAppService;
     @Mock private WhatsAppAgentService whatsAppAgentService;
     @Mock private AssinaturaService assinaturaService;
+    @Mock private LimiteUsoService limiteUsoService;
 
     private NotificacaoWhatsAppScheduler scheduler;
 
@@ -51,10 +54,12 @@ class NotificacaoWhatsAppSchedulerTest {
     void setUp() {
         scheduler = new NotificacaoWhatsAppScheduler(
                 preferenciaRepository, boletoRepository, pixRepository, chequeRepository,
-                whatsAppService, whatsAppAgentService, assinaturaService);
+                whatsAppService, whatsAppAgentService, assinaturaService, limiteUsoService);
         // Assinatura acessável por padrão — lenient porque nem todo teste
         // chega até a checagem (ex.: sem preferência ativa no horário).
         lenient().when(assinaturaService.podeAcessar(any())).thenReturn(true);
+        // Idem para o teto mensal de templates.
+        lenient().when(limiteUsoService.consumir(any(), eq(TipoUso.TEMPLATE))).thenReturn(true);
         // Fixa o relógio do job para o dia/horário simulado — sem isso, o
         // scheduler usaria LocalTime.now() do relógio de parede e os stubs
         // de findAtivosComHorario(horário fixo) nunca casariam.
@@ -232,6 +237,28 @@ class NotificacaoWhatsAppSchedulerTest {
 
         verify(whatsAppService, never()).enviarTemplate(anyString(), anyString(), anyList());
         verifyNoInteractions(boletoRepository, pixRepository, chequeRepository);
+    }
+
+    /**
+     * Teto mensal de templates atingido: as pendências até são consultadas
+     * (o teto só é consumido quando o envio realmente aconteceria), mas nenhum
+     * template é enviado — e o detalhe não é guardado, porque ele só serve como
+     * complemento de um resumo que o cliente recebeu.
+     */
+    @Test
+    void tetoMensalDeTemplatesAtingido_NaoDeveEnviarTemplateNemGuardarDetalhe() {
+        var pref = preferencia(horario);
+        when(preferenciaRepository.findAtivosComHorario(horario)).thenReturn(List.of(pref));
+        when(boletoRepository.findVencidos(any(), any())).thenReturn(List.of(boletoVencido(2)));
+        when(boletoRepository.findPendentesVencendoEm(any(), any())).thenReturn(List.of());
+        when(boletoRepository.findPendentesEntre(any(), any(), any())).thenReturn(List.of());
+        semPixNemCheque();
+        when(limiteUsoService.consumir(empresa.getId(), TipoUso.TEMPLATE)).thenReturn(false);
+
+        scheduler.verificarEEnviarNotificacoes();
+
+        verify(whatsAppService, never()).enviarTemplate(anyString(), anyString(), anyList());
+        verify(whatsAppAgentService, never()).registrarDetalheNotificacao(any(), anyString());
     }
 
     @Test

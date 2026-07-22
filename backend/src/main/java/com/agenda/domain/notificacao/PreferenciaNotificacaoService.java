@@ -1,11 +1,13 @@
 package com.agenda.domain.notificacao;
 
 import com.agenda.domain.loja.LojaRepository;
+import com.agenda.domain.uso.LimiteUsoService;
 import com.agenda.domain.usuario.UsuarioRepository;
 import com.agenda.shared.TenantContext;
 import com.agenda.shared.UserContext;
 import com.agenda.shared.exception.AccessDeniedException;
 import com.agenda.shared.exception.NotFoundException;
+import com.agenda.shared.exception.PagamentoRequeridoException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +29,7 @@ public class PreferenciaNotificacaoService {
     private final PreferenciaNotificacaoRepository preferenciaRepository;
     private final UsuarioRepository usuarioRepository;
     private final LojaRepository lojaRepository;
+    private final LimiteUsoService limiteUsoService;
 
     /**
      * Retorna a preferência do usuário logado. Se ele ainda não tiver
@@ -78,6 +81,20 @@ public class PreferenciaNotificacaoService {
                 throw new AccessDeniedException("Acesso negado a loja de outra empresa");
             }
             lojaIdsValidados.add(lojaId);
+        }
+
+        // Teto de destinatários: cada telefone ativo custa um template pago por
+        // disparo, até 4 vezes ao dia. Só barra na TRANSIÇÃO para ativo — quem
+        // já recebe lembrete não perde a vaga ao editar horário ou loja, o que
+        // aconteceria se a contagem incluísse o próprio registro sendo salvo.
+        if (req.whatsappAtivo() && !Boolean.TRUE.equals(preferencia.getWhatsappAtivo())) {
+            int limite = limiteUsoService.limiteDestinatarios(empresaId);
+            long ativos = preferenciaRepository.contarAtivosDaEmpresa(empresaId);
+            if (ativos >= limite) {
+                throw new PagamentoRequeridoException(
+                    "Sua assinatura cobre " + limite + " telefone(s) recebendo lembrete e você já tem "
+                        + ativos + ". Desative outro telefone ou contrate mais uma loja.");
+            }
         }
 
         preferencia.setTelefoneWhatsapp(req.telefoneWhatsapp());

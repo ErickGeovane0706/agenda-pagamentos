@@ -10,6 +10,8 @@ import com.agenda.domain.loja.LojaRepository;
 import com.agenda.domain.notificacao.PreferenciaNotificacao;
 import com.agenda.domain.notificacao.PreferenciaNotificacaoRepository;
 import com.agenda.domain.pix.PagamentoPixRepository;
+import com.agenda.domain.uso.LimiteUsoService;
+import com.agenda.domain.uso.TipoUso;
 import com.agenda.domain.usuario.Usuario;
 import com.agenda.security.RateLimiterService;
 import com.agenda.whatsapp.WhatsAppService;
@@ -62,6 +64,7 @@ class WhatsAppAgentServiceTest {
     // testes (aqui os repositórios já são mocks).
     @Mock private PlatformTransactionManager transactionManager;
     @Mock private AssinaturaService assinaturaService;
+    @Mock private LimiteUsoService limiteUsoService;
 
     private WhatsAppAgentService agentService;
     private RespostaFormatterService respostaFormatter;
@@ -76,11 +79,13 @@ class WhatsAppAgentServiceTest {
         agentService = new WhatsAppAgentService(
                 preferenciaRepository, lojaRepository, boletoRepository, pixRepository,
                 chequeRepository, classifierService, respostaFormatter, whatsAppService,
-                new RateLimiterService(), transactionManager, assinaturaService);
+                new RateLimiterService(), transactionManager, assinaturaService, limiteUsoService);
 
         // Assinatura acessável por padrão — lenient porque os testes de telefone
         // não cadastrado terminam antes de chegar à checagem.
         lenient().when(assinaturaService.podeAcessar(any())).thenReturn(true);
+        // Idem para o teto mensal: dentro do limite salvo quando o teste diz o contrário.
+        lenient().when(limiteUsoService.consumir(any(), eq(TipoUso.AGENTE))).thenReturn(true);
 
         empresa = Empresa.builder().id(UUID.randomUUID()).nome("Empresa Teste").build();
         usuario = Usuario.builder().id(UUID.randomUUID()).nome("Maria").empresa(empresa).build();
@@ -115,6 +120,40 @@ class WhatsAppAgentServiceTest {
 
         verifyNoInteractions(classifierService, boletoRepository, pixRepository, chequeRepository);
         verify(whatsAppService).enviarMensagemTexto(eq("5583999990000"), contains("suspenso"));
+    }
+
+    /**
+     * Teto mensal estourado não chama a LLM — é o ponto inteiro do teto. E o
+     * cliente é avisado, porque a pergunta dele acabou de abrir a janela de 24h
+     * da Meta: é o único momento em que dá para avisar sem pagar template.
+     */
+    @Test
+    void tetoMensalEstourado_naoDeveChamarLLMEDeveAvisarUmaVez() {
+        when(preferenciaRepository.findByTelefoneNormalizadoIn(List.of("5583999990000", "558399990000"))).thenReturn(List.of(preferencia));
+        when(limiteUsoService.consumir(empresa.getId(), TipoUso.AGENTE)).thenReturn(false);
+        when(limiteUsoService.deveAvisar(empresa.getId())).thenReturn(true);
+
+        agentService.processarMensagem("5583999990000", "quanto tenho pra pagar hoje");
+
+        verifyNoInteractions(classifierService, boletoRepository, pixRepository, chequeRepository);
+        verify(whatsAppService).enviarMensagemTexto(eq("5583999990000"), contains("limite de mensagens"));
+    }
+
+    /**
+     * Da segunda mensagem em diante o silêncio é a resposta certa: responder a
+     * cada uma transformaria um flood num flood de respostas — o loop de eco
+     * que o descarte silencioso do teto por telefone já evita.
+     */
+    @Test
+    void tetoMensalEstouradoEJaAvisado_naoDeveResponderNada() {
+        when(preferenciaRepository.findByTelefoneNormalizadoIn(List.of("5583999990000", "558399990000"))).thenReturn(List.of(preferencia));
+        when(limiteUsoService.consumir(empresa.getId(), TipoUso.AGENTE)).thenReturn(false);
+        when(limiteUsoService.deveAvisar(empresa.getId())).thenReturn(false);
+
+        agentService.processarMensagem("5583999990000", "e agora?");
+
+        verifyNoInteractions(classifierService);
+        verify(whatsAppService, never()).enviarMensagemTexto(any(), any());
     }
 
     @Test

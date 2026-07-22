@@ -1,5 +1,7 @@
 package com.agenda.domain.whatsappagent;
 
+import com.agenda.domain.uso.LimiteUsoService;
+import com.agenda.domain.uso.TipoUso;
 import com.agenda.security.RateLimiterService;
 import com.agenda.whatsapp.WhatsAppMediaDownloader;
 import com.agenda.whatsapp.WhatsAppService;
@@ -8,6 +10,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.Optional;
+import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -32,6 +37,7 @@ class WhatsAppAudioServiceTest {
     @Mock private TranscricaoAudioService transcricaoService;
     @Mock private WhatsAppAgentService agentService;
     @Mock private WhatsAppService whatsAppService;
+    @Mock private LimiteUsoService limiteUsoService;
 
     private WhatsAppAudioService audioService;
 
@@ -39,11 +45,19 @@ class WhatsAppAudioServiceTest {
     private static final String MEDIA_ID = "media-123";
     private static final String URL = "https://lookaside.fbsbx.com/whatsapp/media-123";
     private static final String MIME = "audio/ogg; codecs=opus";
+    private static final UUID EMPRESA_ID = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
         audioService = new WhatsAppAudioService(
-                mediaDownloader, transcricaoService, agentService, whatsAppService, new RateLimiterService());
+                mediaDownloader, transcricaoService, agentService, whatsAppService,
+                new RateLimiterService(), limiteUsoService);
+
+        // Caminho feliz por padrão: número cadastrado e dentro do teto mensal.
+        // lenient porque os testes que barram antes (teto por remetente) não
+        // chegam a consultar nenhum dos dois.
+        lenient().when(agentService.empresaDoTelefone(TELEFONE)).thenReturn(Optional.of(EMPRESA_ID));
+        lenient().when(limiteUsoService.consumir(EMPRESA_ID, TipoUso.AUDIO)).thenReturn(true);
     }
 
     @Test
@@ -124,5 +138,38 @@ class WhatsAppAudioServiceTest {
         verify(agentService, never()).processarTranscricao(any(), any());
         // Descarta em silêncio — responder alimentaria um loop de eco.
         verify(whatsAppService, never()).enviarMensagemTexto(any(), any());
+    }
+
+    /**
+     * O teto mensal da EMPRESA é checado antes de qualquer chamada paga. É o
+     * que o teto por remetente não cobre: uma empresa com dez telefones passa
+     * dez vezes por aquele e continuaria gastando transcrição.
+     */
+    @Test
+    void tetoMensalDaEmpresaEstourado_NaoDeveTranscreverEDeveAvisar() {
+        when(limiteUsoService.consumir(EMPRESA_ID, TipoUso.AUDIO)).thenReturn(false);
+
+        audioService.processarAudio(TELEFONE, MEDIA_ID);
+
+        verify(mediaDownloader, never()).obterMetadados(anyString());
+        verify(transcricaoService, never()).transcrever(any(), any());
+        verify(agentService, never()).processarTranscricao(any(), any());
+        verify(agentService).avisarLimiteUmaVez(EMPRESA_ID, TELEFONE);
+    }
+
+    /**
+     * Número não cadastrado não custa transcrição. Antes o áudio era baixado e
+     * transcrito para só então o agente responder que não reconhece o número.
+     */
+    @Test
+    void telefoneNaoCadastrado_NaoDeveBaixarNemTranscrever() {
+        when(agentService.empresaDoTelefone(TELEFONE)).thenReturn(Optional.empty());
+
+        audioService.processarAudio(TELEFONE, MEDIA_ID);
+
+        verify(mediaDownloader, never()).obterMetadados(anyString());
+        verify(transcricaoService, never()).transcrever(any(), any());
+        verify(limiteUsoService, never()).consumir(any(), any());
+        verify(whatsAppService).enviarMensagemTexto(eq(TELEFONE), contains("Não localizei esse número"));
     }
 }

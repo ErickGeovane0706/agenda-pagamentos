@@ -23,6 +23,17 @@ public interface PreferenciaNotificacaoRepository extends JpaRepository<Preferen
     Optional<PreferenciaNotificacao> findByUsuarioId(UUID usuarioId);
 
     /**
+     * Quantos telefones da empresa estão recebendo lembrete. Usado para aplicar
+     * o teto de destinatários — cada um a mais é um template pago por disparo.
+     */
+    @Query("""
+    SELECT COUNT(p) FROM PreferenciaNotificacao p
+    WHERE p.usuario.empresa.id = :empresaId
+      AND p.whatsappAtivo = true
+    """)
+    long contarAtivosDaEmpresa(@Param("empresaId") UUID empresaId);
+
+    /**
      * Busca todas as preferências ativas em que o horário informado bate com
      * QUALQUER um dos 4 horários configurados pelo usuário.
      * Usado pelo scheduler a cada execução (ex: a cada 15 minutos).

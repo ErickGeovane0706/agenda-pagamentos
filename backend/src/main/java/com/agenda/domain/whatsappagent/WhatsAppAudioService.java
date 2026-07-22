@@ -1,5 +1,7 @@
 package com.agenda.domain.whatsappagent;
 
+import com.agenda.domain.uso.LimiteUsoService;
+import com.agenda.domain.uso.TipoUso;
 import com.agenda.security.RateLimiterService;
 import com.agenda.whatsapp.WhatsAppMediaDownloader;
 import com.agenda.whatsapp.WhatsAppService;
@@ -37,6 +39,7 @@ public class WhatsAppAudioService {
     private final WhatsAppAgentService agentService;
     private final WhatsAppService whatsAppService;
     private final RateLimiterService rateLimiter;
+    private final LimiteUsoService limiteUsoService;
 
     /**
      * Teto de tamanho do áudio. A Meta NÃO informa a duração no webhook — só o
@@ -64,6 +67,26 @@ public class WhatsAppAudioService {
             // transcrever, sem responder (responder alimentaria um loop de eco).
             log.warn("[WHATSAPP-AUDIO] Teto de mensagens por remetente atingido, ignorando áudio de {}",
                     mascarar(telefoneOrigem));
+            return;
+        }
+
+        // De quem é este número? Precisa vir antes do download e da transcrição:
+        // ambos são pagos e o teto é por EMPRESA. Como efeito, um número não
+        // cadastrado também deixa de custar transcrição — antes ele era baixado
+        // e transcrito para só então o agente responder que não o reconhece.
+        var empresaId = agentService.empresaDoTelefone(telefoneOrigem);
+        if (empresaId.isEmpty()) {
+            log.info("[WHATSAPP-AUDIO] Telefone {} não reconhecido, áudio descartado sem transcrever.",
+                    mascarar(telefoneOrigem));
+            responder(telefoneOrigem,
+                    "Não localizei esse número no nosso cadastro. Fale com o administrador da sua empresa para vincular seu WhatsApp.");
+            return;
+        }
+
+        if (!limiteUsoService.consumir(empresaId.get(), TipoUso.AUDIO)) {
+            log.info("[WHATSAPP-AUDIO] Empresa {} atingiu o teto mensal de áudios — nada transcrito.",
+                    empresaId.get());
+            agentService.avisarLimiteUmaVez(empresaId.get(), telefoneOrigem);
             return;
         }
 

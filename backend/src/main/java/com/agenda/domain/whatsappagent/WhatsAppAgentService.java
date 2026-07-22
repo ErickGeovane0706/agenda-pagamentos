@@ -17,6 +17,8 @@ import com.agenda.domain.pix.PagamentoPix;
 import com.agenda.domain.pix.PagamentoPixRepository;
 import com.agenda.domain.pix.PagamentoPixSpecification;
 import com.agenda.domain.pix.StatusPix;
+import com.agenda.domain.uso.LimiteUsoService;
+import com.agenda.domain.uso.TipoUso;
 import com.agenda.security.RateLimiterService;
 import com.agenda.whatsapp.WhatsAppService;
 import lombok.RequiredArgsConstructor;
@@ -62,6 +64,21 @@ public class WhatsAppAgentService {
     private final RateLimiterService rateLimiter;
     private final PlatformTransactionManager transactionManager;
     private final AssinaturaService assinaturaService;
+    private final LimiteUsoService limiteUsoService;
+
+    /**
+     * Resposta quando a empresa estourou o teto mensal de consumo pago.
+     * <p>
+     * Sai como texto livre, o que só é possível porque o cliente ACABOU de
+     * mandar uma mensagem — é a pergunta dele que abre a janela de 24h da Meta.
+     * Fora dessa janela a Meta recusaria o texto livre e a falha seria engolida
+     * pelo {@code catch} do {@code WhatsAppCloudApiService}: avisaríamos no
+     * vazio. Por isso o aviso é reativo, nunca proativo.
+     */
+    private static final String AVISO_LIMITE_ATINGIDO =
+            "Sua empresa atingiu o limite de mensagens automáticas deste mês, "
+            + "então os lembretes e as consultas por aqui ficam pausados até o dia 1º. "
+            + "Fale com o administrador da sua empresa para liberar mais.";
 
     /**
      * Teto de mensagens por REMETENTE (telefone): 15 a cada 5 minutos.
@@ -159,6 +176,16 @@ public class WhatsAppAgentService {
             return;
         }
 
+        // Teto mensal da EMPRESA, checado antes da chamada paga à LLM. O teto
+        // por telefone lá em cima não cobre isto: uma empresa com dez telefones
+        // passa dez vezes por ele.
+        if (!limiteUsoService.consumir(remetente.empresaId(), TipoUso.AGENTE)) {
+            log.info("[WHATSAPP-AGENTE] Empresa {} atingiu o teto mensal de uso — mensagem não processada.",
+                    remetente.empresaId());
+            avisarLimiteUmaVez(remetente.empresaId(), telefoneOrigem);
+            return;
+        }
+
         try {
             // 2) Sem transação nenhuma aberta: a chamada paga e lenta à LLM.
             FiltrosAgente filtrosAnteriores = ultimaConsultaPorUsuario.get(remetente.usuarioId());
@@ -180,6 +207,39 @@ public class WhatsAppAgentService {
             whatsAppService.enviarMensagemTexto(telefoneOrigem,
                     "Tive um problema para consultar isso agora. Tenta de novo em alguns instantes.");
         }
+    }
+
+    /**
+     * Avisa o cliente que o teto do mês acabou — no máximo uma vez por
+     * competência, decidido pelo {@code deveAvisar} (que é atômico no banco).
+     * <p>
+     * Responder a TODA mensagem depois do teto reintroduziria o loop de eco que
+     * o descarte silencioso do teto por telefone evita: um flood viraria um
+     * flood de respostas. Uma vez o cliente entende; da segunda em diante o
+     * silêncio é a resposta certa.
+     * <p>
+     * Visibilidade de pacote: o {@link WhatsAppAudioService} avisa pelo mesmo
+     * caminho quando barra um áudio.
+     */
+    void avisarLimiteUmaVez(UUID empresaId, String telefoneOrigem) {
+        if (limiteUsoService.deveAvisar(empresaId)) {
+            whatsAppService.enviarMensagemTexto(telefoneOrigem, AVISO_LIMITE_ATINGIDO);
+        }
+    }
+
+    /**
+     * Resolve a empresa dona de um telefone cadastrado, para quem precisa
+     * checar o teto ANTES de chamar o agente.
+     * <p>
+     * Existe por causa do áudio: a transcrição é paga e acontece antes de o
+     * agente entrar em cena, então o {@link WhatsAppAudioService} precisa saber
+     * de que empresa é o número sem duplicar a busca por variantes do nono
+     * dígito. O custo é uma consulta indexada a mais no caminho de voz —
+     * barato perto de uma transcrição paga por engano.
+     */
+    Optional<UUID> empresaDoTelefone(String telefone) {
+        return emTransacaoDeLeitura(() -> buscarPreferenciaPorTelefone(telefone)
+                .map(p -> p.getUsuario().getEmpresa().getId()));
     }
 
     /**
