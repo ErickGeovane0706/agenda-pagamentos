@@ -60,6 +60,15 @@ public class UsuarioController {
         return ResponseEntity.ok(usuarioService.criarNaEmpresa(empresaId, req));
     }
 
+    /**
+     * Sem @PreAuthorize de perfil: o wizard de boas-vindas roda para qualquer
+     * usuário logado, e a rota só alcança o dono do próprio token.
+     */
+    @PatchMapping("/minha-conta/onboarding")
+    public ResponseEntity<UsuarioDTO> avancarOnboarding(@RequestBody @Valid AvancarOnboardingRequest req) {
+        return ResponseEntity.ok(usuarioService.avancarOnboarding(req.etapa()));
+    }
+
     @PostMapping("/minha-conta/solicitar-exclusao")
     @PreAuthorize("hasAnyRole('ADMIN', 'MASTER')")
     public ResponseEntity<Void> solicitarExclusao() {

@@ -117,7 +117,7 @@ class RegistroServiceTest {
     /** Prepara os mocks do caminho feliz de {@code confirmar}. */
     private UsuarioDTO prepararProvisionamento() {
         var dto = new UsuarioDTO(USUARIO_ID, "João Batista", "joao@test.com",
-                PerfilUsuario.ADMIN, EMPRESA_ID, "Mercado do João");
+                PerfilUsuario.ADMIN, EMPRESA_ID, "Mercado do João", EtapaOnboarding.LEMBRETES);
         when(pendenteRepository.findByTokenHash(anyString()))
                 .thenReturn(Optional.of(pendente(LocalDateTime.now().plusHours(1))));
         when(empresaService.criar(any())).thenReturn(new EmpresaDTO(EMPRESA_ID, "Mercado do João", true));

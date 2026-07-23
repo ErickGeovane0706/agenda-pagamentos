@@ -159,6 +159,42 @@ class UsuarioServiceTest {
     }
 
     @Test
+    void avancarOnboarding_DeveGravarEtapaNoUsuarioLogado() {
+        UserContext.set(usuario.getId(), "João", "ADMIN");
+        when(usuarioRepository.findById(usuario.getId())).thenReturn(Optional.of(usuario));
+        when(usuarioRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        var result = usuarioService.avancarOnboarding(EtapaOnboarding.CHEQUES);
+
+        assertEquals(EtapaOnboarding.CHEQUES, usuario.getOnboardingEtapa());
+        assertEquals(EtapaOnboarding.CHEQUES, result.onboardingEtapa());
+    }
+
+    /** Pular tudo é etapa válida — decisão nº 6: todo passo do wizard é pulável. */
+    @Test
+    void avancarOnboarding_DeveAceitarConcluidoDireto() {
+        usuario.setOnboardingEtapa(EtapaOnboarding.LEMBRETES);
+        UserContext.set(usuario.getId(), "João", "ADMIN");
+        when(usuarioRepository.findById(usuario.getId())).thenReturn(Optional.of(usuario));
+        when(usuarioRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        usuarioService.avancarOnboarding(EtapaOnboarding.CONCLUIDO);
+
+        assertEquals(EtapaOnboarding.CONCLUIDO, usuario.getOnboardingEtapa());
+    }
+
+    /** Ignora qualquer id que não seja o do token — a rota não recebe id. */
+    @Test
+    void avancarOnboarding_DeveFalharQuandoUsuarioDoTokenNaoExiste() {
+        UserContext.set(UUID.randomUUID(), "Fantasma", "ADMIN");
+        when(usuarioRepository.findById(any())).thenReturn(Optional.empty());
+
+        assertThrows(RuntimeException.class,
+            () -> usuarioService.avancarOnboarding(EtapaOnboarding.CONCLUIDO));
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
     void solicitarExclusao_DeveMarcarApenasUsuarioLogado() {
         var operador = Usuario.builder()
             .id(UUID.randomUUID()).empresa(empresa).nome("Op")

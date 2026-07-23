@@ -156,6 +156,24 @@ public class UsuarioService {
     }
 
     /**
+     * Grava em que ponto do onboarding o usuário logado está.
+     * <p>
+     * Atua sempre sobre o próprio usuário do token — não recebe id — porque a
+     * etapa é estado de interface de quem está na tela, e aceitar um id abriria
+     * escrita em usuário alheio sem ganho nenhum.
+     * <p>
+     * Não audita: é preferência de interface, não ação de negócio, e o wizard
+     * emite várias em poucos segundos.
+     */
+    @Transactional
+    public UsuarioDTO avancarOnboarding(EtapaOnboarding etapa) {
+        var usuario = usuarioRepository.findById(UserContext.getUsuarioId())
+            .orElseThrow(() -> new NotFoundException("Usuário não encontrado"));
+        usuario.setOnboardingEtapa(etapa);
+        return UsuarioDTO.from(usuarioRepository.save(usuario));
+    }
+
+    /**
      * Marca APENAS o usuário logado para exclusão (anonimizado no job das 03:00).
      * Nunca afeta a empresa nem outros usuários — encerrar a empresa inteira é
      * um fluxo separado, deliberado.

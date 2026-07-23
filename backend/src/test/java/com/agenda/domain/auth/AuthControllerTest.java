@@ -1,6 +1,7 @@
 package com.agenda.domain.auth;
 
 import com.agenda.domain.assinatura.AssinaturaService;
+import com.agenda.domain.usuario.EtapaOnboarding;
 import com.agenda.domain.usuario.PerfilUsuario;
 import com.agenda.domain.usuario.UsuarioDTO;
 import com.agenda.security.JwtService;
@@ -42,7 +43,7 @@ class AuthControllerTest {
     @Test
     void login_ComCookieSecureLigado_DeveEmitirCookiesComFlagSecure() throws Exception {
         var usuario = new UsuarioDTO(UUID.randomUUID(), "Fulano", "fulano@test.com",
-                PerfilUsuario.ADMIN, UUID.randomUUID(), "Empresa");
+                PerfilUsuario.ADMIN, UUID.randomUUID(), "Empresa", EtapaOnboarding.CONCLUIDO);
         when(authService.login(any())).thenReturn(
                 new AuthLoginResult("access-token", "refresh-token", usuario));
 

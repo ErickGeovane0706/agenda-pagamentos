@@ -319,6 +319,48 @@
   font-family: var(--mono);
 }
 
+/* Wizard de boas-vindas: escolha por toque em vez de digitação. O cliente
+   está no celular e acabou de criar a conta — cada campo livre a mais é
+   uma chance de fechar a aba. */
+.reg-chips { display: flex; flex-wrap: wrap; gap: .5rem; }
+.reg-chip {
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: .625rem 1rem;
+  color: var(--ink-dim);
+  font-family: inherit;
+  font-size: .875rem;
+  cursor: pointer;
+  box-shadow: var(--sombra);
+  transition: border-color .2s var(--ease), color .2s var(--ease), background-color .2s var(--ease);
+}
+.reg-chip[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--ink);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+.reg-chip[aria-pressed="true"]::before { content: "✓ "; color: var(--accent); }
+
+/* Resumo final: o que o sistema montou, em uma olhada. */
+.reg-resumo {
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.reg-resumo li {
+  display: flex;
+  align-items: baseline;
+  gap: .75rem;
+  font-size: .9375rem;
+  color: var(--ink-dim);
+}
+.reg-resumo li b { color: var(--ink); font-weight: 500; }
+.reg-resumo .reg-mark { color: var(--accent); font-family: var(--mono); }
+
 .reg-fade { animation: reg-rise .5s var(--ease) both; }
 
 @keyframes reg-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }

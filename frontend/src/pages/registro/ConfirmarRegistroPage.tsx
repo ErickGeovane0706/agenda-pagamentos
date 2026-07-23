@@ -62,8 +62,12 @@ export default function ConfirmarRegistroPage() {
           clearInterval(timer);
           setPasso(PASSOS.length); // marca todos concluídos
           setAuth(res.data.usuario);
+          // Quem se cadastrou sozinho nasce com onboarding pendente e segue
+          // para o wizard de boas-vindas; o /lojas é o destino de quem já
+          // chegou com ele encerrado.
+          const destino = res.data.usuario.onboardingEtapa === 'CONCLUIDO' ? '/lojas' : '/bem-vindo';
           // Pequena pausa para o último check aparecer antes de sair do mergulho.
-          window.setTimeout(() => navigate('/lojas', { replace: true }), 600);
+          window.setTimeout(() => navigate(destino, { replace: true }), 600);
         }, Math.max(restante, 0));
       })
       .catch((err) => {

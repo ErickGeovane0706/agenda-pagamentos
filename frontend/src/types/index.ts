@@ -4,12 +4,15 @@ export interface Empresa {
   ativo: boolean;
 }
 
+export type EtapaOnboarding = 'LEMBRETES' | 'CHEQUES' | 'CONCLUIDO';
+
 export interface Usuario {
   id: string;
   nome: string;
   email: string;
   perfil: 'MASTER' | 'ADMIN' | 'OPERADOR' | 'VIEWER';
   empresaId: string;
+  onboardingEtapa: EtapaOnboarding;
 }
 
 export interface Loja {
