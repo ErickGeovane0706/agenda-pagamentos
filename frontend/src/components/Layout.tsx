@@ -3,6 +3,7 @@ import { useAuthStore } from '../store/authStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { Store, Calendar, BarChart3, Settings, LogOut, Building2, Shield, Globe } from 'lucide-react';
 import { clsx } from 'clsx';
+import AvisoAssinatura from './AvisoAssinatura';
 
 export default function Layout() {
   const navigate = useNavigate();
@@ -73,6 +74,7 @@ export default function Layout() {
 
       {/* Mobile header */}
       <div className="md:pl-64 flex flex-col flex-1">
+        <AvisoAssinatura />
         <main className="flex-1 pb-20 md:pb-0">
           <Outlet />
         </main>
