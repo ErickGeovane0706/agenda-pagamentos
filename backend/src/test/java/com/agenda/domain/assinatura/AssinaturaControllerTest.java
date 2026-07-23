@@ -1,5 +1,6 @@
 package com.agenda.domain.assinatura;
 
+import com.agenda.domain.empresa.EmpresaService;
 import com.agenda.security.JwtService;
 import com.agenda.shared.TenantContext;
 import com.agenda.shared.UserContext;
@@ -50,6 +51,9 @@ class AssinaturaControllerTest {
     private AssinaturaService assinaturaService;
 
     @MockBean
+    private EmpresaService empresaService;
+
+    @MockBean
     private JwtService jwtService;
 
     @MockBean
@@ -70,7 +74,7 @@ class AssinaturaControllerTest {
     void assinar_MasterRecebe200ComUrlDePagamento() throws Exception {
         var id = UUID.randomUUID();
         autenticadoComo("MASTER", null);
-        when(assinaturaService.assinar(id))
+        when(assinaturaService.assinar(eq(id), any()))
             .thenReturn(new AssinaturaCheckoutDTO("sub_1", "https://asaas.com/i/xyz"));
 
         mockMvc.perform(post("/api/assinaturas/{empresaId}/assinar", id)
@@ -98,7 +102,7 @@ class AssinaturaControllerTest {
     void assinar_AdminDaPropriaEmpresa_DevePermitir() throws Exception {
         var id = UUID.randomUUID();
         autenticadoComo("ADMIN", id);
-        when(assinaturaService.assinar(id))
+        when(assinaturaService.assinar(eq(id), any()))
             .thenReturn(new AssinaturaCheckoutDTO("sub_1", "https://asaas.com/i/xyz"));
 
         mockMvc.perform(post("/api/assinaturas/{empresaId}/assinar", id)
@@ -121,7 +125,7 @@ class AssinaturaControllerTest {
                 .with(csrf()))
             .andExpect(status().isForbidden());
 
-        verify(assinaturaService, never()).assinar(any());
+        verify(assinaturaService, never()).assinar(any(), any());
     }
 
     /** O pior caso do IDOR: cancelar a assinatura de outra empresa. */
@@ -149,7 +153,7 @@ class AssinaturaControllerTest {
                 .with(csrf()))
             .andExpect(status().isForbidden());
 
-        verify(assinaturaService, never()).assinar(any());
+        verify(assinaturaService, never()).assinar(any(), any());
     }
 
     /** A listagem do painel continua exclusiva do MASTER. */

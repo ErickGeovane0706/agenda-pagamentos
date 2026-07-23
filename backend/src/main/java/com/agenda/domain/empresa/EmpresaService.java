@@ -57,6 +57,22 @@ public class EmpresaService {
         return EmpresaDTO.from(empresa);
     }
 
+    /**
+     * Grava os dados de cobrança da própria empresa, no momento de assinar.
+     * <p>
+     * Separado de {@link #editar} porque aquele é o painel do MASTER (mexe em
+     * nome e no flag de ativo) e este é self-service do ADMIN — que não pode
+     * desativar o próprio tenant nem renomeá-lo por um caminho de billing.
+     */
+    @Transactional
+    public void salvarDadosCobranca(UUID empresaId, DadosCobrancaRequest req) {
+        var empresa = empresaRepository.findById(empresaId)
+            .orElseThrow(() -> new NotFoundException("Empresa não encontrada"));
+        empresa.setCpfCnpj(req.cpfCnpj());
+        empresa.setTelefone(req.telefone());
+        empresaRepository.save(empresa);
+    }
+
     @Transactional
     public void excluir(UUID id) {
         var empresa = empresaRepository.findById(id)

@@ -2,6 +2,7 @@ package com.agenda.domain.assinatura;
 
 import com.agenda.domain.empresa.Empresa;
 import com.agenda.shared.exception.NotFoundException;
+import com.agenda.shared.exception.PagamentoRequeridoException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -55,6 +56,41 @@ class AssinaturaServiceTest {
     private void mockAssinaturaComEmpresa(Assinatura assinatura) {
         when(assinaturaRepository.findByEmpresaIdComEmpresa(empresa.getId()))
             .thenReturn(Optional.ofNullable(assinatura));
+    }
+
+    @Test
+    void buscarMinha_DeveTrazerStatusEPrecosDaConfiguracao() {
+        var vence = LocalDate.now().plusDays(10);
+        mockAssinaturaComEmpresa(assinatura(StatusAssinatura.TRIAL, vence));
+
+        var dto = assinaturaService.buscarMinha(empresa.getId());
+
+        assertEquals(StatusAssinatura.TRIAL, dto.status());
+        assertEquals(1, dto.lojasContratadas());
+        assertEquals(vence, dto.vigenteAte());
+        assertEquals(new BigDecimal("79.00"), dto.precoBase());
+        assertEquals(new BigDecimal("29.00"), dto.precoLojaAdicional());
+    }
+
+    /** Quem veio do cadastro público não tem documento — a tela precisa saber para perguntar. */
+    @Test
+    void buscarMinha_SemCpfCnpj_DeveMarcarCobrancaIncompleta() {
+        mockAssinaturaComEmpresa(assinatura(StatusAssinatura.TRIAL, LocalDate.now().plusDays(10)));
+        assertFalse(assinaturaService.buscarMinha(empresa.getId()).dadosCobrancaCompletos());
+    }
+
+    @Test
+    void buscarMinha_ComCpfCnpjETelefone_DeveMarcarCobrancaCompleta() {
+        empresa.setCpfCnpj("12345678901");
+        empresa.setTelefone("83999999999");
+        mockAssinaturaComEmpresa(assinatura(StatusAssinatura.TRIAL, LocalDate.now().plusDays(10)));
+        assertTrue(assinaturaService.buscarMinha(empresa.getId()).dadosCobrancaCompletos());
+    }
+
+    @Test
+    void buscarMinha_SemAssinatura_DeveFalhar() {
+        mockAssinaturaComEmpresa(null);
+        assertThrows(RuntimeException.class, () -> assinaturaService.buscarMinha(empresa.getId()));
     }
 
     @Test
@@ -357,7 +393,7 @@ class AssinaturaServiceTest {
         when(assinaturaRepository.vincularSubscriptionSeAusente(empresa.getId(), "sub_new", "cus_new"))
             .thenReturn(1);
 
-        var result = assinaturaService.assinar(empresa.getId());
+        var result = assinaturaService.assinar(empresa.getId(), null);
 
         assertEquals("sub_new", result.subscriptionId());
         assertEquals("https://asaas/i/1", result.urlPagamento());
@@ -365,12 +401,87 @@ class AssinaturaServiceTest {
         assertEquals(StatusAssinatura.TRIAL, a.getStatus()); // não ativa antes do pagamento
     }
 
+    /** O upsell da 2ª loja: assina já contratando duas, e o gateway cobra 79+29. */
+    @Test
+    void assinar_ComLojasDesejadas_DeveCobrarOAdicional() {
+        empresa.setCpfCnpj("12345678901");
+        empresa.setTelefone("11999999999");
+        var a = assinatura(StatusAssinatura.TRIAL, null); // nasce com 1
+        mockAssinaturaComEmpresa(a);
+        when(assinaturaRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(asaasClient.criarCustomer(any(), any(), any(), any(), any())).thenReturn("cus_new");
+        when(asaasClient.criarAssinatura(eq("cus_new"), eq(new BigDecimal("108.00")), any(), any()))
+            .thenReturn("sub_new");
+        when(asaasClient.buscarUrlPagamento("sub_new")).thenReturn("https://asaas/i/1");
+        when(assinaturaRepository.vincularSubscriptionSeAusente(any(), any(), any())).thenReturn(1);
+
+        assinaturaService.assinar(empresa.getId(), 2);
+
+        assertEquals(2, a.getLojasContratadas());
+        verify(asaasClient).criarAssinatura(eq("cus_new"), eq(new BigDecimal("108.00")), any(), any());
+    }
+
+    /** Pedir MENOS do que já tem contratado não reduz por este caminho. */
+    @Test
+    void assinar_ComLojasMenorQueOContratado_DeveIgnorar() {
+        empresa.setCpfCnpj("12345678901");
+        empresa.setTelefone("11999999999");
+        var a = assinatura(StatusAssinatura.TRIAL, null);
+        a.setLojasContratadas(3);
+        mockAssinaturaComEmpresa(a);
+        when(asaasClient.criarCustomer(any(), any(), any(), any(), any())).thenReturn("cus_new");
+        when(asaasClient.criarAssinatura(any(), eq(new BigDecimal("137.00")), any(), any()))
+            .thenReturn("sub_new");
+        when(asaasClient.buscarUrlPagamento(any())).thenReturn("https://asaas/i/1");
+        when(assinaturaRepository.vincularSubscriptionSeAusente(any(), any(), any())).thenReturn(1);
+
+        assinaturaService.assinar(empresa.getId(), 1);
+
+        assertEquals(3, a.getLojasContratadas());
+    }
+
+    @Test
+    void contratarMaisLojas_DeveSubirQuantidadeEAtualizarValorNoGateway() {
+        var a = assinatura(StatusAssinatura.ATIVA, null);
+        a.setGatewaySubscriptionId("sub_exist");
+        mockAssinaturaComEmpresa(a);
+        when(assinaturaRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        var result = assinaturaService.contratarMaisLojas(empresa.getId(), 3);
+
+        assertEquals(3, result.lojasContratadas());
+        verify(asaasClient).atualizarValorAssinatura("sub_exist", new BigDecimal("137.00"));
+    }
+
+    /** Sem subscription, subir a quantidade seria liberar loja sem cobrança. */
+    @Test
+    void contratarMaisLojas_SemSubscription_DeveExigirPagamento() {
+        mockAssinaturaComEmpresa(assinatura(StatusAssinatura.TRIAL, null));
+
+        assertThrows(PagamentoRequeridoException.class,
+            () -> assinaturaService.contratarMaisLojas(empresa.getId(), 2));
+        verify(asaasClient, never()).atualizarValorAssinatura(any(), any());
+    }
+
+    @Test
+    void contratarMaisLojas_Reduzindo_DeveRecusar() {
+        var a = assinatura(StatusAssinatura.ATIVA, null);
+        a.setLojasContratadas(4);
+        a.setGatewaySubscriptionId("sub_exist");
+        mockAssinaturaComEmpresa(a);
+
+        assertThrows(IllegalArgumentException.class,
+            () -> assinaturaService.contratarMaisLojas(empresa.getId(), 2));
+        assertEquals(4, a.getLojasContratadas());
+        verify(asaasClient, never()).atualizarValorAssinatura(any(), any());
+    }
+
     @Test
     void assinar_SemCpfCnpj_DeveLancarIllegalArgumentSemChamarGateway() {
         empresa.setTelefone("11999999999"); // sem cpfCnpj
         mockAssinaturaComEmpresa(assinatura(StatusAssinatura.TRIAL, null));
 
-        assertThrows(IllegalArgumentException.class, () -> assinaturaService.assinar(empresa.getId()));
+        assertThrows(IllegalArgumentException.class, () -> assinaturaService.assinar(empresa.getId(), null));
         verify(asaasClient, never()).criarCustomer(any(), any(), any(), any(), any());
     }
 
@@ -381,7 +492,7 @@ class AssinaturaServiceTest {
         mockAssinaturaComEmpresa(a);
         when(asaasClient.buscarUrlPagamento("sub_exist")).thenReturn("https://asaas/i/exist");
 
-        var result = assinaturaService.assinar(empresa.getId());
+        var result = assinaturaService.assinar(empresa.getId(), null);
 
         assertEquals("sub_exist", result.subscriptionId());
         verify(asaasClient, never()).criarCustomer(any(), any(), any(), any(), any());
@@ -399,7 +510,7 @@ class AssinaturaServiceTest {
         when(asaasClient.buscarUrlPagamento("sub_2")).thenReturn("https://asaas/i/2");
         when(assinaturaRepository.vincularSubscriptionSeAusente(any(), any(), any())).thenReturn(1);
 
-        var result = assinaturaService.assinar(empresa.getId());
+        var result = assinaturaService.assinar(empresa.getId(), null);
 
         assertEquals("sub_2", result.subscriptionId());
         verify(asaasClient, never()).criarCustomer(any(), any(), any(), any(), any());
@@ -425,7 +536,7 @@ class AssinaturaServiceTest {
         mockAssinatura(vencedora);
         when(asaasClient.buscarUrlPagamento("sub_vencedora")).thenReturn("https://asaas/i/vencedora");
 
-        var result = assinaturaService.assinar(empresa.getId());
+        var result = assinaturaService.assinar(empresa.getId(), null);
 
         assertEquals("sub_vencedora", result.subscriptionId());
         verify(asaasClient).cancelarAssinatura("sub_perdedora");
@@ -446,7 +557,7 @@ class AssinaturaServiceTest {
         when(asaasClient.criarAssinatura(any(), any(), any(), any()))
             .thenThrow(new AsaasException("gateway fora"));
 
-        assertThrows(AsaasException.class, () -> assinaturaService.assinar(empresa.getId()));
+        assertThrows(AsaasException.class, () -> assinaturaService.assinar(empresa.getId(), null));
 
         verify(assinaturaRepository).vincularCustomerSeAusente(empresa.getId(), "cus_novo");
     }
@@ -461,7 +572,7 @@ class AssinaturaServiceTest {
         when(asaasClient.criarAssinatura(any(), any(), any(), any())).thenReturn("sub_1");
         when(assinaturaRepository.vincularSubscriptionSeAusente(any(), any(), any())).thenReturn(1);
 
-        assinaturaService.assinar(empresa.getId());
+        assinaturaService.assinar(empresa.getId(), null);
 
         verify(asaasClient, never()).criarCustomer(any(), any(), any(), any(), any());
         verify(assinaturaRepository, never()).vincularCustomerSeAusente(any(), any());
@@ -482,7 +593,7 @@ class AssinaturaServiceTest {
         when(assinaturaRepository.vincularSubscriptionSeAusente(any(), any(), any()))
             .thenThrow(new RuntimeException("banco fora"));
 
-        assertThrows(RuntimeException.class, () -> assinaturaService.assinar(empresa.getId()));
+        assertThrows(RuntimeException.class, () -> assinaturaService.assinar(empresa.getId(), null));
 
         verify(asaasClient).cancelarAssinatura("sub_orfa");
     }

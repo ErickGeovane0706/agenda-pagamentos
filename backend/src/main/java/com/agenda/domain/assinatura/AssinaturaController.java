@@ -1,5 +1,7 @@
 package com.agenda.domain.assinatura;
 
+import com.agenda.domain.empresa.DadosCobrancaRequest;
+import com.agenda.domain.empresa.EmpresaService;
 import com.agenda.shared.TenantContext;
 import com.agenda.shared.UserContext;
 import com.agenda.shared.exception.AccessDeniedException;
@@ -32,10 +34,37 @@ import java.util.UUID;
 public class AssinaturaController {
 
     private final AssinaturaService assinaturaService;
+    private final EmpresaService empresaService;
 
     @GetMapping
     public ResponseEntity<List<AssinaturaDTO>> listar() {
         return ResponseEntity.ok(assinaturaService.listar());
+    }
+
+    /**
+     * A assinatura de quem está logado. Não recebe empresaId no path de
+     * propósito: resolve pelo tenant do token, e assim não há UUID alheio a
+     * tentar. Para o MASTER (que não tem tenant próprio) o painel é o
+     * {@link #listar()}.
+     */
+    @GetMapping("/minha")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERADOR','VIEWER')")
+    public ResponseEntity<MinhaAssinaturaDTO> buscarMinha() {
+        return ResponseEntity.ok(assinaturaService.buscarMinha(TenantContext.getEmpresaId()));
+    }
+
+    /**
+     * Dados de cobrança da própria empresa. Mora aqui, e não em
+     * {@code /api/empresas}, porque o {@code AssinaturaGateFilter} isenta
+     * {@code /api/assinaturas}: em qualquer outro caminho, a empresa suspensa
+     * levaria 402 ao tentar informar o CPF — e precisaria pagar para conseguir
+     * preencher o que é exigido para pagar.
+     */
+    @PutMapping("/minha/cobranca")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> salvarDadosCobranca(@RequestBody @Valid DadosCobrancaRequest req) {
+        empresaService.salvarDadosCobranca(TenantContext.getEmpresaId(), req);
+        return ResponseEntity.noContent().build();
     }
 
     @PutMapping("/{empresaId}")
@@ -51,9 +80,22 @@ public class AssinaturaController {
      */
     @PostMapping("/{empresaId}/assinar")
     @PreAuthorize("hasAnyRole('MASTER','ADMIN')")
-    public ResponseEntity<AssinaturaCheckoutDTO> assinar(@PathVariable UUID empresaId) {
+    public ResponseEntity<AssinaturaCheckoutDTO> assinar(@PathVariable UUID empresaId,
+                                                         @RequestBody(required = false) @Valid AssinarRequest req) {
         exigirAcessoA(empresaId);
-        return ResponseEntity.ok(assinaturaService.assinar(empresaId));
+        return ResponseEntity.ok(assinaturaService.assinar(empresaId, req == null ? null : req.lojas()));
+    }
+
+    /**
+     * Cliente já assinante contrata mais lojas. Separado do {@code assinar}
+     * porque aqui não há checkout novo: a subscription que já corre passa a
+     * valer outro valor, e a loja libera na hora.
+     */
+    @PutMapping("/minha/lojas")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<AssinaturaDTO> contratarMaisLojas(@RequestBody @Valid AssinarRequest req) {
+        return ResponseEntity.ok(
+            assinaturaService.contratarMaisLojas(TenantContext.getEmpresaId(), req.lojas()));
     }
 
     /** Cancela a assinatura no gateway e marca CANCELADA. */

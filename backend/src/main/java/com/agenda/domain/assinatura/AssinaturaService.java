@@ -2,6 +2,7 @@ package com.agenda.domain.assinatura;
 
 import com.agenda.domain.empresa.Empresa;
 import com.agenda.shared.exception.NotFoundException;
+import com.agenda.shared.exception.PagamentoRequeridoException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -117,6 +118,21 @@ public class AssinaturaService {
             .build());
     }
 
+    /**
+     * A assinatura da própria empresa, para a tela de contratação. Recebe o
+     * {@code empresaId} já resolvido pelo controller — o service não conhece
+     * quem está logado.
+     */
+    @Transactional(readOnly = true)
+    public MinhaAssinaturaDTO buscarMinha(UUID empresaId) {
+        var a = assinaturaRepository.findByEmpresaIdComEmpresa(empresaId)
+            .orElseThrow(() -> new NotFoundException("Assinatura não encontrada para a empresa"));
+        var empresa = a.getEmpresa();
+        boolean cobrancaOk = preenchido(empresa.getCpfCnpj()) && preenchido(empresa.getTelefone());
+        return new MinhaAssinaturaDTO(a.getStatus(), a.getLojasContratadas(), a.getVigenteAte(),
+            precoBase, precoLojaAdicional, cobrancaOk, preenchido(a.getGatewaySubscriptionId()));
+    }
+
     @Transactional(readOnly = true)
     public List<AssinaturaDTO> listar() {
         return assinaturaRepository.findAllComEmpresa().stream()
@@ -189,12 +205,19 @@ public class AssinaturaService {
      * cliques simultâneos. Quem perde a corrida cancela no gateway a subscription
      * que criou — nada de cobrança órfã cobrando o cliente para sempre.
      */
-    public AssinaturaCheckoutDTO assinar(UUID empresaId) {
+    public AssinaturaCheckoutDTO assinar(UUID empresaId, Integer lojasDesejadas) {
         var assinatura = assinaturaRepository.findByEmpresaIdComEmpresa(empresaId)
             .orElseThrow(() -> new NotFoundException("Assinatura não encontrada para a empresa"));
 
         if (preenchido(assinatura.getGatewaySubscriptionId())) {
             return checkoutDe(assinatura.getGatewaySubscriptionId());
+        }
+
+        // A quantidade entra AQUI e em nenhum outro lugar antes da subscription
+        // existir: é o que impede o trial de contratar lojas que ninguém pagou.
+        if (lojasDesejadas != null && lojasDesejadas > assinatura.getLojasContratadas()) {
+            assinatura.setLojasContratadas(lojasDesejadas);
+            assinaturaRepository.save(assinatura);
         }
 
         var empresa = assinatura.getEmpresa();
@@ -273,6 +296,43 @@ public class AssinaturaService {
         assinatura.setStatus(StatusAssinatura.CANCELADA);
         assinaturaRepository.save(assinatura);
         log.info("Assinatura da empresa {} cancelada", empresaId);
+    }
+
+    /**
+     * Cliente já assinante contrata mais lojas. A loja nova fica utilizável na
+     * hora e a diferença entra na próxima fatura — o gateway passa a cobrar o
+     * valor novo a partir daqui.
+     * <p>
+     * <b>Só sobe.</b> Reduzir por aqui deixaria quem tem 5 lojas pagando por 1,
+     * com as 5 continuando a funcionar (nada apaga loja existente): a redução é
+     * uma conversa, e segue no painel do MASTER.
+     * <p>
+     * Exige subscription no gateway pelo mesmo motivo de {@link #assinar}: sem
+     * ela não há o que recalcular, e liberar loja sem cobrança é dar de graça.
+     */
+    public AssinaturaDTO contratarMaisLojas(UUID empresaId, int lojas) {
+        var assinatura = assinaturaRepository.findByEmpresaIdComEmpresa(empresaId)
+            .orElseThrow(() -> new NotFoundException("Assinatura não encontrada para a empresa"));
+
+        var subscriptionId = assinatura.getGatewaySubscriptionId();
+        if (!preenchido(subscriptionId)) {
+            throw new PagamentoRequeridoException(
+                "Assine primeiro para poder contratar mais lojas.");
+        }
+        if (lojas <= assinatura.getLojasContratadas()) {
+            throw new IllegalArgumentException(
+                "Para reduzir a quantidade de lojas, fale com a gente.");
+        }
+
+        // Banco primeiro, como em atualizar: se o gateway falhar, cobra-se a
+        // menos por um ciclo — preferível a cobrar por loja que não liberou.
+        assinatura.setLojasContratadas(lojas);
+        assinaturaRepository.save(assinatura);
+
+        var valor = calcularValor(lojas);
+        asaasClient.atualizarValorAssinatura(subscriptionId, valor);
+        log.info("Empresa {} passou a contratar {} lojas (valor {})", empresaId, lojas, valor);
+        return AssinaturaDTO.from(assinatura);
     }
 
     /** Valor mensal: base (inclui 1 loja) + adicional por loja além da primeira. */
