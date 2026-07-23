@@ -93,6 +93,13 @@ export default function LoginPage() {
             </Link>
           </p>
 
+          <p className="text-center text-sm text-slate-600 mt-4 pt-4 border-t border-slate-100">
+            Ainda não tem conta?{' '}
+            <Link to="/registro" className="font-semibold text-[#0c4a6e] hover:underline">
+              Criar agora
+            </Link>
+          </p>
+
           <p className="text-center text-xs text-slate-400 mt-4">
             <Link to="/privacidade" className="hover:underline">Política de Privacidade</Link>
           </p>
