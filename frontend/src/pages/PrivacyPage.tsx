@@ -121,9 +121,10 @@ export default function PrivacyPage() {
 
           <Secao titulo="5. Dados que saem do Brasil">
             <p>
-              Todas as empresas acima ficam fora do país, principalmente nos Estados Unidos.
-              Ao usar o sistema, seus dados são processados no exterior por elas, dentro do que
-              a LGPD permite e apenas para as finalidades desta política.
+              Todas as empresas acima ficam fora do país: a maior parte nos Estados Unidos, e o
+              serviço de monitoramento de erros na Alemanha. Ao usar o sistema, seus dados são
+              processados no exterior por elas, dentro do que a LGPD permite e apenas para as
+              finalidades desta política.
             </p>
           </Secao>
 
