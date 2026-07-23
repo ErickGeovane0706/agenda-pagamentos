@@ -97,6 +97,10 @@ resend:
 #
 # min-event-level=ERROR: WARN é usado no código para situação esperada (Turnstile
 # sem secret, email sem chave em dev) e viraria ruído que consome a cota.
+# TEMPORÁRIO — remover junto com o SentryTesteController.
+sentry-teste:
+  key: ${SENTRY_TESTE_KEY:}
+
 sentry:
   dsn: ${SENTRY_DSN:}
   environment: ${SENTRY_ENVIRONMENT:local}
