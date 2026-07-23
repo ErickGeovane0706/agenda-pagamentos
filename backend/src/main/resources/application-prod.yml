@@ -15,3 +15,11 @@ logging:
   level:
     root: WARN
     com.agenda: INFO
+
+# Produção SEMPRE fala com o Asaas de produção. O default de sandbox vive no
+# application.yml (para o dev local, que roda sem o perfil prod); aqui ele é
+# sobrescrito para produção. Assim não depende da variável ASAAS_BASE_URL chegar
+# ao container — que foi exatamente o que falhou no Railway. A variável ainda
+# funciona como override, se um dia for preciso apontar prod para outro lugar.
+asaas:
+  base-url: ${ASAAS_BASE_URL:https://api.asaas.com/v3}
