@@ -88,6 +88,24 @@ resend:
   api-key: ${RESEND_API_KEY:}
   from: ${RESEND_FROM:Agenda de Pagamentos <onboarding@resend.dev>}
 
+# Monitoramento de erro. Sem SENTRY_DSN o SDK não inicia e nada é enviado — é o
+# que mantém o log local limpo e o painel sem erro de teste.
+#
+# send-default-pii FALSO de propósito: sem isso o SDK anexa IP, cookies e corpo
+# da requisição, o que faria dado pessoal de cliente sair do Brasil por um canal
+# que a política de privacidade descreve como "dado técnico de falha".
+#
+# min-event-level=ERROR: WARN é usado no código para situação esperada (Turnstile
+# sem secret, email sem chave em dev) e viraria ruído que consome a cota.
+sentry:
+  dsn: ${SENTRY_DSN:}
+  environment: ${SENTRY_ENVIRONMENT:local}
+  send-default-pii: false
+  traces-sample-rate: 0
+  logging:
+    minimum-event-level: error
+    minimum-breadcrumb-level: info
+
 # URL pública do frontend, usada para montar links enviados por email.
 app:
   frontend-url: ${APP_FRONTEND_URL:http://localhost:5173}

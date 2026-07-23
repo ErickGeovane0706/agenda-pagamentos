@@ -110,6 +110,22 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- Monitoramento de erro. O starter traz duas capturas que se cobrem:
+             um HandlerExceptionResolver de precedência máxima (pega a exceção
+             antes do RestExceptionHandler, que trata tudo e devolveria 500 sem
+             ninguém saber) e o appender do Logback para os log.error. Sem
+             SENTRY_DSN o SDK não inicia e nada sai daqui. -->
+        <dependency>
+            <groupId>io.sentry</groupId>
+            <artifactId>sentry-spring-boot-starter-jakarta</artifactId>
+            <version>8.16.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.sentry</groupId>
+            <artifactId>sentry-logback</artifactId>
+            <version>8.16.0</version>
+        </dependency>
+
         <!-- Postgres descartável para o ApplicationContextSmokeTest: o contexto
              precisa de um banco real (as migrations são Postgres-específicas e o
              ddl-auto é validate). Exige Docker rodando para `mvn test`. -->

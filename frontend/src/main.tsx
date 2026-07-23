@@ -19,6 +19,12 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import './index.css'
+import { iniciarMonitoramento } from './monitoramento'
+import ErrorBoundary from './components/ErrorBoundary'
+
+// Antes do render: erro na montagem da árvore é justamente o que deixa a tela
+// branca, e é o que mais precisa ser capturado.
+iniciarMonitoramento();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -28,6 +34,8 @@ if ('serviceWorker' in navigator) {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </React.StrictMode>,
 )

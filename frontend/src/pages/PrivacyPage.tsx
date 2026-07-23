@@ -91,7 +91,7 @@ export default function PrivacyPage() {
               <li>Mostrar e organizar as contas do seu negócio.</li>
               <li>Enviar os lembretes que você pediu.</li>
               <li>Cobrar a assinatura, quando houver.</li>
-              <li>Descobrir e corrigir falhas do sistema.</li>
+              <li>Descobrir e corrigir falhas do sistema — quando algo quebra, recebemos um aviso técnico para arrumar.</li>
             </ul>
             <p className="font-medium text-slate-800">
               Não vendemos seus dados, não usamos para publicidade e não repassamos para quem
@@ -112,6 +112,7 @@ export default function PrivacyPage() {
               <li><strong>Meta (WhatsApp)</strong> — entrega as mensagens de lembrete. Recebe o número e o conteúdo enviado.</li>
               <li><strong>OpenAI</strong> — transcreve os áudios que você mandar para o assistente no WhatsApp.</li>
               <li><strong>Anthropic</strong> — interpreta o que você escreve para o assistente e monta a resposta.</li>
+              <li><strong>Sentry</strong> — recebe aviso quando algo dá errado no sistema, para conseguirmos corrigir. Recebe dado técnico da falha (mensagem de erro, tela em que aconteceu); configuramos para não enviar seu IP nem o conteúdo do que você digitou.</li>
             </ul>
             <p>
               Também podemos entregar dados por ordem judicial ou exigência legal.
