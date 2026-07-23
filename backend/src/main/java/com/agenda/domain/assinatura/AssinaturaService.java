@@ -46,18 +46,23 @@ public class AssinaturaService {
     private final BigDecimal precoBase;
     private final BigDecimal precoLojaAdicional;
 
+    /** Para onde o Asaas devolve o cliente depois que ele paga. */
+    private final String frontendUrl;
+
     public AssinaturaService(AssinaturaRepository assinaturaRepository,
                              AsaasClient asaasClient,
                              @Value("${assinatura.carencia-dias}") int carenciaDias,
                              @Value("${assinatura.trial-dias}") int trialDias,
                              @Value("${assinatura.preco-base}") BigDecimal precoBase,
-                             @Value("${assinatura.preco-loja-adicional}") BigDecimal precoLojaAdicional) {
+                             @Value("${assinatura.preco-loja-adicional}") BigDecimal precoLojaAdicional,
+                             @Value("${app.frontend-url}") String frontendUrl) {
         this.assinaturaRepository = assinaturaRepository;
         this.asaasClient = asaasClient;
         this.carenciaDias = carenciaDias;
         this.trialDias = trialDias;
         this.precoBase = precoBase;
         this.precoLojaAdicional = precoLojaAdicional;
+        this.frontendUrl = frontendUrl;
     }
 
     /**
@@ -234,8 +239,12 @@ public class AssinaturaService {
         }
 
         var valor = calcularValor(lojasAlvo);
+        // successUrl leva o cliente de volta ao app assim que ele paga, em vez de
+        // deixá-lo parado na página do Asaas. Cai em /lojas — onde ele vai criar
+        // a loja que o trouxe até aqui. A ativação em si continua vindo pelo
+        // webhook; esta URL é só o retorno visual.
         var subscriptionId = asaasClient.criarAssinatura(customerId, valor,
-            LocalDate.now(), empresaId.toString());
+            LocalDate.now(), empresaId.toString(), frontendUrl + "/lojas");
 
         int vinculadas;
         try {
@@ -325,13 +334,17 @@ public class AssinaturaService {
                 "Para reduzir a quantidade de lojas, fale com a gente.");
         }
 
-        // Banco primeiro, como em atualizar: se o gateway falhar, cobra-se a
-        // menos por um ciclo — preferível a cobrar por loja que não liberou.
-        assinatura.setLojasContratadas(lojas);
-        assinaturaRepository.save(assinatura);
-
+        // Gateway PRIMEIRO. Se ele falhar, a exceção sobe e lojasContratadas fica
+        // intacto — um gateway fora do ar não vira loja grátis (o mesmo furo que
+        // o assinar tinha). O risco invertido (gateway sobe o valor mas o save
+        // abaixo falha) é raro — é uma operação local logo após a rede — e vira
+        // cobrança a mais, que o cliente reclama, em vez de receita perdida em
+        // silêncio.
         var valor = calcularValor(lojas);
         asaasClient.atualizarValorAssinatura(subscriptionId, valor);
+
+        assinatura.setLojasContratadas(lojas);
+        assinaturaRepository.save(assinatura);
         log.info("Empresa {} passou a contratar {} lojas (valor {})", empresaId, lojas, valor);
         return AssinaturaDTO.from(assinatura);
     }

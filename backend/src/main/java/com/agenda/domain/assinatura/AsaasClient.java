@@ -89,7 +89,8 @@ public class AsaasClient {
      * Retorna o id da subscription (ex.: {@code sub_...}).
      */
     public String criarAssinatura(String customerId, BigDecimal valor,
-                                  LocalDate proximoVencimento, String externalReference) {
+                                  LocalDate proximoVencimento, String externalReference,
+                                  String successUrl) {
         var body = new LinkedHashMap<String, Object>();
         body.put("customer", customerId);
         body.put("billingType", "UNDEFINED");
@@ -97,6 +98,16 @@ public class AsaasClient {
         body.put("nextDueDate", proximoVencimento.toString());
         body.put("cycle", "MONTHLY");
         body.put("externalReference", externalReference);
+        // Redireciona o cliente de volta ao app após o pagamento, em vez de
+        // deixá-lo preso na página do Asaas. autoRedirect=true faz o pulo ser
+        // automático. Só enviado quando há URL (sem frontend-url configurado,
+        // omite — o Asaas então não redireciona, que é o comportamento antigo).
+        if (successUrl != null && !successUrl.isBlank()) {
+            var callback = new LinkedHashMap<String, Object>();
+            callback.put("successUrl", successUrl);
+            callback.put("autoRedirect", true);
+            body.put("callback", callback);
+        }
         return idObrigatorio(post("/subscriptions", body));
     }
 

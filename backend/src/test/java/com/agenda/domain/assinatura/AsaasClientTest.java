@@ -65,10 +65,12 @@ class AsaasClientTest {
                 .andExpect(jsonPath("$.value").value(137.00))
                 .andExpect(jsonPath("$.nextDueDate").value("2026-08-15"))
                 .andExpect(jsonPath("$.externalReference").value("emp-1"))
+                .andExpect(jsonPath("$.callback.successUrl").value("https://app.teste/lojas"))
+                .andExpect(jsonPath("$.callback.autoRedirect").value(true))
                 .andRespond(withSuccess("{\"id\":\"sub_abc\"}", MediaType.APPLICATION_JSON));
 
         var id = client.criarAssinatura("cus_123", new BigDecimal("137.00"),
-                LocalDate.of(2026, 8, 15), "emp-1");
+                LocalDate.of(2026, 8, 15), "emp-1", "https://app.teste/lojas");
 
         assertThat(id).isEqualTo("sub_abc");
         server.verify();

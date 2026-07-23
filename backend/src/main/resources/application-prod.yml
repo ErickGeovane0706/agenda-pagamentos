@@ -23,3 +23,10 @@ logging:
 # funciona como override, se um dia for preciso apontar prod para outro lugar.
 asaas:
   base-url: ${ASAAS_BASE_URL:https://api.asaas.com/v3}
+
+# URL pública do app em produção. Default aqui (em vez de depender só da env var)
+# pelo mesmo motivo do asaas.base-url: se APP_FRONTEND_URL não chegar ao
+# container, o link de retorno do pagamento e os links de email sairiam apontando
+# para localhost. A env var continua como override.
+app:
+  frontend-url: ${APP_FRONTEND_URL:https://app-agendapagamentos.up.railway.app}

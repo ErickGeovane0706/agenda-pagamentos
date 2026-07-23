@@ -33,7 +33,7 @@ class AssinaturaServiceTest {
     @BeforeEach
     void setUp() {
         assinaturaService = new AssinaturaService(assinaturaRepository, asaasClient, CARENCIA_DIAS,
-            TRIAL_DIAS, new BigDecimal("79.00"), new BigDecimal("29.00"));
+            TRIAL_DIAS, new BigDecimal("79.00"), new BigDecimal("29.00"), "https://app.teste");
         empresa = Empresa.builder().id(UUID.randomUUID()).nome("Empresa Teste").build();
     }
 
@@ -388,7 +388,7 @@ class AssinaturaServiceTest {
         when(asaasClient.criarCustomer(any(), any(), any(), any(), eq(empresa.getId().toString())))
             .thenReturn("cus_new");
         when(asaasClient.criarAssinatura(eq("cus_new"), eq(new BigDecimal("137.00")), any(),
-                eq(empresa.getId().toString()))).thenReturn("sub_new");
+                eq(empresa.getId().toString()), any())).thenReturn("sub_new");
         when(asaasClient.buscarUrlPagamento("sub_new")).thenReturn("https://asaas/i/1");
         when(assinaturaRepository.vincularSubscriptionSeAusente(empresa.getId(), "sub_new", "cus_new", 3))
             .thenReturn(1);
@@ -410,7 +410,7 @@ class AssinaturaServiceTest {
         var a = assinatura(StatusAssinatura.TRIAL, null); // nasce com 1
         mockAssinaturaComEmpresa(a);
         when(asaasClient.criarCustomer(any(), any(), any(), any(), any())).thenReturn("cus_new");
-        when(asaasClient.criarAssinatura(eq("cus_new"), eq(new BigDecimal("108.00")), any(), any()))
+        when(asaasClient.criarAssinatura(eq("cus_new"), eq(new BigDecimal("108.00")), any(), any(), any()))
             .thenReturn("sub_new");
         when(asaasClient.buscarUrlPagamento("sub_new")).thenReturn("https://asaas/i/1");
         when(assinaturaRepository.vincularSubscriptionSeAusente(any(), any(), any(), anyInt())).thenReturn(1);
@@ -419,7 +419,7 @@ class AssinaturaServiceTest {
 
         // O gateway cobra por 2 lojas E lojas=2 é gravado junto com a subscription —
         // não antes, senão o gateway falhando deixaria 2 lojas sem cobrança.
-        verify(asaasClient).criarAssinatura(eq("cus_new"), eq(new BigDecimal("108.00")), any(), any());
+        verify(asaasClient).criarAssinatura(eq("cus_new"), eq(new BigDecimal("108.00")), any(), any(), any());
         verify(assinaturaRepository).vincularSubscriptionSeAusente(empresa.getId(), "sub_new", "cus_new", 2);
     }
 
@@ -432,7 +432,7 @@ class AssinaturaServiceTest {
         a.setLojasContratadas(3);
         mockAssinaturaComEmpresa(a);
         when(asaasClient.criarCustomer(any(), any(), any(), any(), any())).thenReturn("cus_new");
-        when(asaasClient.criarAssinatura(any(), eq(new BigDecimal("137.00")), any(), any()))
+        when(asaasClient.criarAssinatura(any(), eq(new BigDecimal("137.00")), any(), any(), any()))
             .thenReturn("sub_new");
         when(asaasClient.buscarUrlPagamento(any())).thenReturn("https://asaas/i/1");
         when(assinaturaRepository.vincularSubscriptionSeAusente(any(), any(), any(), anyInt())).thenReturn(1);
@@ -464,6 +464,25 @@ class AssinaturaServiceTest {
         assertThrows(PagamentoRequeridoException.class,
             () -> assinaturaService.contratarMaisLojas(empresa.getId(), 2));
         verify(asaasClient, never()).atualizarValorAssinatura(any(), any());
+    }
+
+    /**
+     * Gateway falha ao subir o valor: lojasContratadas NÃO pode ficar gravado,
+     * senão a loja extra sai de graça (mesma classe do furo do assinar).
+     */
+    @Test
+    void contratarMaisLojas_GatewayFalha_NaoDevePersistirLojas() {
+        var a = assinatura(StatusAssinatura.ATIVA, null); // 1 loja
+        a.setGatewaySubscriptionId("sub_exist");
+        mockAssinaturaComEmpresa(a);
+        doThrow(new AsaasException("gateway fora"))
+            .when(asaasClient).atualizarValorAssinatura(eq("sub_exist"), any());
+
+        assertThrows(AsaasException.class,
+            () -> assinaturaService.contratarMaisLojas(empresa.getId(), 3));
+
+        assertEquals(1, a.getLojasContratadas());
+        verify(assinaturaRepository, never()).save(any());
     }
 
     @Test
@@ -499,7 +518,7 @@ class AssinaturaServiceTest {
 
         assertEquals("sub_exist", result.subscriptionId());
         verify(asaasClient, never()).criarCustomer(any(), any(), any(), any(), any());
-        verify(asaasClient, never()).criarAssinatura(any(), any(), any(), any());
+        verify(asaasClient, never()).criarAssinatura(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -509,7 +528,7 @@ class AssinaturaServiceTest {
         var a = assinatura(StatusAssinatura.INADIMPLENTE, null);
         a.setGatewayCustomerId("cus_exist");
         mockAssinaturaComEmpresa(a);
-        when(asaasClient.criarAssinatura(eq("cus_exist"), any(), any(), any())).thenReturn("sub_2");
+        when(asaasClient.criarAssinatura(eq("cus_exist"), any(), any(), any(), any())).thenReturn("sub_2");
         when(asaasClient.buscarUrlPagamento("sub_2")).thenReturn("https://asaas/i/2");
         when(assinaturaRepository.vincularSubscriptionSeAusente(any(), any(), any(), anyInt())).thenReturn(1);
 
@@ -531,7 +550,7 @@ class AssinaturaServiceTest {
         var a = assinatura(StatusAssinatura.TRIAL, null);
         a.setGatewayCustomerId("cus_exist");
         mockAssinaturaComEmpresa(a);
-        when(asaasClient.criarAssinatura(any(), any(), any(), any())).thenReturn("sub_perdedora");
+        when(asaasClient.criarAssinatura(any(), any(), any(), any(), any())).thenReturn("sub_perdedora");
         when(assinaturaRepository.vincularSubscriptionSeAusente(any(), any(), any(), anyInt())).thenReturn(0);
 
         var vencedora = assinatura(StatusAssinatura.TRIAL, null);
@@ -557,7 +576,7 @@ class AssinaturaServiceTest {
         empresa.setTelefone("11999999999");
         mockAssinaturaComEmpresa(assinatura(StatusAssinatura.TRIAL, null));
         when(asaasClient.criarCustomer(any(), any(), any(), any(), any())).thenReturn("cus_novo");
-        when(asaasClient.criarAssinatura(any(), any(), any(), any()))
+        when(asaasClient.criarAssinatura(any(), any(), any(), any(), any()))
             .thenThrow(new AsaasException("gateway fora"));
 
         assertThrows(AsaasException.class, () -> assinaturaService.assinar(empresa.getId(), null));
@@ -579,7 +598,7 @@ class AssinaturaServiceTest {
         var a = assinatura(StatusAssinatura.TRIAL, null); // nasce com 1 loja
         mockAssinaturaComEmpresa(a);
         when(asaasClient.criarCustomer(any(), any(), any(), any(), any())).thenReturn("cus_novo");
-        when(asaasClient.criarAssinatura(any(), any(), any(), any()))
+        when(asaasClient.criarAssinatura(any(), any(), any(), any(), any()))
             .thenThrow(new AsaasException("gateway 401"));
 
         assertThrows(AsaasException.class, () -> assinaturaService.assinar(empresa.getId(), 5));
@@ -597,7 +616,7 @@ class AssinaturaServiceTest {
         var a = assinatura(StatusAssinatura.TRIAL, null);
         a.setGatewayCustomerId("cus_exist");
         mockAssinaturaComEmpresa(a);
-        when(asaasClient.criarAssinatura(any(), any(), any(), any())).thenReturn("sub_1");
+        when(asaasClient.criarAssinatura(any(), any(), any(), any(), any())).thenReturn("sub_1");
         when(assinaturaRepository.vincularSubscriptionSeAusente(any(), any(), any(), anyInt())).thenReturn(1);
 
         assinaturaService.assinar(empresa.getId(), null);
@@ -617,7 +636,7 @@ class AssinaturaServiceTest {
         var a = assinatura(StatusAssinatura.TRIAL, null);
         a.setGatewayCustomerId("cus_exist");
         mockAssinaturaComEmpresa(a);
-        when(asaasClient.criarAssinatura(any(), any(), any(), any())).thenReturn("sub_orfa");
+        when(asaasClient.criarAssinatura(any(), any(), any(), any(), any())).thenReturn("sub_orfa");
         when(assinaturaRepository.vincularSubscriptionSeAusente(any(), any(), any(), anyInt()))
             .thenThrow(new RuntimeException("banco fora"));
 
