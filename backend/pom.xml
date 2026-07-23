@@ -110,11 +110,22 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- Monitoramento de erro. O starter traz duas capturas que se cobrem:
-             um HandlerExceptionResolver de precedência máxima (pega a exceção
-             antes do RestExceptionHandler, que trata tudo e devolveria 500 sem
-             ninguém saber) e o appender do Logback para os log.error. Sem
-             SENTRY_DSN o SDK não inicia e nada sai daqui. -->
+        <!-- Monitoramento de erro. Sem SENTRY_DSN o SDK não inicia e nada sai.
+
+             Quem captura aqui é o appender do Logback, e não o
+             SentryExceptionResolver: o resolver nasce com ordem 1, ou seja,
+             DEPOIS do ExceptionHandlerExceptionResolver que serve o
+             @RestControllerAdvice — e como o RestExceptionHandler trata até
+             Exception.class, a cadeia para antes e o resolver nunca vê nada.
+
+             Isso é sorte boa, não descuido: o resolver capturaria TODA exceção,
+             inclusive as que viram 404 e 422 por regra de negócio, e a cota
+             gratuita evaporaria com usuário digitando URL errada. Pelo Logback
+             com minimum-event-level=error, só sobe o que o handleGeneric
+             registra — os 500 de verdade.
+
+             Se um dia algum evento parar de chegar, o suspeito é este caminho:
+             exceção tratada sem log.error não gera evento, por construção. -->
         <dependency>
             <groupId>io.sentry</groupId>
             <artifactId>sentry-spring-boot-starter-jakarta</artifactId>
