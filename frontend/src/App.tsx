@@ -13,6 +13,7 @@ import SelecionarLojaPage from './pages/SelecionarLojaPage';
 import AgendaPage from './pages/AgendaPage';
 import RelatoriosPage from './pages/RelatoriosPage';
 import PrivacyPage from './pages/PrivacyPage';
+import TermosPage from './pages/TermosPage';
 import ConfiguracoesPage from './pages/ConfiguracoesPage';
 import EmpresasPage from './pages/EmpresasPage';
 import Layout from './components/Layout';
@@ -89,6 +90,7 @@ export default function App() {
             <Route path="/esqueci-senha" element={<EsqueciSenhaPage />} />
             <Route path="/redefinir-senha" element={<RedefinirSenhaPage />} />
             <Route path="/privacidade" element={<PrivacyPage />} />
+            <Route path="/termos" element={<TermosPage />} />
 
             <Route path="/bem-vindo" element={
               <ProtectedRoute ignorarOnboarding>

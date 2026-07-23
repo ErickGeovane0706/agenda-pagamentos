@@ -148,8 +148,8 @@ export default function RegistroPage() {
               <label className="reg-consent">
                 <input type="checkbox" {...register('aceiteTermos')} />
                 <span>
-                  Li e aceito os{' '}
-                  <Link to="/privacidade" target="_blank">termos de uso e a política de privacidade</Link>.
+                  Li e aceito os <Link to="/termos" target="_blank">termos de uso</Link> e a{' '}
+                  <Link to="/privacidade" target="_blank">política de privacidade</Link>.
                 </span>
               </label>
               {errors.aceiteTermos && <span className="reg-erro">{errors.aceiteTermos.message}</span>}

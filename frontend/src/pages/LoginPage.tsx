@@ -101,6 +101,8 @@ export default function LoginPage() {
           </p>
 
           <p className="text-center text-xs text-slate-400 mt-4">
+            <Link to="/termos" className="hover:underline">Termos de Uso</Link>
+            {' · '}
             <Link to="/privacidade" className="hover:underline">Política de Privacidade</Link>
           </p>
         </div>

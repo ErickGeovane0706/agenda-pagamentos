@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import {
     Settings, User, Shield, Building2, Plus, Pencil, Trash2,
-    Mail, X, AlertTriangle, MessageCircle, Store, Check
+    Mail, X, AlertTriangle, MessageCircle, Store, Check, Download
 } from 'lucide-react';
 import api from '../api/client';
 import { useAuthStore } from '../store/authStore';
@@ -14,7 +15,7 @@ import { z } from 'zod';
 export default function ConfiguracoesPage() {
     const { usuario } = useAuthStore();
     const queryClient = useQueryClient();
-    const [aba, setAba] = useState<'perfil' | 'bancos' | 'usuarios' | 'notificacoes'>('perfil');
+    const [aba, setAba] = useState<'perfil' | 'bancos' | 'usuarios' | 'notificacoes' | 'meus-dados'>('perfil');
     const [mostrarCriarBanco, setMostrarCriarBanco] = useState(false);
     const [mostrarCriarUsuario, setMostrarCriarUsuario] = useState(false);
     const [solicitouExclusao, setSolicitouExclusao] = useState(false);
@@ -47,6 +48,7 @@ export default function ConfiguracoesPage() {
         { id: 'notificacoes' as const, label: 'Notificações', icon: MessageCircle },
         { id: 'bancos' as const, label: 'Bancos', icon: Building2 },
         ...(usuario?.perfil === 'ADMIN' ? [{ id: 'usuarios' as const, label: 'Usuários', icon: Shield }] : []),
+        { id: 'meus-dados' as const, label: 'Meus dados', icon: Download },
     ];
 
     return (
@@ -77,6 +79,7 @@ export default function ConfiguracoesPage() {
             {aba === 'notificacoes' && <NotificacoesTab lojas={lojas} />}
             {aba === 'bancos' && <BancosTab bancos={bancos} mostrarCriar={mostrarCriarBanco} setMostrarCriar={setMostrarCriarBanco} />}
             {aba === 'usuarios' && <UsuariosTab usuarios={usuarios} mostrarCriar={mostrarCriarUsuario} setMostrarCriar={setMostrarCriarUsuario} />}
+            {aba === 'meus-dados' && <MeusDadosTab />}
         </div>
     );
 }
@@ -119,18 +122,137 @@ function PerfilTab({ usuario, solicitouExclusao, onSolicitarExclusao }: {
                     {solicitouExclusao ? (
                         <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-4 py-3 rounded-lg">
                             <AlertTriangle className="w-4 h-4" />
-                            <span className="text-sm">Solicitação enviada. Processaremos em até 30 dias.</span>
+                            <span className="text-sm">Solicitação enviada. Seus dados são anonimizados no processamento da próxima madrugada.</span>
                         </div>
                     ) : (
+                        /* O texto fala em usuário, e não em empresa, porque é o que o backend
+                           faz: solicitarExclusao marca APENAS o usuário logado e nunca toca na
+                           empresa nem nos outros usuários. */
                         <button
-                            onClick={() => { if (confirm('Tem certeza? Esta ação solicitará a exclusão de todos os dados da sua empresa.')) onSolicitarExclusao(); }}
+                            onClick={() => { if (confirm('Tem certeza? Seus dados pessoais serão anonimizados e você perderá o acesso. As contas registradas e os demais usuários da empresa não são afetados.')) onSolicitarExclusao(); }}
                             className="text-red-600 hover:text-red-700 text-sm font-medium hover:underline"
                         >
-                            Solicitar exclusão de dados
+                            Solicitar exclusão dos meus dados
                         </button>
                     )}
                 </div>
             </div>
+        </div>
+    );
+}
+
+const correcaoSchema = z.object({
+    campo: z.string().min(2, 'Diga qual informação está errada'),
+    valorAtual: z.string().min(1, 'Informe o que está registrado hoje'),
+    valorCorrigido: z.string().min(1, 'Informe o valor correto'),
+});
+
+/**
+ * Direitos do titular (LGPD). Os endpoints existiam desde sempre no backend,
+ * mas nenhuma tela os usava — na prática o direito só era exercível por e-mail.
+ *
+ * A rota /api/lgpd é isenta do gate de assinatura de propósito: direito legal
+ * não depende de estar em dia com o pagamento.
+ */
+function MeusDadosTab() {
+    const [baixando, setBaixando] = useState(false);
+    const [erroDownload, setErroDownload] = useState('');
+
+    const { register, handleSubmit, reset, formState: { errors } } =
+        useForm<z.infer<typeof correcaoSchema>>({ resolver: zodResolver(correcaoSchema) });
+
+    const correcao = useMutation({
+        mutationFn: (d: z.infer<typeof correcaoSchema>) => api.post('/lgpd/corrigir', d),
+        onSuccess: () => reset(),
+    });
+
+    // O endpoint devolve o JSON com Content-Disposition, mas quem faz a
+    // requisição é o axios (com cookie), não o navegador — então o arquivo
+    // precisa ser materializado aqui.
+    const baixar = async () => {
+        setBaixando(true);
+        setErroDownload('');
+        try {
+            const r = await api.get('/lgpd/portabilidade', { responseType: 'blob' });
+            const url = URL.createObjectURL(new Blob([r.data], { type: 'application/json' }));
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'meus-dados.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch {
+            setErroDownload('Não foi possível gerar o arquivo agora. Tente de novo.');
+        } finally {
+            setBaixando(false);
+        }
+    };
+
+    return (
+        <div className="space-y-4">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+                <h3 className="font-medium text-slate-900 mb-1">Baixar meus dados</h3>
+                <p className="text-sm text-slate-500 mb-4">
+                    Gera um arquivo com seu cadastro, sua empresa, suas lojas e todos os
+                    pagamentos registrados. É seu, dá para levar para outro sistema.
+                </p>
+                <button
+                    onClick={baixar}
+                    disabled={baixando}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#0c4a6e] text-white text-sm font-medium hover:bg-[#0a3d5c] transition-colors disabled:opacity-60"
+                >
+                    <Download className="w-4 h-4" />
+                    {baixando ? 'Gerando...' : 'Baixar arquivo'}
+                </button>
+                {erroDownload && <p className="text-sm text-red-600 mt-3">{erroDownload}</p>}
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+                <h3 className="font-medium text-slate-900 mb-1">Corrigir uma informação</h3>
+                <p className="text-sm text-slate-500 mb-4">
+                    Achou algo errado no seu cadastro? Diga o que é e nós corrigimos.
+                </p>
+
+                {correcao.isSuccess ? (
+                    <div className="flex items-center gap-2 text-green-700 bg-green-50 px-4 py-3 rounded-lg">
+                        <Check className="w-4 h-4" />
+                        <span className="text-sm">Pedido registrado. Vamos analisar e responder em até 15 dias.</span>
+                    </div>
+                ) : (
+                    <form onSubmit={handleSubmit(d => correcao.mutate(d))} className="space-y-3">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1.5">O que está errado</label>
+                            <input {...register('campo')} placeholder="Ex.: meu nome, meu e-mail"
+                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#0c4a6e]/20 focus:border-[#0c4a6e]" />
+                            {errors.campo && <p className="text-xs text-red-600 mt-1">{errors.campo.message}</p>}
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1.5">Como está hoje</label>
+                            <input {...register('valorAtual')}
+                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#0c4a6e]/20 focus:border-[#0c4a6e]" />
+                            {errors.valorAtual && <p className="text-xs text-red-600 mt-1">{errors.valorAtual.message}</p>}
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1.5">Como deveria ser</label>
+                            <input {...register('valorCorrigido')}
+                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#0c4a6e]/20 focus:border-[#0c4a6e]" />
+                            {errors.valorCorrigido && <p className="text-xs text-red-600 mt-1">{errors.valorCorrigido.message}</p>}
+                        </div>
+                        {correcao.isError && (
+                            <p className="text-sm text-red-600">Não foi possível enviar agora. Tente de novo.</p>
+                        )}
+                        <button type="submit" disabled={correcao.isPending}
+                            className="px-4 py-2.5 rounded-xl bg-[#0c4a6e] text-white text-sm font-medium hover:bg-[#0a3d5c] transition-colors disabled:opacity-60">
+                            {correcao.isPending ? 'Enviando...' : 'Pedir correção'}
+                        </button>
+                    </form>
+                )}
+            </div>
+
+            <p className="text-xs text-slate-400 px-1">
+                Para apagar seus dados, use "Solicitar exclusão dos meus dados" na aba Perfil.
+                O que fazemos com suas informações está na{' '}
+                <Link to="/privacidade" className="underline">Política de Privacidade</Link>.
+            </p>
         </div>
     );
 }
