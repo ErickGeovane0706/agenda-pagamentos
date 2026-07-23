@@ -60,6 +60,12 @@ public interface AssinaturaRepository extends JpaRepository<Assinatura, UUID> {
      * <p>
      * Grava o customer junto de propósito: o par (customer, subscription) tem de
      * ser coerente, então quem vence a corrida da subscription define os dois.
+     * <p>
+     * Grava também {@code lojasContratadas} aqui, e <b>em nenhum lugar antes</b>:
+     * a quantidade só passa a valer quando existe subscription paga cobrindo-a.
+     * Persistir antes (com o método não-transacional {@code assinar}) deixava o
+     * número alto mesmo quando o gateway falhava, e o teto de lojas liberava loja
+     * de graça — bastava clicar em assinar, tomar o erro e voltar.
      *
      * @return 1 se vinculou (o chamador venceu), 0 se outra requisição chegou antes
      *         (o chamador precisa cancelar a subscription que criou).
@@ -70,11 +76,13 @@ public interface AssinaturaRepository extends JpaRepository<Assinatura, UUID> {
         UPDATE Assinatura a
            SET a.gatewaySubscriptionId = :subscriptionId,
                a.gatewayCustomerId = :customerId,
+               a.lojasContratadas = :lojas,
                a.atualizadoEm = CURRENT_TIMESTAMP
          WHERE a.empresa.id = :empresaId
            AND a.gatewaySubscriptionId IS NULL
         """)
     int vincularSubscriptionSeAusente(@Param("empresaId") UUID empresaId,
                                       @Param("subscriptionId") String subscriptionId,
-                                      @Param("customerId") String customerId);
+                                      @Param("customerId") String customerId,
+                                      @Param("lojas") int lojas);
 }

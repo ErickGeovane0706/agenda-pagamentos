@@ -213,12 +213,13 @@ public class AssinaturaService {
             return checkoutDe(assinatura.getGatewaySubscriptionId());
         }
 
-        // A quantidade entra AQUI e em nenhum outro lugar antes da subscription
-        // existir: é o que impede o trial de contratar lojas que ninguém pagou.
-        if (lojasDesejadas != null && lojasDesejadas > assinatura.getLojasContratadas()) {
-            assinatura.setLojasContratadas(lojasDesejadas);
-            assinaturaRepository.save(assinatura);
-        }
+        // Quantas lojas a subscription vai cobrir. NÃO é persistido aqui: só é
+        // gravado junto com a subscription (em vincularSubscriptionSeAusente),
+        // quando o gateway confirmar. Persistir antes, num método não-transacional,
+        // deixava lojasContratadas alto mesmo com o gateway falhando — e o teto
+        // de lojas liberava loja de graça a cada clique-e-erro.
+        int lojasAlvo = lojasDesejadas != null && lojasDesejadas > assinatura.getLojasContratadas()
+            ? lojasDesejadas : assinatura.getLojasContratadas();
 
         var empresa = assinatura.getEmpresa();
         exigirDadosDeCobranca(empresa);
@@ -232,13 +233,13 @@ public class AssinaturaService {
             assinaturaRepository.vincularCustomerSeAusente(empresaId, customerId);
         }
 
-        var valor = calcularValor(assinatura.getLojasContratadas());
+        var valor = calcularValor(lojasAlvo);
         var subscriptionId = asaasClient.criarAssinatura(customerId, valor,
             LocalDate.now(), empresaId.toString());
 
         int vinculadas;
         try {
-            vinculadas = assinaturaRepository.vincularSubscriptionSeAusente(empresaId, subscriptionId, customerId);
+            vinculadas = assinaturaRepository.vincularSubscriptionSeAusente(empresaId, subscriptionId, customerId, lojasAlvo);
         } catch (RuntimeException e) {
             // A subscription existe no gateway mas não conseguimos registrá-la: sem
             // compensar, o cliente seria cobrado por algo que o sistema não conhece.
