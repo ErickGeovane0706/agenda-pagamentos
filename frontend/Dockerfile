@@ -3,6 +3,20 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
+
+# As VITE_* sao lidas na COMPILACAO, nao em tempo de execucao: o Vite troca
+# import.meta.env.VITE_X pelo literal dentro do bundle. Sem estes ARG/ENV, uma
+# variavel definida no painel do Railway nao chega ate o `npm run build` e o
+# valor sai `undefined` no bundle — o Sentry nunca inicia e o Turnstile fica no
+# escape hatch, os dois em silencio e parecendo configuracao errada do painel.
+# Vazias por padrao: e o que mantem o build local funcionando sem nada setado.
+ARG VITE_SENTRY_DSN=""
+ARG VITE_SENTRY_ENV=""
+ARG VITE_TURNSTILE_SITE_KEY=""
+ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN \
+    VITE_SENTRY_ENV=$VITE_SENTRY_ENV \
+    VITE_TURNSTILE_SITE_KEY=$VITE_TURNSTILE_SITE_KEY
+
 RUN npm run build
 
 FROM nginx:alpine
