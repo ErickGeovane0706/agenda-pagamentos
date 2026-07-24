@@ -112,8 +112,22 @@ class AssinaturaServiceTest {
     }
 
     @Test
-    void podeAcessar_Cancelada_DeveBloquear() {
+    void podeAcessar_CanceladaSemVigencia_DeveBloquear() {
         mockAssinatura(assinatura(StatusAssinatura.CANCELADA, null));
+        assertFalse(assinaturaService.podeAcessar(empresa.getId()));
+    }
+
+    /** Cancelou mas pagou até depois de hoje: mantém acesso até o fim do período pago. */
+    @Test
+    void podeAcessar_CanceladaComVigenciaFutura_DevePermitir() {
+        mockAssinatura(assinatura(StatusAssinatura.CANCELADA, LocalDate.now().plusDays(10)));
+        assertTrue(assinaturaService.podeAcessar(empresa.getId()));
+    }
+
+    /** Cancelada sem carência: vencida ontem já bloqueia (o prazo pago é exato). */
+    @Test
+    void podeAcessar_CanceladaComVigenciaVencida_DeveBloquear() {
+        mockAssinatura(assinatura(StatusAssinatura.CANCELADA, LocalDate.now().minusDays(1)));
         assertFalse(assinaturaService.podeAcessar(empresa.getId()));
     }
 

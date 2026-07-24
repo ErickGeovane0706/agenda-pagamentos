@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
     Settings, User, Shield, Building2, Plus, Pencil, Trash2,
-    Mail, X, AlertTriangle, MessageCircle, Store, Check, Download
+    Mail, X, AlertTriangle, MessageCircle, Store, Check, Download, CreditCard
 } from 'lucide-react';
 import api from '../api/client';
 import { useAuthStore } from '../store/authStore';
@@ -15,7 +15,7 @@ import { z } from 'zod';
 export default function ConfiguracoesPage() {
     const { usuario } = useAuthStore();
     const queryClient = useQueryClient();
-    const [aba, setAba] = useState<'perfil' | 'bancos' | 'usuarios' | 'notificacoes' | 'meus-dados'>('perfil');
+    const [aba, setAba] = useState<'perfil' | 'bancos' | 'usuarios' | 'notificacoes' | 'assinatura' | 'meus-dados'>('perfil');
     const [mostrarCriarBanco, setMostrarCriarBanco] = useState(false);
     const [mostrarCriarUsuario, setMostrarCriarUsuario] = useState(false);
     const [solicitouExclusao, setSolicitouExclusao] = useState(false);
@@ -48,6 +48,7 @@ export default function ConfiguracoesPage() {
         { id: 'notificacoes' as const, label: 'Notificações', icon: MessageCircle },
         { id: 'bancos' as const, label: 'Bancos', icon: Building2 },
         ...(usuario?.perfil === 'ADMIN' ? [{ id: 'usuarios' as const, label: 'Usuários', icon: Shield }] : []),
+        ...(usuario?.perfil === 'ADMIN' ? [{ id: 'assinatura' as const, label: 'Assinatura', icon: CreditCard }] : []),
         { id: 'meus-dados' as const, label: 'Meus dados', icon: Download },
     ];
 
@@ -79,6 +80,7 @@ export default function ConfiguracoesPage() {
             {aba === 'notificacoes' && <NotificacoesTab lojas={lojas} />}
             {aba === 'bancos' && <BancosTab bancos={bancos} mostrarCriar={mostrarCriarBanco} setMostrarCriar={setMostrarCriarBanco} />}
             {aba === 'usuarios' && <UsuariosTab usuarios={usuarios} mostrarCriar={mostrarCriarUsuario} setMostrarCriar={setMostrarCriarUsuario} />}
+            {aba === 'assinatura' && <AssinaturaTab empresaId={usuario?.empresaId} />}
             {aba === 'meus-dados' && <MeusDadosTab />}
         </div>
     );
@@ -253,6 +255,140 @@ function MeusDadosTab() {
                 O que fazemos com suas informações está na{' '}
                 <Link to="/privacidade" className="underline">Política de Privacidade</Link>.
             </p>
+        </div>
+    );
+}
+
+interface MinhaAssinatura {
+    status: 'TRIAL' | 'ATIVA' | 'INADIMPLENTE' | 'CANCELADA';
+    lojasContratadas: number;
+    vigenteAte: string | null;
+    precoBase: number;
+    precoLojaAdicional: number;
+    assinaturaIniciada: boolean;
+}
+
+const reais = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const dataBR = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('pt-BR');
+
+const rotuloStatus: Record<MinhaAssinatura['status'], string> = {
+    TRIAL: 'Período grátis',
+    ATIVA: 'Ativa',
+    INADIMPLENTE: 'Pagamento pendente',
+    CANCELADA: 'Cancelada',
+};
+
+/**
+ * Assinatura da própria empresa. O foco é o cancelamento self-service: o
+ * endpoint DELETE já existia, mas nenhuma tela o chamava — sem botão, o cliente
+ * que quer sair abre chargeback (pior que um cancelamento limpo). Só ADMIN vê a
+ * aba, batendo com a autorização do endpoint.
+ */
+function AssinaturaTab({ empresaId }: { empresaId?: string }) {
+    const queryClient = useQueryClient();
+
+    const { data: a, isLoading } = useQuery<MinhaAssinatura>({
+        queryKey: ['minha-assinatura'],
+        queryFn: () => api.get('/assinaturas/minha').then(r => r.data),
+    });
+
+    const cancelar = useMutation({
+        mutationFn: () => api.delete(`/assinaturas/${empresaId}/assinar`),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['minha-assinatura'] }),
+    });
+
+    if (isLoading || !a) {
+        return (
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 text-center text-slate-400 text-sm">
+                Carregando assinatura...
+            </div>
+        );
+    }
+
+    const total = a.precoBase + a.precoLojaAdicional * Math.max(0, a.lojasContratadas - 1);
+    // Só há o que cancelar quando existe assinatura paga no gateway. Num trial
+    // sem assinatura, "cancelar" só trancaria o cliente em somente-leitura de
+    // graça — para sair do trial ele simplesmente para de usar.
+    const podeCancelar = a.assinaturaIniciada && a.status !== 'CANCELADA';
+
+    return (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <div className="p-6 border-b border-slate-100 space-y-3">
+                <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-500">Situação</span>
+                    <span className="text-sm font-medium text-slate-900">{rotuloStatus[a.status]}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-500">Lojas contratadas</span>
+                    <span className="text-sm font-medium text-slate-900">{a.lojasContratadas}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-500">Valor mensal</span>
+                    <span className="text-sm font-medium text-slate-900">{reais(total)}</span>
+                </div>
+                {a.vigenteAte && (
+                    <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-500">
+                            {a.status === 'TRIAL' ? 'Grátis até' : 'Vigente até'}
+                        </span>
+                        <span className="text-sm font-medium text-slate-900">{dataBR(a.vigenteAte)}</span>
+                    </div>
+                )}
+            </div>
+
+            <div className="p-6">
+                {cancelar.isSuccess ? (
+                    <div className="flex items-center gap-2 text-amber-700 bg-amber-50 px-4 py-3 rounded-lg">
+                        <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                        <span className="text-sm">
+                            Assinatura cancelada. A cobrança foi encerrada
+                            {a.vigenteAte ? `, e você mantém acesso até ${dataBR(a.vigenteAte)}` : ''}.
+                            Depois disso a conta fica somente-leitura até você assinar de novo.
+                        </span>
+                    </div>
+                ) : a.status === 'CANCELADA' ? (
+                    <div className="text-sm text-slate-600">
+                        Sua assinatura está cancelada.{' '}
+                        <Link to="/assinar" className="text-[#0c4a6e] font-medium hover:underline">
+                            Assinar novamente
+                        </Link>.
+                    </div>
+                ) : podeCancelar ? (
+                    <>
+                        <h3 className="text-sm font-medium text-slate-700 mb-1">Cancelar assinatura</h3>
+                        <p className="text-sm text-slate-500 mb-3">
+                            A cobrança para na hora, mas você continua com acesso normal até o fim
+                            do período já pago{a.vigenteAte ? ` (${dataBR(a.vigenteAte)})` : ''}.
+                            Depois disso a conta fica somente-leitura. Dá para voltar assinando de
+                            novo quando quiser.
+                        </p>
+                        {cancelar.isError && (
+                            <p className="text-sm text-red-600 mb-3">
+                                Não foi possível cancelar agora. Tente de novo em instantes.
+                            </p>
+                        )}
+                        <button
+                            onClick={() => {
+                                const ate = a.vigenteAte ? ` Você mantém acesso até ${dataBR(a.vigenteAte)}.` : '';
+                                if (confirm(`Cancelar a assinatura? A cobrança para na hora.${ate}`)) {
+                                    cancelar.mutate();
+                                }
+                            }}
+                            disabled={cancelar.isPending}
+                            className="text-red-600 hover:text-red-700 text-sm font-medium hover:underline disabled:opacity-60"
+                        >
+                            {cancelar.isPending ? 'Cancelando...' : 'Cancelar minha assinatura'}
+                        </button>
+                    </>
+                ) : (
+                    <p className="text-sm text-slate-500">
+                        Você ainda não tem uma assinatura paga.{' '}
+                        <Link to="/assinar" className="text-[#0c4a6e] font-medium hover:underline">
+                            Assinar
+                        </Link>.
+                    </p>
+                )}
+            </div>
         </div>
     );
 }

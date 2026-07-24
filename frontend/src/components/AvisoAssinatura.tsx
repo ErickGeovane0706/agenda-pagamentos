@@ -28,6 +28,8 @@ function diasRestantes(vigenteAte: string) {
   return Math.ceil((fim - Date.now()) / 86_400_000);
 }
 
+const dataBR = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('pt-BR');
+
 export default function AvisoAssinatura() {
   const usuario = useAuthStore((s) => s.usuario);
   // O MASTER não tem tenant próprio — /minha responderia 403. O painel dele é
@@ -42,17 +44,23 @@ export default function AvisoAssinatura() {
 
   if (!data) return null;
 
-  const bloqueada = data.status === 'INADIMPLENTE' || data.status === 'CANCELADA';
   const dias = data.vigenteAte ? diasRestantes(data.vigenteAte) : null;
+  // Cancelou mas ainda tem período pago: mantém acesso até vigenteAte (espelha o
+  // acessivel() do backend). Não é bloqueio — é aviso de que vai terminar.
+  const canceladaComAcesso = data.status === 'CANCELADA' && dias !== null && dias > 0;
+  const bloqueada = data.status === 'INADIMPLENTE'
+    || (data.status === 'CANCELADA' && !canceladaComAcesso);
   const trialAcabando = data.status === 'TRIAL' && dias !== null && dias <= DIAS_PARA_AVISAR;
 
-  if (!bloqueada && !trialAcabando) return null;
+  if (!bloqueada && !canceladaComAcesso && !trialAcabando) return null;
 
   const texto = bloqueada
     ? 'Sua conta está suspensa — você pode ver seus dados, mas não lançar nem editar.'
-    : dias! <= 0
-      ? 'Seu período grátis termina hoje.'
-      : `Seu período grátis termina em ${dias} ${dias === 1 ? 'dia' : 'dias'}.`;
+    : canceladaComAcesso
+      ? `Assinatura cancelada. Você tem acesso até ${dataBR(data.vigenteAte!)}.`
+      : dias! <= 0
+        ? 'Seu período grátis termina hoje.'
+        : `Seu período grátis termina em ${dias} ${dias === 1 ? 'dia' : 'dias'}.`;
 
   const Icone = bloqueada ? AlertTriangle : Clock;
 
@@ -71,7 +79,7 @@ export default function AvisoAssinatura() {
           bloqueada ? 'bg-red-600 hover:bg-red-700' : 'bg-amber-600 hover:bg-amber-700'
         }`}
       >
-        {bloqueada ? 'Regularizar' : 'Assinar agora'}
+        {bloqueada ? 'Regularizar' : canceladaComAcesso ? 'Reativar' : 'Assinar agora'}
       </Link>
     </div>
   );

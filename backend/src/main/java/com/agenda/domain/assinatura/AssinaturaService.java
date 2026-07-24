@@ -80,11 +80,21 @@ public class AssinaturaService {
     }
 
     private boolean acessivel(Assinatura a) {
-        if (a.getStatus() != StatusAssinatura.TRIAL && a.getStatus() != StatusAssinatura.ATIVA) {
-            return false;
+        var status = a.getStatus();
+        if (status == StatusAssinatura.TRIAL || status == StatusAssinatura.ATIVA) {
+            return a.getVigenteAte() == null
+                || !LocalDate.now().isAfter(a.getVigenteAte().plusDays(carenciaDias));
         }
-        return a.getVigenteAte() == null
-            || !LocalDate.now().isAfter(a.getVigenteAte().plusDays(carenciaDias));
+        // Cancelada mantém o acesso só até o fim do período já pago: o cliente
+        // parou de renovar, mas pagou até vigenteAte e tem direito de usar até lá.
+        // Sem vigência não há período pago a respeitar — bloqueia (não vira acesso
+        // vitalício, e é como o painel do MASTER corta na hora: CANCELADA com
+        // vigência nula). Sem carência de propósito: aqui não há pagamento em
+        // compensação a esperar, o prazo é exato.
+        if (status == StatusAssinatura.CANCELADA) {
+            return a.getVigenteAte() != null && !LocalDate.now().isAfter(a.getVigenteAte());
+        }
+        return false;
     }
 
     /**
