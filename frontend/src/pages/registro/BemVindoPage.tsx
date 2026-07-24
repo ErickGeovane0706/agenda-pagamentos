@@ -246,8 +246,9 @@ export default function BemVindoPage() {
         <div className="reg-ticks"><i className="done" /><i className="done" /><i className="done" /></div>
       </div>
       <div className="reg-body reg-fade" key="pronto">
+        <div className="reg-done-badge" aria-hidden="true">✓</div>
         <h1 className="reg-h1">Tudo pronto, {primeiroNome}.</h1>
-        <ul className="reg-resumo">
+        <ul className="reg-resumo reg-resumo-done">
           <li><span className="reg-mark">✓</span><span>Sua área está no ar com <b>30 dias grátis</b></span></li>
           <li><span className="reg-mark">✓</span><span>Loja <b>{lojas?.[0]?.nome ?? 'criada'}</b> pronta para receber lançamentos</span></li>
           {ativouLembretes && (

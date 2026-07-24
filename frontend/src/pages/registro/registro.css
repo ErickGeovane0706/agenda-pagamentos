@@ -448,6 +448,34 @@
 .reg-resumo .reg-total { padding-top: .75rem; border-top: 1px solid var(--hairline); }
 .reg-resumo .reg-total b { font-size: 1.125rem; }
 
+/* Tela final do funil ("Tudo pronto") — momento de recompensa. Aqui um pouco de
+   orquestração se justifica: é uma celebração única, não um passo repetido. O
+   escopo .reg-resumo-done evita animar o resumo de preço da AssinarPage. */
+.reg-done-badge {
+  align-self: flex-start;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, #059669 14%, var(--surface));
+  color: #059669;
+  font-size: 1.5rem;
+  box-shadow: var(--sombra);
+  animation: reg-pop .45s var(--ease) both;
+}
+.reg-resumo-done li { animation: reg-rise .5s var(--ease) both; }
+.reg-resumo-done li:nth-child(1) { animation-delay: .18s; }
+.reg-resumo-done li:nth-child(2) { animation-delay: .34s; }
+.reg-resumo-done li:nth-child(3) { animation-delay: .50s; }
+.reg-resumo-done li:nth-child(4) { animation-delay: .66s; }
+
+@keyframes reg-pop {
+  from { opacity: 0; transform: scale(.6); }
+  60%  { transform: scale(1.08); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
 .reg-ok {
   border: 1px solid color-mix(in srgb, #059669 30%, var(--hairline));
   background: color-mix(in srgb, #059669 6%, var(--surface));
