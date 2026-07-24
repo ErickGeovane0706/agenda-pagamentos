@@ -154,6 +154,47 @@
 
 .reg-stack { display: flex; flex-direction: column; gap: 1.25rem; }
 
+/* Dica curta abaixo de um campo (linguagem humana, sem jargão). */
+.reg-hint { font-size: .75rem; color: var(--ink-faint); line-height: 1.4; }
+
+/* Preview ao vivo do nome do negócio (passo 1 do cadastro): mostra "é assim que
+   vai aparecer" enquanto o cliente digita. Reforça o maior retorno emocional do
+   funil — é o nome dele na tela — e é só CSS, sem peso. */
+.reg-preview {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  align-self: flex-start;
+  max-width: 100%;
+  padding: .5625rem .9375rem .5625rem .5625rem;
+  border: 1px solid var(--hairline);
+  border-radius: .875rem;
+  background: var(--surface);
+  box-shadow: var(--sombra);
+  transition: border-color .25s var(--ease);
+}
+.reg-preview.vazio { border-style: dashed; }
+.reg-preview:not(.vazio) { border-color: color-mix(in srgb, var(--accent) 40%, var(--hairline)); }
+.reg-preview-dot {
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: none;
+  border-radius: .625rem;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  font-size: 1.125rem;
+}
+.reg-preview-nome {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reg-preview.vazio .reg-preview-nome { color: var(--ink-faint); font-weight: 400; }
+
 .reg-consent {
   display: flex;
   gap: .75rem;
@@ -417,6 +458,149 @@
 }
 
 .reg-fade { animation: reg-rise .5s var(--ease) both; }
+
+/* ================= Landing pública (/comecar) =================
+   Honra o sistema porcelana/azul. A ousadia fica concentrada num lugar só:
+   o mockup de conversa do WhatsApp (a coisa mais característica do produto).
+   O resto fica quieto. Coluna mais larga para caber os dois atos. */
+.reg-land { --coluna: 60rem; }
+
+.reg-land-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: clamp(2rem, 5vw, 3.5rem);
+  align-content: center;
+}
+@media (min-width: 860px) {
+  .reg-land-grid { grid-template-columns: 1.05fr .95fr; align-items: center; }
+}
+
+.reg-land-copy { display: flex; flex-direction: column; gap: 1.5rem; }
+.reg-land-h1 { font-size: clamp(2rem, 6vw, 3.25rem); }
+
+.reg-land-trust {
+  display: flex;
+  flex-direction: column;
+  gap: .625rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.reg-land-trust li {
+  display: flex;
+  align-items: flex-start;
+  gap: .625rem;
+  font-size: .9375rem;
+  line-height: 1.5;
+  color: var(--ink-dim);
+}
+.reg-land-trust li::before {
+  content: "✓";
+  flex: none;
+  color: var(--accent);
+  font-weight: 700;
+}
+.reg-land-trust b { color: var(--ink); font-weight: 600; }
+
+.reg-land-price { font-size: 1.0625rem; color: var(--ink-dim); }
+.reg-land-price b { color: var(--ink); font-weight: 600; }
+
+.reg-land-cta { align-self: flex-start; font-size: 1rem; padding: 1rem 1.75rem; text-decoration: none; }
+.reg-land-founder { font-size: .8125rem; color: var(--ink-faint); }
+
+/* --- o mockup de conversa: prova viva do produto --- */
+.reg-chat {
+  --wa-green: #1FA855;
+  margin: 0;
+  border-radius: 1.25rem;
+  overflow: hidden;
+  background: #E9F1EC;
+  border: 1px solid var(--hairline);
+  box-shadow: 0 1px 2px rgba(12,24,38,.05), 0 28px 56px -28px rgba(12,24,38,.30);
+}
+.reg-chat-head {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .75rem 1rem;
+  background: #F5F8F6;
+  border-bottom: 1px solid var(--hairline);
+}
+.reg-chat-avatar {
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: none;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--wa-green) 16%, #fff);
+  font-size: 1.25rem;
+}
+.reg-chat-head > div { display: flex; flex-direction: column; line-height: 1.3; }
+.reg-chat-head b { font-size: .9375rem; color: var(--ink); font-weight: 600; }
+.reg-chat-status {
+  font-size: .75rem;
+  color: var(--wa-green);
+  display: flex;
+  align-items: center;
+  gap: .3125rem;
+}
+.reg-chat-status::before {
+  content: "";
+  width: .4375rem;
+  height: .4375rem;
+  border-radius: 50%;
+  background: var(--wa-green);
+}
+
+.reg-chat-body {
+  display: flex;
+  flex-direction: column;
+  gap: .625rem;
+  padding: 1.125rem 1rem 1.5rem;
+}
+.reg-chat-day {
+  align-self: center;
+  background: rgba(255,255,255,.9);
+  border-radius: 999px;
+  padding: .1875rem .6875rem;
+  font-family: var(--mono);
+  font-size: .625rem;
+  letter-spacing: .12em;
+  color: var(--ink-dim);
+  box-shadow: var(--sombra);
+}
+.reg-chat-msg {
+  position: relative;
+  align-self: flex-start;
+  max-width: 92%;
+  background: #fff;
+  border-radius: .25rem .875rem .875rem .875rem;
+  padding: .625rem .8125rem 1.375rem;
+  box-shadow: 0 1px 1.5px rgba(12,24,38,.10);
+  animation: reg-rise .5s var(--ease) both;
+}
+.reg-chat-body .reg-chat-msg:nth-of-type(1) { animation-delay: .15s; }
+.reg-chat-body .reg-chat-msg:nth-of-type(2) { animation-delay: .55s; }
+.reg-chat-msg p {
+  margin: 0;
+  font-size: .875rem;
+  line-height: 1.5;
+  color: #0C1826;
+  white-space: pre-line;
+}
+.reg-chat-meta {
+  position: absolute;
+  right: .6875rem;
+  bottom: .4375rem;
+  display: flex;
+  align-items: center;
+  gap: .25rem;
+  font-size: .625rem;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.reg-chat-tick { color: var(--wa-green); letter-spacing: -.15em; }
 
 @keyframes reg-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @keyframes reg-spin { to { transform: rotate(360deg); } }

@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from './store/authStore';
 
 import LoginPage from './pages/LoginPage';
+import LandingPage from './pages/LandingPage';
 import RegistroPage from './pages/registro/RegistroPage';
 import ConfirmarRegistroPage from './pages/registro/ConfirmarRegistroPage';
 import BemVindoPage from './pages/registro/BemVindoPage';
@@ -84,6 +85,7 @@ export default function App() {
         <BrowserRouter>
           <ToastContainer />
           <Routes>
+            <Route path="/comecar" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/registro" element={<RegistroPage />} />
             <Route path="/registro/confirmar" element={<ConfirmarRegistroPage />} />

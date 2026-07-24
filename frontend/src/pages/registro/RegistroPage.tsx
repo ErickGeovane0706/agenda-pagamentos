@@ -93,6 +93,10 @@ export default function RegistroPage() {
                 placeholder="Mercado do João"
               />
             </div>
+            <div className={`reg-preview ${nomeNegocio.trim() ? '' : 'vazio'}`}>
+              <span className="reg-preview-dot" aria-hidden="true">🏬</span>
+              <span className="reg-preview-nome">{nomeNegocio.trim() || 'Mercado do João'}</span>
+            </div>
             <p className="reg-lede">É assim que ele vai aparecer no sistema. Dá para mudar depois.</p>
             <div className="reg-actions">
               <button

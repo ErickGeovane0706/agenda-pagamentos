@@ -106,7 +106,7 @@ export default function BemVindoPage() {
 
   const confirmarLembretes = () => {
     if (!TELEFONE_RE.test(telefone.trim())) {
-      setErroTelefone('Use o formato com DDI e DDD, ex: 5583999999999');
+      setErroTelefone('Confira o número: só números, com o 55 na frente e o DDD. Ex.: 5583999999999');
       return;
     }
     setErroTelefone('');
@@ -153,7 +153,9 @@ export default function BemVindoPage() {
                 value={telefone}
                 onChange={(e) => setTelefone(e.target.value)}
               />
-              {erroTelefone && <span className="reg-erro">{erroTelefone}</span>}
+              {erroTelefone
+                ? <span className="reg-erro">{erroTelefone}</span>
+                : <span className="reg-hint">Só números, com o 55 na frente e o DDD. Ex.: 5583999999999</span>}
             </div>
             <div className="reg-field">
               <label htmlFor="horario">Horário do aviso</label>
