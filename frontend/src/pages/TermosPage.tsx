@@ -14,8 +14,8 @@ import { FileText, ArrowLeft } from 'lucide-react';
  * e o modo somente-leitura do `AssinaturaGateFilter`. Se algum deles mudar no
  * application.yml, este texto precisa mudar junto.
  *
- * TODO quando houver domínio próprio: trocar o e-mail de contato por um do
- * próprio domínio.
+ * TODO: o e-mail é uma caixa dedicada, mas ainda é Gmail. Trocar por um do
+ * domínio (diadepagar.com.br) quando o encaminhamento estiver de pé.
  */
 
 function Secao({ titulo, children }: { titulo: string; children: React.ReactNode }) {
@@ -213,8 +213,8 @@ export default function TermosPage() {
           <Secao titulo="14. Falar com a gente">
             <p>
               Dúvida sobre estes termos, escreva para{' '}
-              <a href="mailto:privacidade@diadepagar.com.br" className="text-[#0c4a6e] underline">
-                privacidade@diadepagar.com.br
+              <a href="mailto:privacidade.diadepagar@gmail.com" className="text-[#0c4a6e] underline">
+                privacidade.diadepagar@gmail.com
               </a>.
             </p>
           </Secao>

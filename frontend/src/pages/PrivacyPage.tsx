@@ -20,8 +20,10 @@ import { Shield, ArrowLeft } from 'lucide-react';
  * sobre /api/lgpd/portabilidade e /corrigir; exclusão na aba Perfil). O e-mail
  * ficou como canal para o que a tela não cobre.
  *
- * TODO quando houver domínio próprio: trocar o e-mail de contato por
- * privacidade@<dominio> — o Gmail atual expõe uma caixa pessoal a scrapers.
+ * TODO: o e-mail é uma caixa dedicada (não mais a pessoal), mas ainda é Gmail.
+ * Trocar por privacidade@diadepagar.com.br quando o encaminhamento do domínio
+ * estiver de pé — só depois que ele receber de fato, senão o canal exigido pela
+ * LGPD passa a ser um endereço que devolve erro.
  */
 
 function Secao({ titulo, children }: { titulo: string; children: React.ReactNode }) {
@@ -64,8 +66,8 @@ export default function PrivacyPage() {
             </p>
             <p>
               Contato para assuntos de privacidade:{' '}
-              <a href="mailto:privacidade@diadepagar.com.br" className="text-[#0c4a6e] underline">
-                privacidade@diadepagar.com.br
+              <a href="mailto:privacidade.diadepagar@gmail.com" className="text-[#0c4a6e] underline">
+                privacidade.diadepagar@gmail.com
               </a>.
             </p>
           </Secao>
@@ -189,8 +191,8 @@ export default function PrivacyPage() {
             </p>
             <p>
               Para o que não estiver ali, escreva para{' '}
-              <a href="mailto:privacidade@diadepagar.com.br" className="text-[#0c4a6e] underline">
-                privacidade@diadepagar.com.br
+              <a href="mailto:privacidade.diadepagar@gmail.com" className="text-[#0c4a6e] underline">
+                privacidade.diadepagar@gmail.com
               </a>. Respondemos em até 15 dias.
             </p>
           </Secao>
