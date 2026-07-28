@@ -106,3 +106,7 @@ tmp/
 # ══════════════════════════════════════════════
 zap-report.html
 zap-report.json
+# Boletos reais usados para testar o validador (dados de terceiros:
+# nome, CNPJ, valores). NUNCA versionar - o repositorio esta no GitHub e
+# no git apagar depois nao resolve, fica no historico.
+boletos/

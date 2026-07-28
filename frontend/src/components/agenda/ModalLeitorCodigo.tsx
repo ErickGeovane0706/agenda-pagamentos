@@ -4,6 +4,7 @@ import Tesseract from 'tesseract.js';
 import { BrowserMultiFormatReader, IScannerControls } from '@zxing/browser';
 import { BarcodeFormat, DecodeHintType } from '@zxing/library';
 import { X, Camera, Image, FileText, Loader2, RotateCw, Check } from 'lucide-react';
+import { lerCodigo, formatarLinha, DadosBoleto } from '../../utils/boleto';
 import { clsx } from 'clsx';
 import { useToastStore } from '../../store/toastStore';
 
@@ -120,77 +121,6 @@ function extrairCodigoDigitavel(texto: string): string | null {
   return null;
 }
 
-/**
- * Identifica o tipo de documento pelo código numérico limpo (sem espaços/pontos).
- *
- * Referências de segmento (posições 2–4 do código de 48 dígitos começando com 8):
- *   826x → GRU (Guia de Recolhimento da União)
- *   840x → DARF Normal
- *   841x → DARF Simples
- *   850x → GPS / INSS
- *   858x → DAS (Simples Nacional / MEI) / GNRE / DAE
- *   880x → Multas de trânsito (RENAINF)
- *   836x / 863x → Concessionárias (energia, água, gás, telefone)
- *   Outros com 8 → Convênio/concessionária genérico
- */
-function identificarTipoDocumento(codigo: string): { tipo: string; valido: boolean } {
-  const limpo = codigo.replace(/[\s.\-]/g, '');
-
-  // Código de barras puro lido pela câmera (44 dígitos)
-  if (limpo.length === 44) {
-    if (/^\d{44}$/.test(limpo)) return { tipo: 'Código de Barras', valido: true };
-    return { tipo: 'Desconhecido', valido: false };
-  }
-
-  // Código digitável — 47 dígitos (boleto bancário) ou 48 dígitos (guias/convênio)
-  if (limpo.length === 47 || limpo.length === 48) {
-    if (!limpo.startsWith('8')) {
-      // Boleto bancário (começa com código do banco, ex: 341, 237, 033...)
-      return { tipo: 'Boleto Bancário', valido: true };
-    }
-
-    // Produto 6 — começa com 8, segmento nas posições 2-4
-    const seg = limpo.substring(1, 4); // posições 2,3,4
-
-    // GRU — Guia de Recolhimento da União (taxas federais, passaportes, universidades)
-    if (seg.startsWith('82') || seg.startsWith('826')) return { tipo: 'GRU — Guia de Recolhimento da União', valido: true };
-
-    // DARF — Receita Federal (IRPF, IRPJ, PIS, COFINS, CSLL, IOF, IPI, CIDE...)
-    if (seg === '840' || seg === '841' || seg.startsWith('84')) return { tipo: 'DARF — Receita Federal', valido: true };
-
-    // GPS / INSS — Guia da Previdência Social
-    if (seg === '850' || seg === '851' || seg === '852' || seg.startsWith('85') && parseInt(seg) <= 857) {
-      return { tipo: 'GPS — INSS / Previdência Social', valido: true };
-    }
-
-    // DAS / GNRE / DAE — Simples Nacional, MEI, GNRE, Secretarias Estaduais
-    if (seg === '858') {
-      // DAS do Simples Nacional e MEI: posição 5 indica tipo
-      const sub = limpo.substring(4, 7);
-      if (sub === '000' || sub === '001') return { tipo: 'DAS — Simples Nacional / MEI', valido: true };
-      return { tipo: 'GNRE / DAE — Guia Estadual', valido: true };
-    }
-
-    // Multas de trânsito — RENAINF
-    if (seg === '880' || seg.startsWith('88')) return { tipo: 'Multa de Trânsito (RENAINF)', valido: true };
-
-    // Concessionárias — energia elétrica, água, gás, telefone, TV a cabo
-    if (seg.startsWith('83') || seg.startsWith('86') || seg.startsWith('87')) {
-      return { tipo: 'Concessionária (energia / água / gás / telefone)', valido: true };
-    }
-
-    // Convênio genérico com prefixo 8 não mapeado acima
-    return { tipo: 'Guia de Arrecadação / Convênio', valido: true };
-  }
-
-  return { tipo: 'Desconhecido', valido: false };
-}
-
-function validarCodigoBoleto(codigo: string): boolean {
-  const limpo = codigo.replace(/[\s.\-]/g, '');
-  return /^\d{44,48}$/.test(limpo);
-}
-
 // ─── Tesseract v7 ────────────────────────────────────────────────────────────
 // Problema: workerBlobURL:false exige CORS no CDN (jsDelivr não retorna
 //   Access-Control-Allow-Origin para Worker), bloqueado pelo browser.
@@ -255,6 +185,11 @@ export function ModalLeitorCodigo({
   // Código lido pela câmera, segurando o painel de sucesso até o celular voltar
   // a ficar em pé — ver handleCodigoCamera.
   const [codigoLido, setCodigoLido] = useState<string | null>(null);
+
+  /** Leitura que passou no dígito verificador e aguarda o OK do usuário. */
+  const [confirmacao, setConfirmacao] = useState<
+    { dados: DadosBoleto; origem: 'camera' | 'outro' } | null
+  >(null);
   // Safari/iPhone não implementa screen.orientation.lock() — quando o lock
   // falha, o giro passa a ser manual (o usuário vira o aparelho e a interface
   // acompanha pelo botão de girar).
@@ -422,19 +357,39 @@ export function ModalLeitorCodigo({
   }, []);
 
   // ─── Handlers ─────────────────────────────────────────────────────────────
-  function handleCodigo(codigo: string) {
-    const limpo = codigo.replace(/[\s.\-]/g, '');
-    const { tipo, valido } = identificarTipoDocumento(limpo);
 
-    if (!valido) {
-      addToast('info', 'Código identificado mas não reconhecido como boleto. Verifique se é um documento válido.');
-      resultadoRef.current = limpo;
+  /**
+   * Portão único de aceitação. Antes daqui, qualquer coisa com 44 a 48 dígitos
+   * era gravada direto: uma linha digitável de 47 que perdesse 3 dígitos virava
+   * um "código de barras de 44" perfeitamente válido aos olhos do sistema, e o
+   * usuário não tinha como perceber. Agora o dígito verificador decide, e o que
+   * passa ainda vai para conferência humana — a aritmética pega ~99% das
+   * leituras erradas, e o olho no valor e na data cobre o resto.
+   */
+  function aceitar(codigo: string, origem: 'camera' | 'outro') {
+    const r = lerCodigo(codigo);
+
+    if (!r.valido) {
+      addToast('info', `${r.motivo} Tente ler novamente.`);
+      resultadoRef.current = codigo.replace(/\D/g, '');
       return;
     }
 
-    addToast('success', `${tipo} lido com sucesso!`);
-    onCodigoLido(limpo);
-    onFechar();
+    setConfirmacao({ dados: r.dados, origem });
+  }
+
+  /** Só aqui o código sai do modal — e sempre como linha digitável (47/48). */
+  function confirmar() {
+    if (!confirmacao) return;
+    const { dados, origem } = confirmacao;
+    setConfirmacao(null);
+    onCodigoLido(dados.linhaDigitavel);
+    if (origem === 'camera') setCodigoLido(dados.linhaDigitavel);
+    else onFechar();
+  }
+
+  function handleCodigo(codigo: string) {
+    aceitar(codigo, 'outro');
   }
 
   /**
@@ -450,16 +405,7 @@ export function ModalLeitorCodigo({
    * no mesmo instante e ninguém vê etapa nenhuma.
    */
   function handleCodigoCamera(codigo: string) {
-    const { tipo, valido } = identificarTipoDocumento(codigo);
-
-    if (!valido) {
-      handleCodigo(codigo); // cai no aviso + "Usar mesmo assim", dentro do modal
-      return;
-    }
-
-    addToast('success', `${tipo} lido com sucesso!`);
-    onCodigoLido(codigo);
-    setCodigoLido(codigo);
+    aceitar(codigo, 'camera');
   }
 
   function concluirLeitura() {
@@ -804,7 +750,7 @@ export function ModalLeitorCodigo({
                           <p className="text-sm text-slate-400">Câmera ativa em tela cheia</p>
                         </div>
                     )}
-                    {resultadoRef.current && !validarCodigoBoleto(resultadoRef.current) && (
+                    {resultadoRef.current && !lerCodigo(resultadoRef.current).valido && (
                         <div className="mt-4">
                           <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-3">
                             <p className="text-xs text-amber-600 font-medium">Código identificado (não reconhecido como boleto):</p>
@@ -925,7 +871,7 @@ export function ModalLeitorCodigo({
                         </div>
                     )}
 
-                    {resultadoRef.current && !validarCodigoBoleto(resultadoRef.current) && (
+                    {resultadoRef.current && !lerCodigo(resultadoRef.current).valido && (
                         <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-3">
                           <p className="text-xs text-amber-600 font-medium">Código identificado (não reconhecido como boleto):</p>
                           <p className="text-sm font-mono text-amber-800 break-all mt-1">{resultadoRef.current}</p>
@@ -1042,6 +988,78 @@ export function ModalLeitorCodigo({
               </div>
           )}
         </div>
+
+        {/* Conferência antes de gravar. O dígito verificador pega ~99% das
+            leituras erradas, mas o padrão FEBRABAN colapsa alguns restos do
+            módulo 11 num mesmo DV — sobra uma zona cega que nenhuma
+            implementação alcança. Estes três campos são a segunda camada: o
+            usuário reconhece na hora um valor ou vencimento que não é o dele. */}
+        {confirmacao && (
+            <div className="fixed inset-0 z-[90] bg-black/60 flex items-end sm:items-center justify-center p-4">
+              <div className="bg-white rounded-2xl w-full max-w-sm p-5 space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
+                    <Check className="w-5 h-5 text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-900 leading-tight">Confira os dados</p>
+                    <p className="text-xs text-slate-500">{confirmacao.dados.tipo}</p>
+                  </div>
+                </div>
+
+                <dl className="space-y-2 text-sm">
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-slate-500 shrink-0">Emissor</dt>
+                    <dd className="font-medium text-slate-900 text-right">
+                      {confirmacao.dados.emissor ?? 'Não identificado'}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-slate-500 shrink-0">Valor</dt>
+                    <dd className="font-medium text-slate-900 text-right">
+                      {confirmacao.dados.valor != null
+                          ? confirmacao.dados.valor.toLocaleString('pt-BR',
+                              { style: 'currency', currency: 'BRL' })
+                          : 'Não consta no código'}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-slate-500 shrink-0">Vencimento</dt>
+                    <dd className="font-medium text-slate-900 text-right">
+                      {confirmacao.dados.vencimento
+                          ? confirmacao.dados.vencimento.toLocaleDateString('pt-BR',
+                              { timeZone: 'UTC' })
+                          : 'Não consta no código'}
+                    </dd>
+                  </div>
+                </dl>
+
+                <div className="bg-slate-50 rounded-xl p-3">
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-1">
+                    Linha digitável
+                  </p>
+                  <p className="font-mono text-[11px] leading-snug text-slate-700 break-all">
+                    {formatarLinha(confirmacao.dados.linhaDigitavel)}
+                  </p>
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                      onClick={() => setConfirmacao(null)}
+                      className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                      onClick={confirmar}
+                      className="flex-1 px-4 py-2.5 rounded-xl bg-[#0c4a6e] text-white text-sm font-medium"
+                  >
+                    OK
+                  </button>
+                </div>
+              </div>
+            </div>
+        )}
 
         {/* Painel de sucesso: cobre o app enquanto o celular ainda está deitado,
             para que o layout de desktop nunca apareça. Fecha sozinho quando o
