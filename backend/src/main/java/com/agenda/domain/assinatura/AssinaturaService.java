@@ -1,5 +1,6 @@
 package com.agenda.domain.assinatura;
 
+import com.agenda.auditoria.AuditoriaService;
 import com.agenda.domain.empresa.Empresa;
 import com.agenda.shared.exception.NotFoundException;
 import com.agenda.shared.exception.PagamentoRequeridoException;
@@ -31,6 +32,7 @@ public class AssinaturaService {
 
     private final AssinaturaRepository assinaturaRepository;
     private final AsaasClient asaasClient;
+    private final AuditoriaService auditoriaService;
 
     /**
      * Dias de tolerância após vigenteAte antes de bloquear o acesso.
@@ -51,6 +53,7 @@ public class AssinaturaService {
 
     public AssinaturaService(AssinaturaRepository assinaturaRepository,
                              AsaasClient asaasClient,
+                             AuditoriaService auditoriaService,
                              @Value("${assinatura.carencia-dias}") int carenciaDias,
                              @Value("${assinatura.trial-dias}") int trialDias,
                              @Value("${assinatura.preco-base}") BigDecimal precoBase,
@@ -58,6 +61,7 @@ public class AssinaturaService {
                              @Value("${app.frontend-url}") String frontendUrl) {
         this.assinaturaRepository = assinaturaRepository;
         this.asaasClient = asaasClient;
+        this.auditoriaService = auditoriaService;
         this.carenciaDias = carenciaDias;
         this.trialDias = trialDias;
         this.precoBase = precoBase;
@@ -198,6 +202,9 @@ public class AssinaturaService {
             log.info("Valor da assinatura da empresa {} atualizado para {} ({} lojas)",
                 empresaId, valor, req.lojasContratadas());
         }
+        auditoriaService.registrar("ALTERAR", "ASSINATURA", assinatura.getId(),
+            "Status: " + req.status() + ", lojas: " + req.lojasContratadas()
+                + ", vigente até: " + req.vigenteAte() + " (painel do MASTER)");
         return AssinaturaDTO.from(assinatura);
     }
 
@@ -275,6 +282,8 @@ public class AssinaturaService {
         }
 
         log.info("Assinatura criada no gateway para empresa {} (valor {})", empresaId, valor);
+        auditoriaService.registrar("ASSINAR", "ASSINATURA", assinatura.getId(),
+            "Lojas: " + lojasAlvo + ", valor: " + valor + ", subscription: " + subscriptionId);
         return checkoutDe(subscriptionId);
     }
 
@@ -316,6 +325,8 @@ public class AssinaturaService {
         assinatura.setStatus(StatusAssinatura.CANCELADA);
         assinaturaRepository.save(assinatura);
         log.info("Assinatura da empresa {} cancelada", empresaId);
+        auditoriaService.registrar("CANCELAR", "ASSINATURA", assinatura.getId(),
+            "Acesso mantido até " + assinatura.getVigenteAte());
     }
 
     /**
@@ -356,6 +367,8 @@ public class AssinaturaService {
         assinatura.setLojasContratadas(lojas);
         assinaturaRepository.save(assinatura);
         log.info("Empresa {} passou a contratar {} lojas (valor {})", empresaId, lojas, valor);
+        auditoriaService.registrar("CONTRATAR_LOJAS", "ASSINATURA", assinatura.getId(),
+            "Lojas: " + lojas + ", novo valor: " + valor);
         return AssinaturaDTO.from(assinatura);
     }
 
@@ -421,6 +434,9 @@ public class AssinaturaService {
         a.setStatus(StatusAssinatura.ATIVA);
         assinaturaRepository.save(a);
         log.info("Pagamento confirmado: empresa {} ativa até {}", a.getEmpresa().getId(), a.getVigenteAte());
+        auditoriaService.registrarSistema("PAGAMENTO_CONFIRMADO", "ASSINATURA",
+            a.getEmpresa().getId(), a.getId(),
+            "Ativa até " + a.getVigenteAte() + " (webhook do gateway)");
         return true;
     }
 
@@ -451,6 +467,11 @@ public class AssinaturaService {
             a.setStatus(StatusAssinatura.INADIMPLENTE);
             assinaturaRepository.save(a);
             log.info("{}: empresa {} marcada INADIMPLENTE", motivo, a.getEmpresa().getId());
+            // Dentro do if, não no return: o método devolve true mesmo quando o
+            // guard de CANCELADA impede a mudança, e auditar pelo retorno gravaria
+            // "ficou inadimplente" para quem não ficou.
+            auditoriaService.registrarSistema("INADIMPLENCIA", "ASSINATURA",
+                a.getEmpresa().getId(), a.getId(), motivo + " (webhook do gateway)");
         }
         return true;
     }
@@ -471,6 +492,9 @@ public class AssinaturaService {
             a.setStatus(StatusAssinatura.INADIMPLENTE);
             assinaturaRepository.save(a);
             log.info("Assinatura da empresa {} vencida além da carência — INADIMPLENTE", a.getEmpresa().getId());
+            auditoriaService.registrarSistema("REBAIXADA_VENCIMENTO", "ASSINATURA",
+                a.getEmpresa().getId(), a.getId(),
+                "Vigência " + a.getVigenteAte() + " estourou a carência de " + carenciaDias + " dias (job diário)");
         }
     }
 }

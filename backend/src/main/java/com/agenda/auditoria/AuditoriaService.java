@@ -99,4 +99,32 @@ public class AuditoriaService {
             .build();
         auditoriaRepository.save(registro);
     }
+
+    /**
+     * Registra um evento que NÃO nasceu de uma requisição de usuário: webhook do
+     * gateway de pagamento e jobs agendados.
+     *
+     * Existe porque {@link #registrar} desiste em silêncio quando não há
+     * {@code TenantContext} — e é exatamente o caso desses caminhos. Usá-lo aqui
+     * não gravaria nada e também não daria erro, deixando sem trilha justamente
+     * os eventos que ninguém consegue reconstruir depois (ativação por pagamento,
+     * inadimplência, rebaixamento por vencimento).
+     *
+     * Por isso o {@code empresaId} vem explícito, do próprio dado que está sendo
+     * alterado. {@code usuarioId} e {@code ip} ficam nulos de propósito: não houve
+     * pessoa nem navegador, e inventar um seria pior que a ausência — a origem
+     * real vai em {@code detalhes}.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void registrarSistema(String acao, String entidade, UUID empresaId,
+                                 UUID entidadeId, String detalhes) {
+        var registro = Auditoria.builder()
+            .empresaId(empresaId)
+            .acao(acao)
+            .entidade(entidade)
+            .entidadeId(entidadeId)
+            .detalhes(detalhes)
+            .build();
+        auditoriaRepository.save(registro);
+    }
 }

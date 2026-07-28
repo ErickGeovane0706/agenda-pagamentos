@@ -1,5 +1,6 @@
 package com.agenda.domain.assinatura;
 
+import com.agenda.auditoria.AuditoriaService;
 import com.agenda.domain.empresa.Empresa;
 import com.agenda.shared.exception.NotFoundException;
 import com.agenda.shared.exception.PagamentoRequeridoException;
@@ -26,14 +27,15 @@ class AssinaturaServiceTest {
 
     @Mock private AssinaturaRepository assinaturaRepository;
     @Mock private AsaasClient asaasClient;
+    @Mock private AuditoriaService auditoriaService;
 
     private AssinaturaService assinaturaService;
     private Empresa empresa;
 
     @BeforeEach
     void setUp() {
-        assinaturaService = new AssinaturaService(assinaturaRepository, asaasClient, CARENCIA_DIAS,
-            TRIAL_DIAS, new BigDecimal("79.00"), new BigDecimal("29.00"), "https://app.teste");
+        assinaturaService = new AssinaturaService(assinaturaRepository, asaasClient, auditoriaService,
+            CARENCIA_DIAS, TRIAL_DIAS, new BigDecimal("79.00"), new BigDecimal("29.00"), "https://app.teste");
         empresa = Empresa.builder().id(UUID.randomUUID()).nome("Empresa Teste").build();
     }
 
@@ -273,6 +275,66 @@ class AssinaturaServiceTest {
 
         assertEquals(StatusAssinatura.CANCELADA, a.getStatus());
         verify(assinaturaRepository, never()).save(any());
+    }
+
+    // ---------------------------------------------------------------
+    // Auditoria
+    // ---------------------------------------------------------------
+
+    /**
+     * Webhook e job rodam sem TenantContext, e {@code registrar} desiste em
+     * silêncio quando ele falta. Trocar {@code registrarSistema} por
+     * {@code registrar} aqui não quebraria compilação nem daria erro em runtime
+     * — só deixaria de gravar. Por isso o teste afirma os dois lados.
+     */
+    @Test
+    void registrarPagamentoConfirmado_DeveAuditarPeloCaminhoSemTenant() {
+        var a = assinaturaComGateway(StatusAssinatura.INADIMPLENTE, null);
+        when(assinaturaRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        assinaturaService.registrarPagamentoConfirmado("cus_123");
+
+        verify(auditoriaService).registrarSistema(eq("PAGAMENTO_CONFIRMADO"), eq("ASSINATURA"),
+            eq(empresa.getId()), eq(a.getId()), anyString());
+        verify(auditoriaService, never()).registrar(any(), any(), any(), any());
+    }
+
+    @Test
+    void registrarInadimplencia_DeveAuditarPeloCaminhoSemTenant() {
+        var a = assinaturaComGateway(StatusAssinatura.ATIVA, null);
+        when(assinaturaRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        assinaturaService.registrarInadimplencia("cus_123", "Chargeback aberto");
+
+        verify(auditoriaService).registrarSistema(eq("INADIMPLENCIA"), eq("ASSINATURA"),
+            eq(empresa.getId()), eq(a.getId()), contains("Chargeback aberto"));
+    }
+
+    /**
+     * O guard de CANCELADA impede a mudança mas o método devolve true assim
+     * mesmo. Auditar pelo retorno gravaria "ficou inadimplente" para quem não
+     * ficou — trilha que mente é pior que trilha ausente.
+     */
+    @Test
+    void registrarInadimplencia_Cancelada_NaoDeveAuditar() {
+        assinaturaComGateway(StatusAssinatura.CANCELADA, null);
+
+        assinaturaService.registrarInadimplencia("cus_123", "Cobrança vencida");
+
+        verifyNoInteractions(auditoriaService);
+    }
+
+    @Test
+    void rebaixarVencidas_DeveAuditarCadaAssinatura() {
+        var a = assinatura(StatusAssinatura.ATIVA, LocalDate.now().minusDays(CARENCIA_DIAS + 1));
+        when(assinaturaRepository.findByStatusInAndVigenteAteBefore(anyList(), any()))
+            .thenReturn(java.util.List.of(a));
+        when(assinaturaRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        assinaturaService.rebaixarVencidas();
+
+        verify(auditoriaService).registrarSistema(eq("REBAIXADA_VENCIMENTO"), eq("ASSINATURA"),
+            eq(empresa.getId()), eq(a.getId()), anyString());
     }
 
     // ---------------------------------------------------------------
