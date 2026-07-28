@@ -42,7 +42,10 @@ export default function AgendaPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
+      {/* Mesmo motivo do SelecionarLojaPage: viewport-fit=cover sem recuo no topo
+          deixa o header por baixo da barra de status do iPhone. Aqui é sticky, e
+          o padding entra no elemento fixo para valer também ao rolar. */}
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-10 pt-[env(safe-area-inset-top)]">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3">
           <button
             onClick={() => navigate('/lojas')}

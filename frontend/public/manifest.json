@@ -2,7 +2,7 @@
   "name": "Agenda de Pagamentos",
   "short_name": "Agenda",
   "description": "Controle de boletos, PIX e cheques",
-  "start_url": "/lojas",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",

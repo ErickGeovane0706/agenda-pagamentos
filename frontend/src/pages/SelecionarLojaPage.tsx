@@ -50,7 +50,7 @@ export default function SelecionarLojaPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-50">
-        <header className="bg-white border-b border-slate-200 px-6 py-4">
+        <header className="bg-white border-b border-slate-200 px-6 py-4 pt-[calc(1rem+env(safe-area-inset-top))]">
           <div className="max-w-4xl mx-auto flex items-center gap-3">
             <div className="w-9 h-9 bg-slate-200 rounded-xl animate-pulse" />
             <div className="space-y-1.5">
@@ -70,7 +70,11 @@ export default function SelecionarLojaPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b border-slate-200 px-6 py-4">
+      {/* O recuo do topo é obrigatório aqui: o index.html usa viewport-fit=cover,
+          que joga o conteúdo por baixo da barra de status do iPhone. Sem ele o
+          botão Sair fica colado no ícone de wifi. O padrão do projeto já tratava
+          safe-area-inset-bottom (Layout, index.css) — faltava o topo. */}
+      <header className="bg-white border-b border-slate-200 px-6 py-4 pt-[calc(1rem+env(safe-area-inset-top))]">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-[#0c4a6e] rounded-xl flex items-center justify-center">
