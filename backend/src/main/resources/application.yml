@@ -86,7 +86,7 @@ asaas:
 # verificado no Resend.
 resend:
   api-key: ${RESEND_API_KEY:}
-  from: ${RESEND_FROM:Agenda de Pagamentos <onboarding@resend.dev>}
+  from: ${RESEND_FROM:Dia de Pagar <onboarding@resend.dev>}
 
 # Monitoramento de erro. Sem SENTRY_DSN o SDK não inicia e nada é enviado — é o
 # que mantém o log local limpo e o painel sem erro de teste.

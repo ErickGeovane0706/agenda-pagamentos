@@ -157,7 +157,7 @@ public class SenhaResetService {
     private String corpoEmail(String nome, String link) {
         return """
             <p>Olá, %s.</p>
-            <p>Recebemos um pedido para redefinir a senha da sua conta na Agenda de Pagamentos.
+            <p>Recebemos um pedido para redefinir a senha da sua conta no Dia de Pagar.
             O link abaixo vale por %d hora(s) e só pode ser usado uma vez:</p>
             <p><a href="%s">Redefinir minha senha</a></p>
             <p>Se você não pediu isso, ignore este email — sua senha continua a mesma.</p>

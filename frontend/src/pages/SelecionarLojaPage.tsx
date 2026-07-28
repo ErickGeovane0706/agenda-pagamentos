@@ -82,7 +82,7 @@ export default function SelecionarLojaPage() {
             </div>
             <div>
               <h1 className="font-bold text-slate-900 text-base leading-tight">
-                Agenda de Pagamentos
+                Dia de Pagar
               </h1>
               <p className="text-xs text-slate-500">{usuario?.nome}</p>
             </div>

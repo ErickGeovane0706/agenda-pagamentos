@@ -1,6 +1,6 @@
 {
-  "name": "Agenda de Pagamentos",
-  "short_name": "Agenda",
+  "name": "Dia de Pagar",
+  "short_name": "Dia de Pagar",
   "description": "Controle de boletos, PIX e cheques",
   "start_url": "/",
   "scope": "/",

@@ -42,7 +42,7 @@ export default function TermosPage() {
           <p className="text-xs text-slate-400">Última atualização: 23 de julho de 2026</p>
 
           <p>
-            Este texto explica as regras para usar a Agenda de Pagamentos. Escrevemos em
+            Este texto explica as regras para usar o Dia de Pagar. Escrevemos em
             linguagem simples de propósito: se algo aqui não estiver claro, escreva para a
             gente antes de aceitar.
           </p>
@@ -55,7 +55,7 @@ export default function TermosPage() {
 
           <Secao titulo="1. O que o sistema faz — e o que ele não faz">
             <p>
-              A Agenda de Pagamentos organiza as contas do seu negócio: você registra boletos,
+              O Dia de Pagar organiza as contas do seu negócio: você registra boletos,
               Pix e cheques, e o sistema mostra o que vence e avisa você.
             </p>
             <p className="font-medium text-slate-800">

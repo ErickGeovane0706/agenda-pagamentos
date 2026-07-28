@@ -52,7 +52,7 @@ export default function PrivacyPage() {
           <p className="text-xs text-slate-400">Última atualização: 23 de julho de 2026</p>
 
           <p>
-            Esta política explica quais dados a Agenda de Pagamentos guarda, por que guarda e
+            Esta política explica quais dados o Dia de Pagar guarda, por que guarda e
             com quem divide. Está em linguagem simples porque de nada adianta você aceitar algo
             que não dá para entender.
           </p>

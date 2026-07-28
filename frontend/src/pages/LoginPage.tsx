@@ -38,7 +38,7 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-2xl shadow-lg mb-4">
             <Building2 className="w-8 h-8 text-[#0c4a6e]" />
           </div>
-          <h1 className="text-2xl font-bold text-white">Agenda de Pagamentos</h1>
+          <h1 className="text-2xl font-bold text-white">Dia de Pagar</h1>
           <p className="text-blue-200 text-sm mt-1">Faça login para continuar</p>
         </div>
 
