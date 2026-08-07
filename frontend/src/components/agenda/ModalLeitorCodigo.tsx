@@ -168,7 +168,11 @@ export function ModalLeitorCodigo({
                                   }: {
   aberto: boolean;
   onFechar: () => void;
-  onCodigoLido: (codigo: string) => void;
+  /**
+   * `dados` só vem quando a leitura passou pelo validador. O caminho "usar
+   * mesmo assim" entrega o código cru, sem valor nem vencimento para oferecer.
+   */
+  onCodigoLido: (codigo: string, dados?: DadosBoleto) => void;
 }) {
   const addToast = useToastStore((s) => s.addToast);
   const [aba, setAba] = useState<Aba>('imagem');
@@ -383,7 +387,7 @@ export function ModalLeitorCodigo({
     if (!confirmacao) return;
     const { dados, origem } = confirmacao;
     setConfirmacao(null);
-    onCodigoLido(dados.linhaDigitavel);
+    onCodigoLido(dados.linhaDigitavel, dados);
     if (origem === 'camera') setCodigoLido(dados.linhaDigitavel);
     else onFechar();
   }

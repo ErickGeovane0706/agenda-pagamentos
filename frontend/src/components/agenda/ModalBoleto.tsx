@@ -32,7 +32,7 @@ export function ModalBoleto({
 }) {
   const [mostrarLeitor, setMostrarLeitor] = useState(false);
   const [maxHeight, setMaxHeight] = useState('90vh');
-  const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, setValue, getValues, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: boleto ? {
       lojaId: boleto.lojaId,
@@ -151,8 +151,23 @@ export function ModalBoleto({
       <ModalLeitorCodigo
         aberto={mostrarLeitor}
         onFechar={() => setMostrarLeitor(false)}
-        onCodigoLido={(codigo) => {
+        onCodigoLido={(codigo, dados) => {
           setValue('codigoBarras', codigo);
+          // O código já carrega valor e vencimento, e o usuário acabou de
+          // conferir os dois na tela de confirmação — redigitar é trabalho
+          // repetido. Mas só preenche campo VAZIO: o que a pessoa digitou vale
+          // mais que a leitura, inclusive quando ela digitou de propósito um
+          // valor diferente do impresso (juros, desconto, entrada negociada).
+          // Vale para editar boleto existente também — lá os campos já vêm
+          // preenchidos, então reler o código não sobrescreve nada.
+          if (dados?.valor != null && !getValues('valor')) {
+            setValue('valor', dados.valor.toFixed(2), { shouldValidate: true });
+          }
+          // Data em UTC, igual à exibida na conferência — o Date vem de um
+          // Date.UTC e converter pelo fuso local jogaria o dia para trás.
+          if (dados?.vencimento && !getValues('vencimento')) {
+            setValue('vencimento', dados.vencimento.toISOString().slice(0, 10), { shouldValidate: true });
+          }
           setMostrarLeitor(false);
         }}
       />
