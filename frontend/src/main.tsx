@@ -20,11 +20,13 @@ import ReactDOM from 'react-dom/client'
 import App from './App'
 import './index.css'
 import { iniciarMonitoramento } from './monitoramento'
+import { iniciarPixel } from './pixel'
 import ErrorBoundary from './components/ErrorBoundary'
 
 // Antes do render: erro na montagem da árvore é justamente o que deixa a tela
 // branca, e é o que mais precisa ser capturado.
 iniciarMonitoramento();
+iniciarPixel();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
