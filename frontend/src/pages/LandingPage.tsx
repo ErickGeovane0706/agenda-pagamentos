@@ -26,6 +26,20 @@ import './registro/registro.css';
  *   Meta); o balão abaixo é uma reconstrução a partir dos parâmetros — CONFIRMAR
  *   a redação exata com o painel da Meta antes de divulgar.
  */
+/**
+ * Suporte pré-venda. Quem chega do anúncio e ainda não tem conta não consegue
+ * falar com ninguém: o agente do WhatsApp identifica o usuário pelo telefone
+ * antes de qualquer coisa e encerra a conversa com quem não é cadastrado
+ * (WhatsAppAgentService), e o único e-mail publicado é o da LGPD, escondido
+ * na política de privacidade.
+ *
+ * PROVISÓRIO: é o número pessoal do Erick. Troca por um chip dedicado quando
+ * ele comprar — e é só esta linha que muda.
+ */
+const WHATSAPP_SUPORTE =
+  'https://wa.me/5583988887777?text=' +
+  encodeURIComponent('Oi! Vim pelo site do Dia de Pagar e queria tirar uma dúvida.');
+
 export default function LandingPage() {
   return (
     <div className="reg-root reg-land">
@@ -60,6 +74,17 @@ export default function LandingPage() {
               Começar meus 30 dias grátis
             </Link>
           </div>
+
+          {/* Fica DEPOIS do CTA de propósito: quem já decidiu não deve tropeçar
+              numa segunda opção antes de clicar. Quem tem dúvida lê tudo e
+              chega aqui. */}
+          <p className="reg-land-suporte">
+            Ficou com dúvida?{' '}
+            <a href={WHATSAPP_SUPORTE} target="_blank" rel="noopener noreferrer">
+              Chama no WhatsApp
+            </a>{' '}
+            — responde uma pessoa, não um robô.
+          </p>
 
           <p className="reg-lede reg-land-founder">
             Feito por quem cansou de ver dono de loja pagando multa por esquecimento.

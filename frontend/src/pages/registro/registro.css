@@ -536,6 +536,9 @@
 .reg-land-cta { align-self: flex-start; font-size: 1rem; padding: 1rem 1.75rem; text-decoration: none; }
 .reg-land-founder { font-size: .8125rem; color: var(--ink-faint); }
 
+.reg-land-suporte { font-size: .875rem; color: var(--ink-dim); }
+.reg-land-suporte a { color: var(--ink); font-weight: 600; text-decoration: underline; }
+
 /* --- o mockup de conversa: prova viva do produto --- */
 .reg-chat {
   --wa-green: #1FA855;
