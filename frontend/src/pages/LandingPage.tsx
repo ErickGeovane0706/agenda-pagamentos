@@ -19,7 +19,9 @@ import './registro/registro.css';
  * - marca/nome do agente ainda não decidida (o avatar da conversa usa um rótulo
  *   neutro; nada de marca gritada);
  * - a linha do fundador entra com nome/rosto quando existir;
- * - preço (R$79) ainda não validado com pagante — texto, não bandeira;
+ * - preço (R$48,60) ainda não validado com pagante — texto, não bandeira.
+ *   Baixado de R$79 em 08/08 por decisão de negócio; se mudar de novo, o
+ *   TermosPage e o `assinatura.preco-*` mudam junto;
  * - o TEXTO FIXO do template de RESUMO não está no código (mora no painel da
  *   Meta); o balão abaixo é uma reconstrução a partir dos parâmetros — CONFIRMAR
  *   a redação exata com o painel da Meta antes de divulgar.
@@ -50,7 +52,7 @@ export default function LandingPage() {
           </ul>
 
           <p className="reg-land-price">
-            <b>30 dias grátis</b> para testar. Depois, R$ 79 por mês.
+            <b>30 dias grátis</b> para testar. Depois, R$ 48,60 por mês.
           </p>
 
           <div className="reg-actions">

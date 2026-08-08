@@ -61,12 +61,14 @@ anthropic:
   model: ${ANTHROPIC_MODEL:claude-haiku-4-5}
 
 # Modelo de cobrança: produto único, preço por loja (base inclui 1 loja).
-# preco-base e preco-loja-adicional ainda não são lidos pelo código — são a
-# fonte única do valor cobrado no Payment Link manual (Fase 1) e serão usados
-# pela integração com o gateway (Fase 2). Ver PLANO-MONETIZACAO.md.
+# São a fonte única do valor: o AssinaturaService lê os dois e o valor sobe
+# para a tela pelo MinhaAssinaturaDTO, então nenhuma tela tem preço chumbado.
+# EXCEÇÃO: a landing e os termos de uso escrevem o número na mão (é texto
+# corrido). Mudar aqui exige mudar LandingPage.tsx e TermosPage.tsx junto —
+# o segundo é contrato de adesão. Ver PLANO-MONETIZACAO.md.
 assinatura:
-  preco-base: ${ASSINATURA_PRECO_BASE:79.00}
-  preco-loja-adicional: ${ASSINATURA_PRECO_LOJA_ADICIONAL:29.00}
+  preco-base: ${ASSINATURA_PRECO_BASE:48.60}
+  preco-loja-adicional: ${ASSINATURA_PRECO_LOJA_ADICIONAL:17.84}
   carencia-dias: ${ASSINATURA_CARENCIA_DIAS:5}
   trial-dias: ${ASSINATURA_TRIAL_DIAS:30}
 

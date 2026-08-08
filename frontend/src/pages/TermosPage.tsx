@@ -99,8 +99,8 @@ export default function TermosPage() {
 
           <Secao titulo="5. Preço e cobrança">
             <ul className="list-disc pl-5 space-y-1">
-              <li><strong>R$ 79,00 por mês</strong>, já com 1 loja incluída.</li>
-              <li><strong>R$ 29,00 por mês</strong> para cada loja a mais.</li>
+              <li><strong>R$ 48,60 por mês</strong>, já com 1 loja incluída.</li>
+              <li><strong>R$ 17,84 por mês</strong> para cada loja a mais.</li>
               <li>A cobrança é mensal e feita pelo Asaas, por Pix ou boleto.</li>
               <li>Se você contratar uma loja a mais no meio do mês, ela libera na hora e o valor novo entra na próxima cobrança.</li>
             </ul>
