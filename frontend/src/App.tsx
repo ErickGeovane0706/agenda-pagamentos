@@ -79,12 +79,35 @@ function ProtectedRoute({ children, ignorarOnboarding }:
   return <>{children}</>;
 }
 
+/**
+ * O que o domínio nu serve. Até aqui, `/` caía dentro do ProtectedRoute e
+ * jogava todo visitante deslogado no formulário de login — inclusive quem
+ * digitou `diadepagar.com.br` depois de ver o anúncio, que é justamente quem
+ * ainda não tem conta. A landing existia em `/comecar`, uma URL que nada no
+ * app linkava e ninguém digita.
+ *
+ * Espera a hidratação antes de decidir: sem isso, quem já está logado vê a
+ * landing piscar por um quadro antes de ser mandado para o app.
+ */
+function Raiz() {
+  const usuario = useAuthStore((s) => s.usuario);
+  const hasHydrated = useAuthStore((s) => s.hasHydrated);
+
+  if (!hasHydrated) return <LoadingScreen />;
+  // Quem está no meio do onboarding é desviado para o wizard pelo
+  // ProtectedRoute de /lojas — um salto a mais, sem laço.
+  return usuario ? <Navigate to="/lojas" replace /> : <LandingPage />;
+}
+
 export default function App() {
   return (
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <ToastContainer />
           <Routes>
+            <Route path="/" element={<Raiz />} />
+            {/* Mantida como apelido: é a URL que já circulou e pode estar em
+                anúncio ou link antigo. A canônica passa a ser `/`. */}
             <Route path="/comecar" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/registro" element={<RegistroPage />} />
@@ -108,12 +131,14 @@ export default function App() {
               </ProtectedRoute>
             } />
 
-            <Route path="/" element={
+            {/* Rota de layout SEM path: só agrupa o que exige login, sem
+                reivindicar `/` — que agora é da landing. Os filhos continuam
+                resolvendo para /lojas, /agenda etc. */}
+            <Route element={
               <ProtectedRoute>
                 <Layout />
               </ProtectedRoute>
             }>
-              <Route index element={<Navigate to="/lojas" replace />} />
               <Route path="lojas" element={<SelecionarLojaPage />} />
               <Route path="agenda" element={<AgendaPage />} />
               <Route path="relatorios" element={<RelatoriosPage />} />

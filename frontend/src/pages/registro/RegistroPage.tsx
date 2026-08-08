@@ -7,6 +7,7 @@ import { useMutation } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
 import api from '../../api/client';
 import Turnstile from '../../components/Turnstile';
+import { pixelEvento } from '../../pixel';
 import './registro.css';
 
 /**
@@ -60,7 +61,17 @@ export default function RegistroPage() {
         turnstileToken,
         website: honeypot,
       }),
-    onSuccess: (_res, data) => { setEmailEnviado(data.email.trim()); setEtapa('enviado'); },
+    onSuccess: (_res, data) => {
+      setEmailEnviado(data.email.trim());
+      setEtapa('enviado');
+      // Diagnóstico, não alvo de otimização — quem a campanha otimiza é o
+      // CompleteRegistration, na confirmação do e-mail. Este mede a perna que
+      // hoje é cega: quantos preenchem o formulário e nunca clicam no link.
+      // Serve também de volume para o aprendizado da Meta, que precisa de
+      // dezenas de conversões por semana e não teria isso só com cadastros
+      // confirmados.
+      pixelEvento('Lead');
+    },
   });
 
   const erroStatus = (mutation.error as AxiosError | null)?.response?.status;
