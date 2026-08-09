@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -77,6 +78,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 log.debug("Token expirado ignorado: {}", e.getMessage());
             } catch (io.jsonwebtoken.JwtException | IllegalArgumentException e) {
                 log.debug("Token inválido ignorado: {}", e.getMessage());
+            } catch (UsernameNotFoundException e) {
+                // Token íntegro e dentro da validade de um usuário que não existe
+                // mais. UsernameNotFoundException estende AuthenticationException,
+                // não JwtException nem IllegalArgumentException, então escapava dos
+                // catch acima — e exceção lançada em filtro não passa pelo
+                // @ControllerAdvice, virando 500 em vez de seguir desautenticada.
+                log.debug("Token de usuário inexistente ignorado: {}", e.getMessage());
             }
 
             filterChain.doFilter(request, response);
