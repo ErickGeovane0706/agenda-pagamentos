@@ -21,6 +21,21 @@ body {
   box-sizing: border-box;
 }
 
+/* Altura maxima dos modais de lancamento. As duas linhas sao propositais: a
+   primeira e o fallback para Safari antigo, a segunda vence onde `dvh` existe.
+   Nao e classe do Tailwind porque valor arbitrario emite uma declaracao so, e
+   aqui a ordem das duas E o mecanismo do fallback.
+
+   Antes isto era JS: window.innerHeight - 20 dentro de um handler de resize,
+   nos tres modais. `dvh` acompanha a barra do navegador aparecendo e sumindo
+   por conta propria, enquanto a versao em JS so reagia quando um resize
+   chegava — e resize em celular e justamente o que nao se pode confiar
+   (ver o conserto do useIsMobile). */
+.max-h-modal {
+  max-height: calc(100vh - 20px);
+  max-height: calc(100dvh - 20px);
+}
+
 #quagga-scanner video,
 #quagga-scanner canvas {
   width: 100% !important;

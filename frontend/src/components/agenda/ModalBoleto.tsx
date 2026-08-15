@@ -31,7 +31,6 @@ export function ModalBoleto({
   onSalvo: () => void;
 }) {
   const [mostrarLeitor, setMostrarLeitor] = useState(false);
-  const [maxHeight, setMaxHeight] = useState('90vh');
   const { register, handleSubmit, setValue, getValues, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: boleto ? {
@@ -70,19 +69,13 @@ export function ModalBoleto({
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
-    const atualizarAltura = () => setMaxHeight(`${window.innerHeight - 20}px`);
-    atualizarAltura();
-    window.addEventListener('resize', atualizarAltura);
-    return () => {
-      document.body.style.overflow = '';
-      window.removeEventListener('resize', atualizarAltura);
-    };
+    return () => { document.body.style.overflow = ''; };
   }, []);
 
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onFechar}>
-        <div className="bg-white w-full sm:max-w-lg rounded-2xl animate-slide-in flex flex-col" style={{ maxHeight }} onClick={e => e.stopPropagation()}>
+        <div className="bg-white w-full sm:max-w-lg rounded-2xl animate-slide-in flex flex-col max-h-modal" onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between px-6 pt-6 pb-0 shrink-0">
             <h2 className="text-lg font-bold text-slate-900">{boleto ? 'Editar boleto' : 'Novo boleto'}</h2>
             <button onClick={onFechar} className="p-2 rounded-lg hover:bg-slate-100 text-slate-400">

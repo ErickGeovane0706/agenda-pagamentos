@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -30,8 +30,6 @@ export function ModalCheque({
   onFechar: () => void;
   onSalvo: () => void;
 }) {
-  const [maxHeight, setMaxHeight] = useState('90vh');
-
   const { data: bancos } = useQuery<Banco[]>({
     queryKey: ['bancos'],
     queryFn: () => api.get('/bancos').then(r => r.data),
@@ -78,20 +76,13 @@ export function ModalCheque({
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
-    const atualizarAltura = () => setMaxHeight(`${window.innerHeight - 20}px`);
-    atualizarAltura();
-    window.addEventListener('resize', atualizarAltura);
-    return () => {
-      document.body.style.overflow = '';
-      window.removeEventListener('resize', atualizarAltura);
-    };
+    return () => { document.body.style.overflow = ''; };
   }, []);
 
   return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onFechar}>
         <div
-            className="bg-white w-full sm:max-w-lg rounded-2xl animate-slide-in flex flex-col"
-            style={{ maxHeight }}
+            className="bg-white w-full sm:max-w-lg rounded-2xl animate-slide-in flex flex-col max-h-modal"
             onClick={e => e.stopPropagation()}
         >
           {/* Cabeçalho fixo */}
