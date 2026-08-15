@@ -31,7 +31,22 @@ import java.util.UUID;
  * Job agendado que verifica periodicamente compromissos a vencer
  * e envia notificações WhatsApp para os usuários com preferência
  * ativa. Executa em horário comercial (08:00–18:00, exceto fins
- * de semana). Notifica 1 dia antes e no próprio dia do vencimento.
+ * de semana).
+ * <p>
+ * <b>O que é notificado</b>, e só isto:
+ * <ul>
+ *   <li>o que <b>vence hoje</b> ({@code buscarVenceHoje});</li>
+ *   <li>o que <b>já venceu</b> e segue pendente — reaparece a cada ciclo até
+ *       ser pago ({@code buscarVencidos});</li>
+ *   <li>às <b>sextas</b>, o que vence no sábado/domingo, como cortesia
+ *       ({@code buscarVenceFimDeSemana}).</li>
+ * </ul>
+ * <b>NÃO existe aviso antecipado geral.</b> A versão anterior deste comentário
+ * dizia "notifica 1 dia antes e no próprio dia" e estava errada — não há
+ * nenhuma busca por "vence amanhã". A frase virou material de divulgação em
+ * 15/08 ("o app te avisa 3 dias antes") e foi ao ar antes de alguém conferir
+ * o código. Antes de prometer prazo em texto de venda, ler os três métodos
+ * acima.
  */
 @Slf4j
 @Component
