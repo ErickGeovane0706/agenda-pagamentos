@@ -316,6 +316,16 @@ export function ModalLeitorCodigo({
    * Escuta só enquanto está escaneando, não desde cameraStarted: o giro que nós
    * mesmos forçamos acontece ANTES de o scan começar, e reiniciar por causa dele
    * seria um laço.
+   *
+   * NÃO TROCAR por screen.orientation.addEventListener('change'). Sim, o
+   * `orientationchange` está deprecado na MDN — a escolha de ficar nele é
+   * deliberada, não descuido. O substituto só existe a partir do Safari 16.4
+   * (março de 2023), e quem usa isto é lojista: iPhone parado no iOS 15 (7, 6s,
+   * SE de 1ª geração) perderia o tratamento de giro no leitor, que é funcional
+   * e não estético — sem ele o ZXing mantém o canvas do tamanho antigo e corta
+   * o código de barras fora. Manter os dois caminhos custaria mais código e
+   * mais ramos para um ganho de zero: deprecado não é removido, e nenhum
+   * navegador anunciou remoção. Reavaliar quando algum anunciar.
    */
   useEffect(() => {
     if (!escaneando) return;
