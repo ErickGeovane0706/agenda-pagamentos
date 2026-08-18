@@ -82,13 +82,13 @@ export function CardCheque({
             <>
               <button
                 onClick={abrirArquivo}
-                className="flex items-center gap-1 p-2 rounded-lg bg-[#e0f2fe] text-[#0c4a6e]"
+                className="flex items-center justify-center w-11 h-11 rounded-lg bg-[#e0f2fe] text-[#0c4a6e]"
               >
                 <ExternalLink className="w-4 h-4" />
               </button>
               <button
                 onClick={() => { if (confirm('Remover arquivo?')) onDeletarArquivo?.(); }}
-                className="p-2 rounded-lg bg-red-100 hover:bg-red-200 text-red-600"
+                className="flex items-center justify-center w-11 h-11 rounded-lg bg-red-100 hover:bg-red-200 text-red-600"
               >
                 <FileX className="w-4 h-4" />
               </button>
@@ -96,7 +96,7 @@ export function CardCheque({
           ) : (
             <button
               onClick={onUpload}
-              className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500"
+              className="flex items-center justify-center w-11 h-11 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500"
             >
               <Upload className="w-4 h-4" />
             </button>
@@ -105,13 +105,13 @@ export function CardCheque({
         <div className="flex gap-2">
           <button
             onClick={onEditar}
-            className="p-2 rounded-lg bg-[#e0f2fe] hover:bg-[#e0f2fe] text-[#0c4a6e]"
+            className="flex items-center justify-center w-11 h-11 rounded-lg bg-[#e0f2fe] hover:bg-[#e0f2fe] text-[#0c4a6e]"
           >
             <Pencil className="w-4 h-4" />
           </button>
           <button
             onClick={() => { if (confirm('Excluir?')) onExcluir(); }}
-            className="p-2 rounded-lg bg-red-100 hover:bg-red-200 text-red-600"
+            className="flex items-center justify-center w-11 h-11 rounded-lg bg-red-100 hover:bg-red-200 text-red-600"
           >
             <Trash2 className="w-4 h-4" />
           </button>
