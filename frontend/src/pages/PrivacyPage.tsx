@@ -39,8 +39,8 @@ export default function PrivacyPage() {
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b border-slate-200 px-6 py-4">
         <div className="max-w-3xl mx-auto flex items-center gap-3">
-          <Link to="/login" className="p-2 rounded-lg hover:bg-slate-100 text-slate-500">
-            <ArrowLeft className="w-4 h-4" />
+          <Link to="/login" className="flex items-center justify-center w-11 h-11 flex-shrink-0 rounded-lg hover:bg-slate-100 text-slate-500 sm:w-8 sm:h-8">
+            <ArrowLeft className="w-5 h-5 sm:w-4 sm:h-4" />
           </Link>
           <Shield className="w-5 h-5 text-[#0c4a6e]" />
           <h1 className="font-bold text-slate-900">Política de Privacidade</h1>

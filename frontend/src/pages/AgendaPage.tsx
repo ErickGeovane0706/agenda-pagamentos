@@ -49,9 +49,9 @@ export default function AgendaPage() {
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3">
           <button
             onClick={() => navigate('/lojas')}
-            className="p-2 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"
+            className="flex items-center justify-center w-11 h-11 flex-shrink-0 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors sm:w-8 sm:h-8"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="w-5 h-5 sm:w-4 sm:h-4" />
           </button>
 
           <div
