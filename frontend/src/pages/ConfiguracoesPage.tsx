@@ -59,7 +59,11 @@ export default function ConfiguracoesPage() {
                 <h1 className="text-xl font-bold text-slate-900">Configurações</h1>
             </div>
 
-            <div className="flex gap-1 mb-6 border-b border-slate-200">
+            {/* flex-wrap porque as seis abas somam ~740px: numa tela de 360px a
+                ultima ("Meus dados") caia fora do campo de visao e so aparecia
+                arrastando a pagina para o lado. Quebrar em linhas mostra todas
+                de uma vez, sem depender de o usuario descobrir um gesto. */}
+            <div className="flex flex-wrap gap-1 mb-6 border-b border-slate-200">
                 {tabs.map(tab => (
                     <button
                         key={tab.id}
