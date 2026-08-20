@@ -40,7 +40,7 @@ public class ChequeController {
             @RequestParam(required = false) LocalDate de,
             @RequestParam(required = false) LocalDate ate,
             @RequestParam(required = false) String fornecedor,
-            @PageableDefault(sort = "vencimento", direction = Sort.Direction.ASC) Pageable pageable) {
+            @PageableDefault(sort = {"vencimento", "fornecedor", "id"}, direction = Sort.Direction.ASC) Pageable pageable) {
         return ResponseEntity.ok(chequeService.listar(lojaId, status, de, ate, fornecedor, pageable));
     }
 

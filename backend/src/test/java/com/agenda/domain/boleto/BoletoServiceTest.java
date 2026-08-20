@@ -21,6 +21,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
@@ -164,5 +165,50 @@ class BoletoServiceTest {
         CriteriaBuilder cb = mock(CriteriaBuilder.class);
         specCaptor.getValue().toPredicate(root, mock(CriteriaQuery.class), cb);
         verify(cb).equal(idPath, empresa.getId());
+    }
+
+    /**
+     * O cálculo da página tem que enxergar a lista na mesma ordem em que ela é exibida.
+     * Contando só {@code vencimento <}, os itens que empatam na data e vêm antes pelo
+     * fornecedor ficam de fora da conta e a aba abre na página errada.
+     */
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void paginaPendente_DeveContarComOsMesmosCriteriosDaOrdenacao() {
+        var alvo = Boleto.builder()
+                .id(UUID.randomUUID()).empresa(empresa).loja(loja)
+                .fornecedor("Fornecedor B").valor(new BigDecimal("100"))
+                .vencimento(LocalDate.of(2026, 8, 20)).status(StatusBoleto.PENDENTE)
+                .build();
+
+        ArgumentCaptor<Pageable> pageCaptor = ArgumentCaptor.forClass(Pageable.class);
+        when(boletoRepository.findAll(any(Specification.class), pageCaptor.capture()))
+                .thenReturn(new PageImpl<>(List.of(alvo)));
+        ArgumentCaptor<Specification<Boleto>> antesCaptor = ArgumentCaptor.forClass(Specification.class);
+        when(boletoRepository.count(antesCaptor.capture())).thenReturn(30L);
+
+        assertEquals(2, boletoService.paginaPendente(null, null, null, null, null, 15));
+
+        // o primeiro pendente é buscado na mesma ordem da listagem
+        assertEquals(Sort.by(Sort.Direction.ASC, "vencimento", "fornecedor", "id"),
+                pageCaptor.getValue().getSort());
+
+        // e "quem vem antes" compara os três campos, não só o vencimento
+        Root<Boleto> root = mock(Root.class);
+        Path empresaPath = mock(Path.class);
+        Path vencimentoPath = mock(Path.class);
+        Path fornecedorPath = mock(Path.class);
+        Path idPath = mock(Path.class);
+        when(root.get("empresa")).thenReturn(empresaPath);
+        when(empresaPath.get("id")).thenReturn(mock(Path.class));
+        when(root.get("vencimento")).thenReturn(vencimentoPath);
+        when(root.get("fornecedor")).thenReturn(fornecedorPath);
+        when(root.get("id")).thenReturn(idPath);
+        CriteriaBuilder cb = mock(CriteriaBuilder.class);
+        antesCaptor.getValue().toPredicate(root, mock(CriteriaQuery.class), cb);
+
+        verify(cb).lessThan(vencimentoPath, alvo.getVencimento());
+        verify(cb).lessThan(fornecedorPath, alvo.getFornecedor());
+        verify(cb).lessThan(idPath, alvo.getId());
     }
 }

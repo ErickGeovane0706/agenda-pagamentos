@@ -22,6 +22,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
@@ -153,5 +154,48 @@ class PixServiceTest {
         CriteriaBuilder cb = mock(CriteriaBuilder.class);
         specCaptor.getValue().toPredicate(root, mock(CriteriaQuery.class), cb);
         verify(cb).equal(idPath, empresa.getId());
+    }
+
+    /**
+     * Mesma exigência do {@link com.agenda.domain.boleto.BoletoService#paginaPendente}:
+     * a conta de "quantos vêm antes" precisa usar a ordenação da listagem inteira,
+     * senão a aba abre numa página que não é a do primeiro pendente.
+     */
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void paginaPendente_DeveContarComOsMesmosCriteriosDaOrdenacao() {
+        var alvo = PagamentoPix.builder()
+                .id(UUID.randomUUID()).empresa(empresa).loja(loja)
+                .fornecedor("Fornecedor B").valor(new BigDecimal("100"))
+                .vencimento(LocalDate.of(2026, 8, 20)).status(StatusPix.PENDENTE)
+                .chavePix("chave-teste").build();
+
+        ArgumentCaptor<Pageable> pageCaptor = ArgumentCaptor.forClass(Pageable.class);
+        when(pixRepository.findAll(any(Specification.class), pageCaptor.capture()))
+                .thenReturn(new PageImpl<>(List.of(alvo)));
+        ArgumentCaptor<Specification<PagamentoPix>> antesCaptor = ArgumentCaptor.forClass(Specification.class);
+        when(pixRepository.count(antesCaptor.capture())).thenReturn(30L);
+
+        assertEquals(2, pixService.paginaPendente(null, null, null, null, null, 15));
+
+        assertEquals(Sort.by(Sort.Direction.ASC, "vencimento", "fornecedor", "id"),
+                pageCaptor.getValue().getSort());
+
+        Root<PagamentoPix> root = mock(Root.class);
+        Path empresaPath = mock(Path.class);
+        Path vencimentoPath = mock(Path.class);
+        Path fornecedorPath = mock(Path.class);
+        Path idPath = mock(Path.class);
+        when(root.get("empresa")).thenReturn(empresaPath);
+        when(empresaPath.get("id")).thenReturn(mock(Path.class));
+        when(root.get("vencimento")).thenReturn(vencimentoPath);
+        when(root.get("fornecedor")).thenReturn(fornecedorPath);
+        when(root.get("id")).thenReturn(idPath);
+        CriteriaBuilder cb = mock(CriteriaBuilder.class);
+        antesCaptor.getValue().toPredicate(root, mock(CriteriaQuery.class), cb);
+
+        verify(cb).lessThan(vencimentoPath, alvo.getVencimento());
+        verify(cb).lessThan(fornecedorPath, alvo.getFornecedor());
+        verify(cb).lessThan(idPath, alvo.getId());
     }
 }

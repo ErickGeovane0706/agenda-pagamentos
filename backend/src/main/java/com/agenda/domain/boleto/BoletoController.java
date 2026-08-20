@@ -34,7 +34,9 @@ public class BoletoController {
 
     /**
      * Lista paginada com filtros opcionais: loja, status, período, fornecedor.
-     * Ordenação default por vencimento ASC.
+     * Ordenação default por vencimento ASC, desempatada por fornecedor e por id — sem
+     * os desempates o Postgres devolve os empates em ordem arbitrária e o mesmo item
+     * pula de página entre uma consulta e outra.
      */
     @GetMapping
     public ResponseEntity<Page<BoletoDTO>> listar(
@@ -43,7 +45,7 @@ public class BoletoController {
             @RequestParam(required = false) LocalDate de,
             @RequestParam(required = false) LocalDate ate,
             @RequestParam(required = false) String fornecedor,
-            @PageableDefault(sort = "vencimento", direction = Sort.Direction.ASC) Pageable pageable) {
+            @PageableDefault(sort = {"vencimento", "fornecedor", "id"}, direction = Sort.Direction.ASC) Pageable pageable) {
         return ResponseEntity.ok(boletoService.listar(lojaId, status, de, ate, fornecedor, pageable));
     }
 

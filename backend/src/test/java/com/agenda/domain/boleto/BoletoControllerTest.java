@@ -6,10 +6,13 @@ import com.agenda.security.JwtService;
 import com.agenda.shared.exception.NotFoundException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
 import org.springframework.http.MediaType;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -21,6 +24,8 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -162,5 +167,28 @@ class BoletoControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(req)))
             .andExpect(status().isUnprocessableEntity());
+    }
+
+    /**
+     * O front não manda {@code sort}, então a ordem da tela é inteiramente o default
+     * daqui. Só vencimento deixa os empates em ordem arbitrária do Postgres: o mesmo
+     * boleto muda de lugar entre dois carregamentos e pode repetir ou sumir na
+     * paginação. Fornecedor e id são o desempate que torna a ordem estável.
+     */
+    @Test
+    void listar_DeveOrdenarPorVencimentoDepoisFornecedorDepoisId() throws Exception {
+        when(boletoService.listar(any(), any(), any(), any(), any(), any()))
+            .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 15), 0));
+
+        mockMvc.perform(get("/api/boletos")
+                .with(user("admin@teste.com").roles("ADMIN")))
+            .andExpect(status().isOk());
+
+        var pageable = ArgumentCaptor.forClass(Pageable.class);
+        verify(boletoService).listar(any(), any(), any(), any(), any(), pageable.capture());
+
+        assertEquals(
+            Sort.by(Sort.Direction.ASC, "vencimento", "fornecedor", "id"),
+            pageable.getValue().getSort());
     }
 }

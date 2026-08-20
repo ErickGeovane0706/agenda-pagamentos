@@ -13,6 +13,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -52,7 +53,7 @@ public class ChequeService {
 
     /**
      * Índice (0-based) da primeira página com cheque pendente, respeitando os mesmos
-     * filtros e a ordenação (vencimento ASC) da listagem. Cheque não tem status VENCIDO
+     * filtros e a ordenação (vencimento, fornecedor, id) da listagem. Cheque não tem status VENCIDO
      * (o "vencido" é apenas PENDENTE com data passada), então basta filtrar por PENDENTE.
      * Ver {@link com.agenda.domain.boleto.BoletoService#paginaPendente} para a estratégia.
      */
@@ -64,13 +65,30 @@ public class ChequeService {
 
         var pendentes = base.and((root, query, cb) -> cb.equal(root.get("status"), StatusCheque.PENDENTE));
         var primeiro = chequeRepository.findAll(pendentes,
-                PageRequest.of(0, 1, Sort.by(Sort.Direction.ASC, "vencimento")));
+                PageRequest.of(0, 1, Sort.by(Sort.Direction.ASC, "vencimento", "fornecedor", "id")));
         if (primeiro.isEmpty()) return 0;
 
-        LocalDate menorVencimento = primeiro.getContent().get(0).getVencimento();
-        var antes = base.and((root, query, cb) -> cb.lessThan(root.get("vencimento"), menorVencimento));
-        long quantidadeAntes = chequeRepository.count(antes);
+        long quantidadeAntes = chequeRepository.count(base.and(antesDe(primeiro.getContent().get(0))));
         return (int) (quantidadeAntes / size);
+    }
+
+    /**
+     * Itens que precedem {@code alvo} na ordenação da listagem: comparação
+     * lexicográfica de (vencimento, fornecedor, id). Precisa acompanhar o
+     * {@code @PageableDefault} do controller — se divergir, a página calculada
+     * aqui deixa de ser a página em que o item realmente aparece.
+     */
+    private static Specification<Cheque> antesDe(Cheque alvo) {
+        LocalDate vencimento = alvo.getVencimento();
+        String fornecedor = alvo.getFornecedor();
+        UUID id = alvo.getId();
+        return (root, query, cb) -> cb.or(
+                cb.lessThan(root.get("vencimento"), vencimento),
+                cb.and(cb.equal(root.get("vencimento"), vencimento),
+                        cb.lessThan(root.get("fornecedor"), fornecedor)),
+                cb.and(cb.equal(root.get("vencimento"), vencimento),
+                        cb.equal(root.get("fornecedor"), fornecedor),
+                        cb.lessThan(root.get("id"), id)));
     }
 
     @Transactional(readOnly = true)

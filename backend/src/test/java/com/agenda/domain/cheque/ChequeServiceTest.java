@@ -7,18 +7,27 @@ import com.agenda.domain.empresa.Empresa;
 import com.agenda.domain.loja.Loja;
 import com.agenda.domain.loja.LojaRepository;
 import com.agenda.shared.TenantContext;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Path;
+import jakarta.persistence.criteria.Root;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -131,5 +140,48 @@ class ChequeServiceTest {
 
         assertNotNull(result);
         assertTrue(result.isEmpty());
+    }
+
+    /**
+     * Mesma exigência do {@link com.agenda.domain.boleto.BoletoService#paginaPendente}:
+     * a conta de "quantos vêm antes" precisa usar a ordenação da listagem inteira,
+     * senão a aba abre numa página que não é a do primeiro pendente.
+     */
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void paginaPendente_DeveContarComOsMesmosCriteriosDaOrdenacao() {
+        var alvo = Cheque.builder()
+                .id(UUID.randomUUID()).empresa(empresa).loja(loja)
+                .fornecedor("Fornecedor B").valor(new BigDecimal("100"))
+                .vencimento(LocalDate.of(2026, 8, 20)).status(StatusCheque.PENDENTE)
+                .build();
+
+        ArgumentCaptor<Pageable> pageCaptor = ArgumentCaptor.forClass(Pageable.class);
+        when(chequeRepository.findAll(any(Specification.class), pageCaptor.capture()))
+                .thenReturn(new PageImpl<>(List.of(alvo)));
+        ArgumentCaptor<Specification<Cheque>> antesCaptor = ArgumentCaptor.forClass(Specification.class);
+        when(chequeRepository.count(antesCaptor.capture())).thenReturn(30L);
+
+        assertEquals(2, chequeService.paginaPendente(null, null, null, null, null, 15));
+
+        assertEquals(Sort.by(Sort.Direction.ASC, "vencimento", "fornecedor", "id"),
+                pageCaptor.getValue().getSort());
+
+        Root<Cheque> root = mock(Root.class);
+        Path empresaPath = mock(Path.class);
+        Path vencimentoPath = mock(Path.class);
+        Path fornecedorPath = mock(Path.class);
+        Path idPath = mock(Path.class);
+        when(root.get("empresa")).thenReturn(empresaPath);
+        when(empresaPath.get("id")).thenReturn(mock(Path.class));
+        when(root.get("vencimento")).thenReturn(vencimentoPath);
+        when(root.get("fornecedor")).thenReturn(fornecedorPath);
+        when(root.get("id")).thenReturn(idPath);
+        CriteriaBuilder cb = mock(CriteriaBuilder.class);
+        antesCaptor.getValue().toPredicate(root, mock(CriteriaQuery.class), cb);
+
+        verify(cb).lessThan(vencimentoPath, alvo.getVencimento());
+        verify(cb).lessThan(fornecedorPath, alvo.getFornecedor());
+        verify(cb).lessThan(idPath, alvo.getId());
     }
 }

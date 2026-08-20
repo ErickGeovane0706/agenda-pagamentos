@@ -12,6 +12,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -53,9 +54,10 @@ public class BoletoService {
 
     /**
      * Índice (0-based) da primeira página que contém um boleto pendente ou vencido,
-     * considerando os mesmos filtros e a mesma ordenação (vencimento ASC) da listagem.
+     * considerando os mesmos filtros e a mesma ordenação (vencimento, fornecedor, id)
+     * da listagem.
      * <p>
-     * Estratégia: acha o menor vencimento entre os pendentes/vencidos e conta quantos
+     * Estratégia: acha o primeiro pendente/vencido nessa ordenação e conta quantos
      * itens (de todos os status, respeitando os filtros) vêm antes dele. A página é
      * {@code floor(quantidadeAntes / size)}. Se não houver pendência, retorna 0.
      * </p>
@@ -69,13 +71,30 @@ public class BoletoService {
         var pendentes = base.and((root, query, cb) ->
                 root.get("status").in(StatusBoleto.PENDENTE, StatusBoleto.VENCIDO));
         var primeiro = boletoRepository.findAll(pendentes,
-                PageRequest.of(0, 1, Sort.by(Sort.Direction.ASC, "vencimento")));
+                PageRequest.of(0, 1, Sort.by(Sort.Direction.ASC, "vencimento", "fornecedor", "id")));
         if (primeiro.isEmpty()) return 0;
 
-        LocalDate menorVencimento = primeiro.getContent().get(0).getVencimento();
-        var antes = base.and((root, query, cb) -> cb.lessThan(root.get("vencimento"), menorVencimento));
-        long quantidadeAntes = boletoRepository.count(antes);
+        long quantidadeAntes = boletoRepository.count(base.and(antesDe(primeiro.getContent().get(0))));
         return (int) (quantidadeAntes / size);
+    }
+
+    /**
+     * Itens que precedem {@code alvo} na ordenação da listagem: comparação
+     * lexicográfica de (vencimento, fornecedor, id). Precisa acompanhar o
+     * {@code @PageableDefault} do controller — se divergir, a página calculada
+     * aqui deixa de ser a página em que o item realmente aparece.
+     */
+    private static Specification<Boleto> antesDe(Boleto alvo) {
+        LocalDate vencimento = alvo.getVencimento();
+        String fornecedor = alvo.getFornecedor();
+        UUID id = alvo.getId();
+        return (root, query, cb) -> cb.or(
+                cb.lessThan(root.get("vencimento"), vencimento),
+                cb.and(cb.equal(root.get("vencimento"), vencimento),
+                        cb.lessThan(root.get("fornecedor"), fornecedor)),
+                cb.and(cb.equal(root.get("vencimento"), vencimento),
+                        cb.equal(root.get("fornecedor"), fornecedor),
+                        cb.lessThan(root.get("id"), id)));
     }
 
     /**
