@@ -33,7 +33,8 @@ class ApplicationContextSmokeTest {
     @Container
     @ServiceConnection
     static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("postgres:16-alpine");
+            // Acompanha a produção (18), como os scripts de backup; ver ESTADO.md §4.
+            new PostgreSQLContainer<>("postgres:18-alpine");
 
     /**
      * Sem corpo de propósito: a asserção é o próprio contexto subir. Se qualquer
