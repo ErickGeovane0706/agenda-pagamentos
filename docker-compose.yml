@@ -2,7 +2,13 @@ version: '3.8'
 
 services:
   db:
-    image: postgres:16-alpine
+    # Acompanha a produção, que é a imagem Debian do 18 (ver ESTADO.md §5).
+    # NÃO trocar por -alpine: o musl ignora o locale e ordena texto byte a
+    # byte (maiúsculas antes de minúsculas), enquanto a glibc ordena em
+    # ordem de dicionário como a produção. Os dois reportam o mesmo
+    # datcollate, então a diferença só aparece no resultado do ORDER BY.
+    # Trocar a major exige recriar o volume.
+    image: postgres:18
     environment:
       POSTGRES_DB: agenda_pagamentos
       POSTGRES_USER: postgres
@@ -10,7 +16,10 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # 18+ exige o mount aqui, e NÃO em /var/lib/postgresql/data: a imagem
+      # guarda os dados num subdiretório por major (18/docker). Apontar para
+      # .../data faz o container morrer no boot com "unused mount/volume".
+      - postgres_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
