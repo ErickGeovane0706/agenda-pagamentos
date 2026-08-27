@@ -28,5 +28,10 @@ asaas:
 # pelo mesmo motivo do asaas.base-url: se APP_FRONTEND_URL não chegar ao
 # container, o link de retorno do pagamento e os links de email sairiam apontando
 # para localhost. A env var continua como override.
+#
+# O domínio TEM que ser o mesmo cadastrado no Asaas em Minha Conta > Informações:
+# o gateway recusa com 400 (invalid_object) uma successUrl de outro domínio, e o
+# default antigo (app-agendapagamentos.up.railway.app) fazia toda assinatura nova
+# falhar. Antes de trocar este valor, confira o domínio lá.
 app:
-  frontend-url: ${APP_FRONTEND_URL:https://app-agendapagamentos.up.railway.app}
+  frontend-url: ${APP_FRONTEND_URL:https://www.diadepagar.com.br}

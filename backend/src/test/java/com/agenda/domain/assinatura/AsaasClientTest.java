@@ -3,6 +3,7 @@ package com.agenda.domain.assinatura;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
@@ -73,6 +74,54 @@ class AsaasClientTest {
                 LocalDate.of(2026, 8, 15), "emp-1", "https://app.teste/lojas");
 
         assertThat(id).isEqualTo("sub_abc");
+        server.verify();
+    }
+
+    /**
+     * O Asaas recusa com 400 uma successUrl cujo domínio não seja o cadastrado em
+     * Minha Conta > Informações. O redirecionamento é só conforto visual: se essa
+     * recusa derrubar o POST inteiro, nenhum cliente novo consegue assinar — foi
+     * exatamente o que aconteceu em produção em 27/08/2026.
+     */
+    @Test
+    void criarAssinatura_quandoOgatewayRecusaOcallback_reenviaSemCallback() {
+        server.expect(requestTo(BASE + "/subscriptions"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(jsonPath("$.callback.successUrl").value("https://dominio.errado/lojas"))
+                .andRespond(withStatus(HttpStatus.BAD_REQUEST)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"errors\":[{\"code\":\"invalid_object\",\"description\":"
+                                + "\"É necessário enviar uma URL que use o mesmo domínio cadastrado "
+                                + "nas suas Minha Conta na aba Informações.\"}]}"));
+
+        server.expect(requestTo(BASE + "/subscriptions"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(jsonPath("$.value").value(137.00))
+                .andExpect(jsonPath("$.callback").doesNotExist())
+                .andRespond(withSuccess("{\"id\":\"sub_abc\"}", MediaType.APPLICATION_JSON));
+
+        var id = client.criarAssinatura("cus_123", new BigDecimal("137.00"),
+                LocalDate.of(2026, 8, 15), "emp-1", "https://dominio.errado/lojas");
+
+        assertThat(id).isEqualTo("sub_abc");
+        server.verify();
+    }
+
+    /**
+     * O reenvio vale só para o 400, que prova que nada foi criado. Numa falha de
+     * rede a assinatura pode ter sido criada e só a resposta ter se perdido —
+     * repetir o POST ali cobraria o cliente duas vezes.
+     */
+    @Test
+    void criarAssinatura_quandoOgatewayFalhaPorRede_naoReenvia() {
+        server.expect(requestTo(BASE + "/subscriptions"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
+
+        assertThatThrownBy(() -> client.criarAssinatura("cus_123", new BigDecimal("137.00"),
+                LocalDate.of(2026, 8, 15), "emp-1", "https://dominio.errado/lojas"))
+                .isInstanceOf(AsaasException.class);
+
         server.verify();
     }
 

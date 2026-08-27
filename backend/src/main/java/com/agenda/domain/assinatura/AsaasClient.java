@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
@@ -107,6 +108,21 @@ public class AsaasClient {
             callback.put("successUrl", successUrl);
             callback.put("autoRedirect", true);
             body.put("callback", callback);
+            try {
+                return idObrigatorio(post("/subscriptions", body));
+            } catch (AsaasException e) {
+                if (!(e.getCause() instanceof HttpClientErrorException.BadRequest)) {
+                    throw e;
+                }
+                // O Asaas recusa com 400 uma successUrl de domínio diferente do
+                // cadastrado em Minha Conta > Informações. O redirecionamento é só
+                // conforto visual; deixar essa recusa derrubar o POST bloqueia toda
+                // assinatura nova — foi o que travou as vendas em 27/08/2026.
+                // 400 prova que nada foi criado, então repetir não duplica cobrança.
+                log.error("[ASAAS] Assinatura recusada com callback — reenviando sem redirecionamento. "
+                        + "Aponte app.frontend-url para o domínio cadastrado no Asaas.");
+                body.remove("callback");
+            }
         }
         return idObrigatorio(post("/subscriptions", body));
     }
@@ -218,6 +234,6 @@ public class AsaasClient {
      */
     private AsaasException falha(String path, Exception e) {
         log.error("[ASAAS] Falha em POST/GET {}: {}", path, e.getMessage());
-        return new AsaasException("Falha na comunicação com o gateway de pagamento.");
+        return new AsaasException("Falha na comunicação com o gateway de pagamento.", e);
     }
 }
