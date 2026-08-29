@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Building2, Plus, Pencil, Trash2, X, User, ChevronDown, ChevronRight, Shield
+  Building2, Plus, Pencil, Trash2, X, User, ChevronDown, ChevronRight, Shield, CreditCard, AlertTriangle
 } from 'lucide-react';
 import api from '../api/client';
 import { useAuthStore } from '../store/authStore';
@@ -13,6 +13,17 @@ import { z } from 'zod';
 const empresaSchema = z.object({
   nome: z.string().min(2, 'Mínimo 2 caracteres'),
 });
+
+/** O que o GET /assinaturas devolve (AssinaturaDTO). Só o MASTER enxerga. */
+interface Assinatura {
+  id: string;
+  empresaId: string;
+  empresaNome: string;
+  status: 'TRIAL' | 'ATIVA' | 'INADIMPLENTE' | 'CANCELADA';
+  lojasContratadas: number;
+  vigenteAte: string | null;
+  gatewayCustomerId: string | null;
+}
 
 const usuarioSchema = z.object({
   nome: z.string().min(2, 'Mínimo 2 caracteres'),
@@ -36,6 +47,14 @@ export default function EmpresasPage() {
   const { data: empresas = [] } = useQuery({
     queryKey: ['empresas'],
     queryFn: () => api.get('/empresas').then(r => r.data),
+    enabled: usuario?.perfil === 'MASTER',
+  });
+
+  // Uma consulta só para todas as assinaturas, e não uma por empresa expandida:
+  // o endpoint já devolve a lista inteira e o painel costuma abrir várias linhas.
+  const { data: assinaturas = [] } = useQuery<Assinatura[]>({
+    queryKey: ['assinaturas'],
+    queryFn: () => api.get('/assinaturas').then(r => r.data),
     enabled: usuario?.perfil === 'MASTER',
   });
 
@@ -112,6 +131,7 @@ export default function EmpresasPage() {
                 )}
                 <div className="px-4 py-3 space-y-2">
                   <UsuariosEmpresa empresaId={empresa.id} />
+                  <AssinaturaEmpresa assinatura={assinaturas.find(a => a.empresaId === empresa.id)} />
                 </div>
               </div>
             )}
@@ -122,6 +142,174 @@ export default function EmpresasPage() {
           <div className="text-center py-12 text-slate-400 text-sm">Nenhuma empresa cadastrada</div>
         )}
       </div>
+    </div>
+  );
+}
+
+const dataBR = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('pt-BR');
+
+const CORES_STATUS: Record<Assinatura['status'], string> = {
+  TRIAL: 'bg-amber-100 text-amber-800',
+  ATIVA: 'bg-emerald-100 text-emerald-800',
+  INADIMPLENTE: 'bg-red-100 text-red-800',
+  CANCELADA: 'bg-slate-200 text-slate-600',
+};
+
+/**
+ * Assinatura da empresa no painel do MASTER: mostrar e editar.
+ *
+ * Existe porque o backend expunha `GET /assinaturas` e `PUT /assinaturas/{id}`
+ * desde 23/07 e nenhuma tela chamava — estender o prazo de um cliente só dava
+ * por curl ou direto no banco, e o banco pula a propagação ao Asaas.
+ */
+function AssinaturaEmpresa({ assinatura }: { assinatura: Assinatura | undefined }) {
+  const [editando, setEditando] = useState(false);
+
+  if (!assinatura) {
+    return <p className="text-xs text-slate-400">Sem assinatura registrada</p>;
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-100 bg-white px-3 py-2.5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <CreditCard className="w-4 h-4 text-slate-400" />
+          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${CORES_STATUS[assinatura.status]}`}>
+            {assinatura.status}
+          </span>
+          <span className="text-xs text-slate-500">
+            {assinatura.lojasContratadas} {assinatura.lojasContratadas === 1 ? 'loja' : 'lojas'}
+          </span>
+          <span className="text-xs text-slate-500">
+            {assinatura.vigenteAte ? `até ${dataBR(assinatura.vigenteAte)}` : 'sem prazo'}
+          </span>
+        </div>
+        <button
+          onClick={() => setEditando(!editando)}
+          className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 flex-shrink-0"
+          title="Editar assinatura"
+        >
+          {editando ? <X className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
+        </button>
+      </div>
+      {editando && <FormAssinatura assinatura={assinatura} onSalvo={() => setEditando(false)} />}
+    </div>
+  );
+}
+
+/**
+ * O PUT do backend é substituição COMPLETA (status e lojasContratadas são
+ * @NotNull), não patch. Por isso todo campo nasce com o valor atual: enviar
+ * `lojasContratadas` errado não erra só o nosso banco — dispara
+ * `atualizarValorAssinatura` e muda quanto o cliente paga por mês no Asaas.
+ *
+ * `vigenteAte` é campo só nosso: mudar a data não fala com o gateway. O que
+ * ela NÃO faz é impedir a cobrança — quem tem subscription ativa continua
+ * recebendo fatura no ciclo dele, então "mês de cortesia" para cliente pagante
+ * exige adiar a cobrança no painel do Asaas também.
+ */
+function FormAssinatura({ assinatura, onSalvo }: { assinatura: Assinatura; onSalvo: () => void }) {
+  const queryClient = useQueryClient();
+  const [status, setStatus] = useState(assinatura.status);
+  const [lojas, setLojas] = useState(String(assinatura.lojasContratadas));
+  const [vigenteAte, setVigenteAte] = useState(assinatura.vigenteAte ?? '');
+  // Acesso sem prazo é escolha declarada, nunca um campo que ficou em branco:
+  // no `acessivel()` do backend, vigenteAte nulo em TRIAL/ATIVA é grátis para sempre.
+  const [semPrazo, setSemPrazo] = useState(assinatura.vigenteAte === null);
+
+  const salvar = useMutation({
+    mutationFn: () => api.put(`/assinaturas/${assinatura.empresaId}`, {
+      status,
+      lojasContratadas: Number(lojas),
+      vigenteAte: semPrazo ? null : vigenteAte,
+      gatewayCustomerId: assinatura.gatewayCustomerId,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['assinaturas'] });
+      onSalvo();
+    },
+  });
+
+  /** O caso de uso que motivou a tela: dar um mês a mais a partir do prazo atual. */
+  const maisUmMes = () => {
+    const base = new Date(`${vigenteAte || new Date().toISOString().slice(0, 10)}T00:00:00`);
+    base.setMonth(base.getMonth() + 1);
+    setSemPrazo(false);
+    setVigenteAte(base.toISOString().slice(0, 10));
+  };
+
+  const lojasMudaram = Number(lojas) !== assinatura.lojasContratadas;
+  const invalido = !Number.isInteger(Number(lojas)) || Number(lojas) < 1 || (!semPrazo && !vigenteAte);
+
+  return (
+    <div className="mt-3 pt-3 border-t border-slate-100 space-y-3">
+      <div className="flex flex-wrap gap-3">
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Status</label>
+          <select
+            value={status}
+            onChange={e => setStatus(e.target.value as Assinatura['status'])}
+            className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9]"
+          >
+            {(['TRIAL', 'ATIVA', 'INADIMPLENTE', 'CANCELADA'] as const).map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Lojas contratadas</label>
+          <input
+            type="number" min={1} value={lojas}
+            onChange={e => setLojas(e.target.value)}
+            className="w-28 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9]"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Vigente até</label>
+          <div className="flex items-center gap-2">
+            <input
+              type="date" value={vigenteAte} disabled={semPrazo}
+              onChange={e => setVigenteAte(e.target.value)}
+              className="px-3 py-2 border border-slate-200 rounded-lg text-sm disabled:bg-slate-100 disabled:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0ea5e9]"
+            />
+            <button
+              type="button" onClick={maisUmMes}
+              className="px-2.5 py-2 text-xs font-medium rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 whitespace-nowrap"
+            >
+              +1 mês
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <label className="flex items-center gap-2 text-xs text-slate-600">
+        <input type="checkbox" checked={semPrazo} onChange={e => setSemPrazo(e.target.checked)} />
+        Sem prazo — acesso liberado por tempo indeterminado
+      </label>
+
+      {status === 'CANCELADA' && assinatura.gatewayCustomerId && (
+        <p className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 rounded-lg px-3 py-2">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-px" />
+          Salvar como CANCELADA <b>remove a assinatura no Asaas</b> e o cliente para de ser cobrado. Não tem desfazer: para voltar, ele assina de novo.
+        </p>
+      )}
+      {lojasMudaram && (
+        <p className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 rounded-lg px-3 py-2">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-px" />
+          Mudar de {assinatura.lojasContratadas} para {lojas} lojas <b>altera o valor cobrado no Asaas</b>, inclusive na fatura pendente.
+        </p>
+      )}
+      {salvar.isError && (
+        <p className="text-xs text-red-600">Não foi possível salvar. Se o erro veio do gateway, confira o Asaas antes de repetir.</p>
+      )}
+
+      <button
+        onClick={() => salvar.mutate()}
+        disabled={salvar.isPending || invalido}
+        className="px-4 py-2 bg-[#0c4a6e] text-white text-sm font-medium rounded-lg hover:bg-[#0a3d5c] disabled:bg-slate-300"
+      >
+        {salvar.isPending ? 'Salvando...' : 'Salvar assinatura'}
+      </button>
     </div>
   );
 }
