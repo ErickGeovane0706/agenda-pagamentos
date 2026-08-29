@@ -4,6 +4,8 @@ import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 
+import java.util.Set;
+
 /**
  * Dados que o gateway exige para emitir a cobrança, informados pelo próprio
  * cliente na hora de assinar.
@@ -19,9 +21,21 @@ public record DadosCobrancaRequest(
     String cpfCnpj,
 
     @NotBlank
-    @Pattern(regexp = "\\d{10,15}", message = "Informe o telefone com DDD, só números")
+    @Pattern(regexp = "\\d{11}", message = "Informe o celular com DDD (11 dígitos), só números")
     String telefone
 ) {
+
+    /** DDDs que existem no Brasil. Os buracos são reais: não há 20, 23, 25, 26, 29, 30, 36, 39, 40, 50, 52, 56, 57, 58, 59, 60, 70, 72, 76, 78, 80 nem 90. */
+    private static final Set<String> DDDS = Set.of(
+        "11", "12", "13", "14", "15", "16", "17", "18", "19",
+        "21", "22", "24", "27", "28",
+        "31", "32", "33", "34", "35", "37", "38",
+        "41", "42", "43", "44", "45", "46", "47", "48", "49",
+        "51", "53", "54", "55",
+        "61", "62", "63", "64", "65", "66", "67", "68", "69",
+        "71", "73", "74", "75", "77", "79",
+        "81", "82", "83", "84", "85", "86", "87", "88", "89",
+        "91", "92", "93", "94", "95", "96", "97", "98", "99");
 
     /**
      * Confere os dígitos verificadores antes de mandar ao gateway.
@@ -31,6 +45,25 @@ public record DadosCobrancaRequest(
      * vazar detalhe) e não diz o que corrigir. Errar o documento no instante em
      * que ele decidiu pagar é comum demais para depender de uma ida à rede.
      */
+    /**
+     * Confere que é celular, e não fixo, antes de mandar ao gateway.
+     * <p>
+     * Mesma razão do CPF acima, e o mesmo estrago: o Asaas envia este campo como
+     * {@code mobilePhone} e recusa fixo com {@code invalid_mobilePhone}. Antes
+     * disto, {@code \d{10,15}} deixava passar um fixo de 10 dígitos — e a
+     * assinatura morria na rede com "falha na comunicação com o gateway".
+     * <p>
+     * Celular não tem dígito verificador; o que dá para conferir é o DDD existir
+     * e o nono dígito estar lá (obrigatório em todo o país desde 2016).
+     */
+    @AssertTrue(message = "Celular inválido — confira o DDD e o número (11 dígitos, começando com 9).")
+    public boolean isCelularValido() {
+        if (telefone == null || !telefone.matches("\\d{11}")) {
+            return true; // o @Pattern já reprova; não duplicar a mensagem
+        }
+        return DDDS.contains(telefone.substring(0, 2)) && telefone.charAt(2) == '9';
+    }
+
     @AssertTrue(message = "CPF ou CNPJ inválido — confira os números.")
     public boolean isCpfCnpjValido() {
         if (cpfCnpj == null || !cpfCnpj.matches("\\d{11}|\\d{14}")) {

@@ -84,6 +84,14 @@ export default function AssinarPage() {
   const [cpfCnpj, setCpfCnpj] = useState('');
   const [telefone, setTelefone] = useState('');
   const [erroCampos, setErroCampos] = useState('');
+  // Reabre os campos de cobrança depois de já preenchidos.
+  //
+  // Sem isto não existia caminho nenhum para corrigir: os campos só apareciam
+  // quando FALTAVAM dados, e `dadosCobrancaCompletos` só quer dizer "preenchido",
+  // nunca "aceito pelo gateway". Quem salvasse um telefone que o Asaas recusa
+  // ficava em laço — erro, tentar de novo, mesmo erro — sem nada na tela para
+  // mexer. Aconteceu de verdade em 27/08 (13 tentativas) e em 29/08.
+  const [corrigindo, setCorrigindo] = useState(false);
 
   // Quantas lojas contratar. Quem chegou aqui esbarrando no limite já vê o
   // seletor um acima do atual — foi exatamente o que ele tentou fazer, e
@@ -99,6 +107,9 @@ export default function AssinarPage() {
   // caminho para quitar a fatura — o botão só sabia ampliar o plano.
   const inadimplente = assinatura?.status === 'INADIMPLENTE';
 
+  // Pedir CPF/telefone: porque faltam, ou porque ele quer trocar o que está lá.
+  const pedindoCobranca = assinatura != null && (!assinatura.dadosCobrancaCompletos || corrigindo);
+
   const total = assinatura
     ? assinatura.precoBase + assinatura.precoLojaAdicional * Math.max(0, lojasEscolhidas - 1)
     : 0;
@@ -107,7 +118,7 @@ export default function AssinarPage() {
     // Os dados de cobrança sobem no mesmo clique quando faltam: para o cliente
     // é uma ação só ("assinar"), e o gateway recusa criar o customer sem eles.
     mutationFn: async () => {
-      if (assinatura && !assinatura.dadosCobrancaCompletos) {
+      if (pedindoCobranca) {
         await api.put('/assinaturas/minha/cobranca', { cpfCnpj, telefone });
       }
       // Quem já tem assinatura EM DIA não passa por checkout de novo: a
@@ -128,13 +139,15 @@ export default function AssinarPage() {
   });
 
   const iniciar = () => {
-    if (assinatura && !assinatura.dadosCobrancaCompletos) {
+    if (pedindoCobranca) {
       if (!/^\d{11}$|^\d{14}$/.test(cpfCnpj)) {
         setErroCampos('Informe CPF (11 dígitos) ou CNPJ (14 dígitos).');
         return;
       }
-      if (!/^\d{10,15}$/.test(telefone)) {
-        setErroCampos('Informe o telefone com DDD.');
+      // 11 dígitos porque o gateway manda este campo como celular e recusa
+      // fixo. O DDD e o nono dígito quem confere é o backend, como no CPF.
+      if (!/^\d{11}$/.test(telefone)) {
+        setErroCampos('Informe o celular com DDD — 11 dígitos.');
         return;
       }
     }
@@ -218,8 +231,14 @@ export default function AssinarPage() {
           </>
         )}
 
-        {assinatura && !assinatura.dadosCobrancaCompletos && (
+        {pedindoCobranca && (
           <div className="reg-stack">
+            {corrigindo && (
+              <p className="reg-lede">
+                Digite os dois de novo. Não trazemos seu documento de volta para a
+                tela — ele fica só no servidor.
+              </p>
+            )}
             <div className="reg-field">
               <label htmlFor="cpfCnpj">CPF ou CNPJ</label>
               <input
@@ -231,7 +250,7 @@ export default function AssinarPage() {
               />
             </div>
             <div className="reg-field">
-              <label htmlFor="telefone">Telefone com DDD</label>
+              <label htmlFor="telefone">Celular com DDD</label>
               <input
                 id="telefone"
                 inputMode="numeric"
@@ -246,6 +265,14 @@ export default function AssinarPage() {
 
         {assinar.isError && (
           <div className="reg-alert">{mensagemDoErro(assinar.error)}</div>
+        )}
+        {/* Fica logo abaixo do erro de propósito: é ali que o cliente descobre
+            que o documento ou o celular foi recusado, e é ali que ele precisa
+            achar como consertar. */}
+        {assinatura?.dadosCobrancaCompletos && !corrigindo && !ampliou && (
+          <button type="button" className="reg-link" onClick={() => setCorrigindo(true)}>
+            Corrigir CPF/CNPJ ou celular
+          </button>
         )}
         {ampliou && (
           <div className="reg-ok">

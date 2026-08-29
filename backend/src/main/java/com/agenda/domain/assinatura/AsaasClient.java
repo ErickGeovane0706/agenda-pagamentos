@@ -1,6 +1,8 @@
 package com.agenda.domain.assinatura;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -45,6 +47,16 @@ public class AsaasClient {
 
     /** Status do Asaas em que a cobrança ainda pode ser paga. */
     private static final Set<String> EM_ABERTO = Set.of("PENDING", "OVERDUE");
+
+    /**
+     * Recusas de validação que sabemos traduzir. A chave é o {@code code} do
+     * Asaas; o valor é texto nosso, para o cliente — nada aqui vem do gateway.
+     */
+    private static final Map<String, String> RECUSAS = Map.of(
+        "invalid_mobilePhone", "O celular informado foi recusado. Confira o DDD e o número (11 dígitos, começando com 9).",
+        "invalid_cpfCnpj", "O CPF ou CNPJ informado foi recusado. Confira os números.");
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final String baseUrl;
     private final String apiKey;
@@ -250,6 +262,36 @@ public class AsaasClient {
      */
     private AsaasException falha(String path, Exception e) {
         log.error("[ASAAS] Falha em POST/GET {}: {}", path, e.getMessage());
-        return new AsaasException("Falha na comunicação com o gateway de pagamento.", e);
+        return new AsaasException(mensagemPara(e), e);
+    }
+
+    /**
+     * Traduz uma recusa de validação do gateway para uma mensagem NOSSA, quando
+     * o código é conhecido. O texto do Asaas nunca é repassado — só o código é
+     * lido — então a promessa do {@link AsaasException} de não vazar nada do
+     * gateway continua de pé.
+     * <p>
+     * Existe porque "Falha na comunicação com o gateway de pagamento" é verdade
+     * e é inútil: o cliente com o telefone errado tentava de novo, e de novo, sem
+     * jamais descobrir qual campo consertar (13 tentativas num caso real de
+     * 27/08). Código desconhecido continua caindo no texto genérico — é melhor
+     * dizer pouco do que dizer errado.
+     */
+    private String mensagemPara(Exception e) {
+        if (e instanceof HttpClientErrorException.BadRequest recusa) {
+            var nossa = RECUSAS.get(primeiroCodigo(recusa.getResponseBodyAsString()));
+            if (nossa != null) {
+                return nossa;
+            }
+        }
+        return "Falha na comunicação com o gateway de pagamento.";
+    }
+
+    private String primeiroCodigo(String corpo) {
+        try {
+            return MAPPER.readTree(corpo).path("errors").path(0).path("code").asText("");
+        } catch (JsonProcessingException ex) {
+            return "";
+        }
     }
 }

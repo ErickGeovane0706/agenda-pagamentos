@@ -167,6 +167,23 @@ class AsaasClientTest {
     }
 
     @Test
+    void recusaConhecida_viraMensagemAcionavel_semVazarOTextoDoGateway() {
+        // O que derrubou a empresa Tetse em 29/08: fixo de 10 dígitos mandado no
+        // campo mobilePhone. O gateway diz exatamente o que está errado, e o
+        // cliente recebia "falha na comunicação" — genérica demais para agir.
+        server.expect(requestTo(BASE + "/customers"))
+                .andRespond(withStatus(HttpStatus.BAD_REQUEST)
+                        .body("{\"errors\":[{\"code\":\"invalid_mobilePhone\",\"description\":\"TEXTO-CRU-DO-GATEWAY\"}]}")
+                        .contentType(MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> client.criarCustomer("Tetse", "12345678909", "8399999999", null, "emp-1"))
+                .isInstanceOf(AsaasException.class)
+                .hasMessageContaining("celular")
+                .hasMessageNotContaining("TEXTO-CRU-DO-GATEWAY");
+        server.verify();
+    }
+
+    @Test
     void erroDoGateway_viraAsaasExceptionSanitizada() {
         server.expect(requestTo(BASE + "/customers"))
                 .andRespond(withStatus(org.springframework.http.HttpStatus.BAD_REQUEST)
