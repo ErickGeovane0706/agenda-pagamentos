@@ -15,10 +15,11 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Cliente HTTP da API do Asaas — cria o customer e a assinatura recorrente e
- * localiza a URL de pagamento da primeira cobrança. É um wrapper fino: não
+ * localiza a URL de pagamento da cobrança em aberto. É um wrapper fino: não
  * decide regra de negócio (valor, vínculo com a empresa), só fala HTTP.
  * <p>
  * Segurança:
@@ -41,6 +42,9 @@ public class AsaasClient {
     private static final int CONNECT_TIMEOUT_MS = 5_000;
     private static final int READ_TIMEOUT_MS = 15_000;
     private static final String USER_AGENT = "AgendaPagamentos";
+
+    /** Status do Asaas em que a cobrança ainda pode ser paga. */
+    private static final Set<String> EM_ABERTO = Set.of("PENDING", "OVERDUE");
 
     private final String baseUrl;
     private final String apiKey;
@@ -145,16 +149,28 @@ public class AsaasClient {
     }
 
     /**
-     * URL da página de pagamento ({@code invoiceUrl}) da primeira cobrança gerada
-     * pela assinatura — é para onde o cliente é redirecionado para pagar.
-     * Retorna {@code null} se ainda não houver cobrança gerada.
+     * URL da página de pagamento ({@code invoiceUrl}) da cobrança EM ABERTO da
+     * assinatura — é para onde o cliente é redirecionado para pagar.
+     * Retorna {@code null} se não houver nenhuma cobrança em aberto.
+     * <p>
+     * O filtro por status não é detalhe: quem assina há meses tem uma lista de
+     * cobranças, e as já pagas vêm antes. Enquanto isso só era chamado logo após
+     * criar a assinatura — quando a lista tem um item só — pegar o primeiro dava
+     * no mesmo; para o inadimplente, dava o recibo do mês que ele já pagou.
      */
     public String buscarUrlPagamento(String subscriptionId) {
         var resp = get("/subscriptions/" + subscriptionId + "/payments");
         var data = resp != null ? resp.path("data") : null;
-        if (data != null && data.isArray() && !data.isEmpty()) {
-            var url = data.get(0).path("invoiceUrl").asText(null);
-            return (url == null || url.isBlank()) ? null : url;
+        if (data != null && data.isArray()) {
+            for (var pagamento : data) {
+                if (!EM_ABERTO.contains(pagamento.path("status").asText(""))) {
+                    continue;
+                }
+                var url = pagamento.path("invoiceUrl").asText(null);
+                if (url != null && !url.isBlank()) {
+                    return url;
+                }
+            }
         }
         return null;
     }

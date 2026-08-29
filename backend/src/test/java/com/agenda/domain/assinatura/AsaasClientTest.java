@@ -130,12 +130,30 @@ class AsaasClientTest {
         server.expect(requestTo(BASE + "/subscriptions/sub_abc/payments"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess(
-                        "{\"data\":[{\"invoiceUrl\":\"https://asaas.com/i/xyz\"}]}",
+                        "{\"data\":[{\"status\":\"PENDING\",\"invoiceUrl\":\"https://asaas.com/i/xyz\"}]}",
                         MediaType.APPLICATION_JSON));
 
         var url = client.buscarUrlPagamento("sub_abc");
 
         assertThat(url).isEqualTo("https://asaas.com/i/xyz");
+        server.verify();
+    }
+
+    @Test
+    void buscarUrlPagamento_assinanteAtrasado_pulaAsCobrancasJaPagas() {
+        // Quem assina há meses tem várias cobranças, e o Asaas devolve as antigas
+        // primeiro. Pegar data[0] mandaria o inadimplente para o RECIBO do mês que
+        // ele já pagou, em vez do boleto que ele deve.
+        server.expect(requestTo(BASE + "/subscriptions/sub_abc/payments"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess(
+                        "{\"data\":["
+                                + "{\"status\":\"RECEIVED\",\"invoiceUrl\":\"https://asaas.com/i/pago\"},"
+                                + "{\"status\":\"OVERDUE\",\"invoiceUrl\":\"https://asaas.com/i/devendo\"}"
+                                + "]}",
+                        MediaType.APPLICATION_JSON));
+
+        assertThat(client.buscarUrlPagamento("sub_abc")).isEqualTo("https://asaas.com/i/devendo");
         server.verify();
     }
 

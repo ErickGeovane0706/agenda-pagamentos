@@ -93,6 +93,12 @@ export default function AssinarPage() {
   const bateuNoLimite = motivo.includes('não cobre mais lojas');
   const lojasEscolhidas = lojas ?? (bateuNoLimite ? lojasAtuais + 1 : lojasAtuais);
 
+  // Quem está devendo vem aqui para PAGAR, não para comprar mais loja. Ter
+  // assinatura no gateway não quer dizer que ela está em dia: o inadimplente
+  // também tem, e tratá-lo como assinante em dia deixava esta tela sem nenhum
+  // caminho para quitar a fatura — o botão só sabia ampliar o plano.
+  const inadimplente = assinatura?.status === 'INADIMPLENTE';
+
   const total = assinatura
     ? assinatura.precoBase + assinatura.precoLojaAdicional * Math.max(0, lojasEscolhidas - 1)
     : 0;
@@ -104,9 +110,9 @@ export default function AssinarPage() {
       if (assinatura && !assinatura.dadosCobrancaCompletos) {
         await api.put('/assinaturas/minha/cobranca', { cpfCnpj, telefone });
       }
-      // Quem já tem assinatura no gateway não passa por checkout de novo: a
+      // Quem já tem assinatura EM DIA não passa por checkout de novo: a
       // subscription em curso muda de valor e a loja libera na hora.
-      if (assinatura?.assinaturaIniciada) {
+      if (assinatura?.assinaturaIniciada && !inadimplente) {
         await api.put('/assinaturas/minha/lojas', { lojas: lojasEscolhidas });
         return { urlPagamento: null, apenasAmpliou: true };
       }
@@ -149,9 +155,11 @@ export default function AssinarPage() {
   // Já era assinante e só ampliou: não há checkout, a loja liberou na hora.
   const ampliou = assinar.isSuccess && assinar.data?.apenasAmpliou === true;
 
-  const rotuloBotao = assinatura?.assinaturaIniciada
-    ? 'Contratar mais uma loja'
-    : 'Assinar agora';
+  const rotuloBotao = inadimplente
+    ? 'Pagar agora'
+    : assinatura?.assinaturaIniciada
+      ? 'Contratar mais uma loja'
+      : 'Assinar agora';
 
   return (
     <div className="reg-root">
@@ -166,22 +174,27 @@ export default function AssinarPage() {
 
         {assinatura && (
           <>
-            <div className="reg-contador">
-              <span>Lojas</span>
-              <button
-                type="button"
-                aria-label="Menos uma loja"
-                onClick={() => setLojas(Math.max(lojasAtuais, lojasEscolhidas - 1))}
-                disabled={lojasEscolhidas <= lojasAtuais}
-              >−</button>
-              <b>{lojasEscolhidas}</b>
-              <button
-                type="button"
-                aria-label="Mais uma loja"
-                onClick={() => setLojas(Math.min(50, lojasEscolhidas + 1))}
-                disabled={lojasEscolhidas >= 50}
-              >+</button>
-            </div>
+            {/* Some para o inadimplente: mudar de plano na hora de quitar a
+                fatura é ruído — e o seletor era justamente o que fazia a tela
+                de "Regularizar" parecer uma tela de comprar loja. */}
+            {!inadimplente && (
+              <div className="reg-contador">
+                <span>Lojas</span>
+                <button
+                  type="button"
+                  aria-label="Menos uma loja"
+                  onClick={() => setLojas(Math.max(lojasAtuais, lojasEscolhidas - 1))}
+                  disabled={lojasEscolhidas <= lojasAtuais}
+                >−</button>
+                <b>{lojasEscolhidas}</b>
+                <button
+                  type="button"
+                  aria-label="Mais uma loja"
+                  onClick={() => setLojas(Math.min(50, lojasEscolhidas + 1))}
+                  disabled={lojasEscolhidas >= 50}
+                >+</button>
+              </div>
+            )}
 
             <ul className="reg-resumo">
               <li>
@@ -242,8 +255,9 @@ export default function AssinarPage() {
         )}
         {semUrl && !ampliou && (
           <div className="reg-alert">
-            Sua assinatura foi registrada, mas a cobrança ainda está sendo gerada.
-            Você receberá o link por email em alguns minutos.
+            {inadimplente
+              ? 'Não encontramos cobrança em aberto para pagar agora. Se você acabou de pagar, a liberação leva alguns minutos; se não, fale com a gente.'
+              : 'Sua assinatura foi registrada, mas a cobrança ainda está sendo gerada. Você receberá o link por email em alguns minutos.'}
           </div>
         )}
 
