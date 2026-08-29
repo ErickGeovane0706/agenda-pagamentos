@@ -23,6 +23,8 @@ interface Assinatura {
   lojasContratadas: number;
   vigenteAte: string | null;
   gatewayCustomerId: string | null;
+  /** Há subscription no gateway? É o que separa alteração que cobra de alteração que não cobra. */
+  assinaturaIniciada: boolean;
 }
 
 const usuarioSchema = z.object({
@@ -287,16 +289,25 @@ function FormAssinatura({ assinatura, onSalvo }: { assinatura: Assinatura; onSal
         Sem prazo — acesso liberado por tempo indeterminado
       </label>
 
-      {status === 'CANCELADA' && assinatura.gatewayCustomerId && (
+      {/* Os dois avisos dependem de haver subscription no gateway: em
+          `atualizar`, tanto o cancelamento quanto o recálculo de valor estão
+          atrás de `preenchido(subscriptionId)`. Avisar sobre cobrança a quem
+          está em trial seria assustar à toa no caso mais comum — dar cortesia. */}
+      {status === 'CANCELADA' && assinatura.assinaturaIniciada && (
         <p className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 rounded-lg px-3 py-2">
           <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-px" />
           Salvar como CANCELADA <b>remove a assinatura no Asaas</b> e o cliente para de ser cobrado. Não tem desfazer: para voltar, ele assina de novo.
         </p>
       )}
-      {lojasMudaram && (
+      {lojasMudaram && assinatura.assinaturaIniciada && (
         <p className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 rounded-lg px-3 py-2">
           <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-px" />
           Mudar de {assinatura.lojasContratadas} para {lojas} lojas <b>altera o valor cobrado no Asaas</b>, inclusive na fatura pendente.
+        </p>
+      )}
+      {!assinatura.assinaturaIniciada && (
+        <p className="text-xs text-slate-500 bg-slate-50 rounded-lg px-3 py-2">
+          Sem assinatura no gateway — lojas e vencimento aqui são <b>só nossos</b>. Nada é cobrado e o Asaas não é consultado.
         </p>
       )}
       {salvar.isError && (
