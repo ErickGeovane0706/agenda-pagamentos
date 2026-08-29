@@ -33,5 +33,13 @@ public record MinhaAssinaturaDTO(
      * sem ela, contratar mais lojas é parte de assinar; com ela, é uma
      * alteração de valor da assinatura que já corre.
      */
-    boolean assinaturaIniciada
+    boolean assinaturaIniciada,
+
+    /**
+     * Módulo de Estoque/PDV liberado para esta empresa. Viaja aqui, e não num
+     * endpoint próprio, porque este já é o "o que a minha empresa pode fazer"
+     * que o frontend consulta — um endpoint novo para um booleano seria pior.
+     * É o que decide se a tela de escolher loja desenha o caminho do PDV.
+     */
+    boolean pdvHabilitado
 ) {}

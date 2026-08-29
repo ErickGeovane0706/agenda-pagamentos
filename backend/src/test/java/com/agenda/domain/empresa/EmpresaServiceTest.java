@@ -1,5 +1,6 @@
 package com.agenda.domain.empresa;
 
+import com.agenda.auditoria.AuditoriaService;
 import com.agenda.domain.assinatura.AssinaturaService;
 import com.agenda.domain.banco.BancoRepository;
 import com.agenda.domain.loja.LojaRepository;
@@ -24,13 +25,15 @@ class EmpresaServiceTest {
     @Mock private LojaRepository lojaRepository;
     @Mock private BancoRepository bancoRepository;
     @Mock private AssinaturaService assinaturaService;
+    @Mock private AuditoriaService auditoriaService;
 
     private EmpresaService empresaService;
 
     @BeforeEach
     void setUp() {
         empresaService = new EmpresaService(
-            empresaRepository, usuarioRepository, lojaRepository, bancoRepository, assinaturaService);
+            empresaRepository, usuarioRepository, lojaRepository, bancoRepository, assinaturaService,
+            auditoriaService);
     }
 
     @Test

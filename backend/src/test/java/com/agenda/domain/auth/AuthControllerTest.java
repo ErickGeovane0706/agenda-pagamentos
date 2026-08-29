@@ -1,6 +1,7 @@
 package com.agenda.domain.auth;
 
 import com.agenda.domain.assinatura.AssinaturaService;
+import com.agenda.domain.empresa.EmpresaService;
 import com.agenda.domain.usuario.EtapaOnboarding;
 import com.agenda.domain.usuario.PerfilUsuario;
 import com.agenda.domain.usuario.UsuarioDTO;
@@ -39,6 +40,8 @@ class AuthControllerTest {
     @MockBean private JpaMetamodelMappingContext jpaMappingContext;
     // Exigido pelo AssinaturaGateFilter (@Component Filter, escaneado pelo @WebMvcTest).
     @MockBean private AssinaturaService assinaturaService;
+    /** Não usado aqui, mas o PdvGateFilter entra no contexto e exige o bean. */
+    @MockBean private EmpresaService empresaService;
 
     @Test
     void login_ComCookieSecureLigado_DeveEmitirCookiesComFlagSecure() throws Exception {

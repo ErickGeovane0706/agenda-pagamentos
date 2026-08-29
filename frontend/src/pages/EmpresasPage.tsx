@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Building2, Plus, Pencil, Trash2, X, User, ChevronDown, ChevronRight, Shield, CreditCard, AlertTriangle
+  Building2, Plus, Pencil, Trash2, X, User, ChevronDown, ChevronRight, Shield, CreditCard, AlertTriangle, Package
 } from 'lucide-react';
 import api from '../api/client';
 import { useAuthStore } from '../store/authStore';
@@ -134,6 +134,7 @@ export default function EmpresasPage() {
                 <div className="px-4 py-3 space-y-2">
                   <UsuariosEmpresa empresaId={empresa.id} />
                   <AssinaturaEmpresa assinatura={assinaturas.find(a => a.empresaId === empresa.id)} />
+                  <ModuloPdv empresa={empresa} />
                 </div>
               </div>
             )}
@@ -144,6 +145,54 @@ export default function EmpresasPage() {
           <div className="text-center py-12 text-slate-400 text-sm">Nenhuma empresa cadastrada</div>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Interruptor do módulo de Estoque/PDV. Nasce desligado em toda empresa: o
+ * módulo sobe inerte e é ligado um cliente por vez.
+ *
+ * Uma coluna booleana e um interruptor — não tabela de módulos, não matriz de
+ * permissões. Se um dia surgir um segundo módulo, aí isto vira lista.
+ */
+function ModuloPdv({ empresa }: { empresa: Empresa }) {
+  const queryClient = useQueryClient();
+  const alternar = useMutation({
+    mutationFn: (habilitado: boolean) =>
+      api.put(`/empresas/${empresa.id}/pdv`, { habilitado }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['empresas'] });
+    },
+  });
+
+  return (
+    <div className="rounded-xl border border-slate-100 bg-white px-3 py-2.5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Package className="w-4 h-4 text-slate-400" />
+          <span className="text-sm text-slate-700">Estoque e PDV</span>
+          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+            empresa.pdvHabilitado ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
+          }`}>
+            {empresa.pdvHabilitado ? 'liberado' : 'desligado'}
+          </span>
+        </div>
+        <button
+          onClick={() => alternar.mutate(!empresa.pdvHabilitado)}
+          disabled={alternar.isPending}
+          className={`text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50 ${
+            empresa.pdvHabilitado
+              ? 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+              : 'bg-[#0c4a6e] hover:bg-[#0a3d5c] text-white'
+          }`}
+        >
+          {empresa.pdvHabilitado ? 'Desligar' : 'Liberar'}
+        </button>
+      </div>
+      {alternar.isError && (
+        <p className="mt-2 text-xs text-red-600">Não foi possível alterar. Tente de novo.</p>
+      )}
     </div>
   );
 }

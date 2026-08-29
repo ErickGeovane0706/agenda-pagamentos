@@ -1,6 +1,7 @@
 package com.agenda.security;
 
 import com.agenda.domain.assinatura.AssinaturaService;
+import com.agenda.domain.empresa.EmpresaService;
 import com.agenda.domain.auth.*;
 import com.agenda.domain.usuario.EtapaOnboarding;
 import com.agenda.domain.usuario.PerfilUsuario;
@@ -57,6 +58,8 @@ class JwtAuthFilterTest {
     @MockBean private UserDetailsService userDetailsService;
     @MockBean private JpaMetamodelMappingContext jpaMappingContext;
     @MockBean private AssinaturaService assinaturaService;
+    /** Não usado aqui, mas o PdvGateFilter entra no contexto e exige o bean. */
+    @MockBean private EmpresaService empresaService;
 
     /**
      * Regressão de 08/08: depois que 11 usuários foram apagados do banco, quem

@@ -120,7 +120,7 @@ class RegistroServiceTest {
                 PerfilUsuario.ADMIN, EMPRESA_ID, "Mercado do João", EtapaOnboarding.LEMBRETES);
         when(pendenteRepository.findByTokenHash(anyString()))
                 .thenReturn(Optional.of(pendente(LocalDateTime.now().plusHours(1))));
-        when(empresaService.criar(any())).thenReturn(new EmpresaDTO(EMPRESA_ID, "Mercado do João", true));
+        when(empresaService.criar(any())).thenReturn(new EmpresaDTO(EMPRESA_ID, "Mercado do João", true, false));
         when(usuarioService.criarAdminDoRegistro(any(), any(), any(), any(), any())).thenReturn(dto);
         when(usuarioRepository.getReferenceById(USUARIO_ID)).thenReturn(new Usuario());
         when(jwtService.generateToken(any())).thenReturn("jwt-falso");

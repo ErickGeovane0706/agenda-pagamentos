@@ -1,6 +1,7 @@
 package com.agenda.domain.whatsappagent;
 
 import com.agenda.domain.assinatura.AssinaturaService;
+import com.agenda.domain.empresa.EmpresaService;
 import com.agenda.domain.webhook.WebhookIdempotencyService;
 import com.agenda.security.JwtService;
 import org.junit.jupiter.api.Test;
@@ -32,6 +33,8 @@ class WhatsAppWebhookControllerTest {
     @MockBean private JpaMetamodelMappingContext jpaMappingContext;
     // Exigido pelo AssinaturaGateFilter (@Component Filter, escaneado pelo @WebMvcTest).
     @MockBean private AssinaturaService assinaturaService;
+    /** Não usado aqui, mas o PdvGateFilter entra no contexto e exige o bean. */
+    @MockBean private EmpresaService empresaService;
 
     private static final String PAYLOAD =
         "{\"entry\":[{\"changes\":[{\"field\":\"messages\",\"value\":{\"messages\":["

@@ -149,7 +149,8 @@ public class AssinaturaService {
         var empresa = a.getEmpresa();
         boolean cobrancaOk = preenchido(empresa.getCpfCnpj()) && preenchido(empresa.getTelefone());
         return new MinhaAssinaturaDTO(a.getStatus(), a.getLojasContratadas(), a.getVigenteAte(),
-            precoBase, precoLojaAdicional, cobrancaOk, preenchido(a.getGatewaySubscriptionId()));
+            precoBase, precoLojaAdicional, cobrancaOk, preenchido(a.getGatewaySubscriptionId()),
+            Boolean.TRUE.equals(empresa.getPdvHabilitado()));
     }
 
     @Transactional(readOnly = true)

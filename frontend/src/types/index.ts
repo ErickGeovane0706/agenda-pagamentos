@@ -2,6 +2,8 @@ export interface Empresa {
   id: string;
   nome: string;
   ativo: boolean;
+  /** Módulo de Estoque/PDV liberado. Nasce falso; só o MASTER liga. */
+  pdvHabilitado: boolean;
 }
 
 export type EtapaOnboarding = 'LEMBRETES' | 'CHEQUES' | 'CONCLUIDO';

@@ -9,9 +9,12 @@ import java.util.UUID;
 public record EmpresaDTO(
     UUID id,
     String nome,
-    boolean ativo
+    boolean ativo,
+
+    /** Módulo de Estoque/PDV liberado. É o que o painel do MASTER desenha como interruptor. */
+    boolean pdvHabilitado
 ) {
     public static EmpresaDTO from(Empresa e) {
-        return new EmpresaDTO(e.getId(), e.getNome(), e.getAtivo());
+        return new EmpresaDTO(e.getId(), e.getNome(), e.getAtivo(), e.getPdvHabilitado());
     }
 }

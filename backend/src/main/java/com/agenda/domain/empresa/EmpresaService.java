@@ -1,5 +1,6 @@
 package com.agenda.domain.empresa;
 
+import com.agenda.auditoria.AuditoriaService;
 import com.agenda.domain.assinatura.AssinaturaService;
 import com.agenda.domain.banco.BancoRepository;
 import com.agenda.domain.loja.LojaRepository;
@@ -27,6 +28,7 @@ public class EmpresaService {
     private final LojaRepository lojaRepository;
     private final BancoRepository bancoRepository;
     private final AssinaturaService assinaturaService;
+    private final AuditoriaService auditoriaService;
 
     @Transactional(readOnly = true)
     public List<EmpresaDTO> listar() {
@@ -71,6 +73,36 @@ public class EmpresaService {
         empresa.setCpfCnpj(req.cpfCnpj());
         empresa.setTelefone(req.telefone());
         empresaRepository.save(empresa);
+    }
+
+    /**
+     * Liga ou desliga o módulo de Estoque/PDV da empresa. Só o MASTER chega aqui
+     * (o controller exige o papel).
+     * <p>
+     * Auditado porque é entitlement: saber quem liberou o módulo para quem, e
+     * quando, é o tipo de coisa que ninguém lembra seis meses depois.
+     */
+    @Transactional
+    public void definirPdv(UUID empresaId, boolean habilitado) {
+        var empresa = empresaRepository.findById(empresaId)
+            .orElseThrow(() -> new NotFoundException("Empresa não encontrada"));
+        empresa.setPdvHabilitado(habilitado);
+        empresaRepository.save(empresa);
+        auditoriaService.registrar(habilitado ? "LIBERAR_PDV" : "REVOGAR_PDV", "EMPRESA",
+            empresaId, "Módulo de Estoque e PDV " + (habilitado ? "liberado" : "revogado"));
+    }
+
+    /**
+     * O módulo está liberado? Consultado pelo {@code PdvGateFilter} a cada
+     * requisição das rotas do PDV — lookup no banco de propósito, nunca claim no
+     * JWT: com o flag no token, o MASTER liberaria e o cliente continuaria
+     * bloqueado até relogar.
+     */
+    @Transactional(readOnly = true)
+    public boolean pdvHabilitado(UUID empresaId) {
+        return empresaRepository.findById(empresaId)
+            .map(Empresa::getPdvHabilitado)
+            .orElse(false);
     }
 
     @Transactional

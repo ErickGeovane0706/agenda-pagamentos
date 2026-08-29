@@ -38,6 +38,19 @@ public class EmpresaController {
         return ResponseEntity.ok(empresaService.editar(id, req));
     }
 
+    /**
+     * Libera (ou revoga) o módulo de Estoque/PDV da empresa. Separado do
+     * {@link #editar} porque não é dado cadastral: é entitlement, nasce
+     * desligado e só o MASTER move — o ADMIN da empresa não liga o próprio
+     * módulo.
+     */
+    @PutMapping("/{id}/pdv")
+    public ResponseEntity<Void> definirPdv(@PathVariable UUID id,
+                                           @RequestBody @Valid DefinirPdvRequest req) {
+        empresaService.definirPdv(id, req.habilitado());
+        return ResponseEntity.noContent().build();
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> excluir(@PathVariable UUID id) {
         empresaService.excluir(id);

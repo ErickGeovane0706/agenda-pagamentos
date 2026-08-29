@@ -37,6 +37,17 @@ public class Empresa {
     @Builder.Default
     private Boolean ativo = true;
 
+    /**
+     * Módulo de Estoque/PDV liberado para esta empresa. Nasce falso: o módulo
+     * sobe inerte e o MASTER liga empresa a empresa.
+     * <p>
+     * Uma coluna booleana, e não tabela de módulos nem JSON de permissões — se
+     * um dia surgir um segundo módulo, aí vira tabela. Não antes.
+     */
+    @Column(name = "pdv_habilitado", nullable = false)
+    @Builder.Default
+    private Boolean pdvHabilitado = false;
+
     @Column(name = "criado_em", nullable = false, updatable = false)
     @Builder.Default
     private LocalDateTime criadoEm = LocalDateTime.now();

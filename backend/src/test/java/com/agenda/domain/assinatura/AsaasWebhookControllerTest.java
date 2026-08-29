@@ -1,5 +1,6 @@
 package com.agenda.domain.assinatura;
 
+import com.agenda.domain.empresa.EmpresaService;
 import com.agenda.security.JwtService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +35,8 @@ class AsaasWebhookControllerTest {
     @MockBean private JpaMetamodelMappingContext jpaMappingContext;
     /** Não usado aqui, mas o AssinaturaGateFilter entra no contexto e exige o bean. */
     @MockBean private AssinaturaService assinaturaService;
+    /** Não usado aqui, mas o PdvGateFilter entra no contexto e exige o bean. */
+    @MockBean private EmpresaService empresaService;
 
     private static final String PAYLOAD_CONFIRMADO =
         "{\"id\":\"evt_001\",\"event\":\"PAYMENT_CONFIRMED\",\"payment\":{\"id\":\"pay_1\",\"customer\":\"cus_123\"}}";

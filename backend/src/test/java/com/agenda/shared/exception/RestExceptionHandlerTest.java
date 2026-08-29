@@ -1,6 +1,7 @@
 package com.agenda.shared.exception;
 
 import com.agenda.domain.assinatura.AssinaturaService;
+import com.agenda.domain.empresa.EmpresaService;
 import com.agenda.domain.loja.LojaController;
 import com.agenda.domain.loja.LojaService;
 import com.agenda.security.JwtService;
@@ -35,6 +36,8 @@ class RestExceptionHandlerTest {
     @MockBean private JpaMetamodelMappingContext jpaMappingContext;
     // Exigido pelo AssinaturaGateFilter (@Component Filter, escaneado pelo @WebMvcTest).
     @MockBean private AssinaturaService assinaturaService;
+    /** Não usado aqui, mas o PdvGateFilter entra no contexto e exige o bean. */
+    @MockBean private EmpresaService empresaService;
 
     @Test
     void metodoNaoSuportado_DeveRetornar405() throws Exception {
