@@ -17,6 +17,9 @@ import PrivacyPage from './pages/PrivacyPage';
 import TermosPage from './pages/TermosPage';
 import ConfiguracoesPage from './pages/ConfiguracoesPage';
 import EmpresasPage from './pages/EmpresasPage';
+import ProdutosPage from './pages/ProdutosPage';
+import VendaPage from './pages/VendaPage';
+import RelatorioVendasPage from './pages/RelatorioVendasPage';
 import Layout from './components/Layout';
 import { ToastContainer } from './components/ToastContainer';
 
@@ -144,6 +147,14 @@ export default function App() {
               <Route path="relatorios" element={<RelatoriosPage />} />
               <Route path="configuracoes" element={<ConfiguracoesPage />} />
               <Route path="empresas" element={<EmpresasPage />} />
+              {/* Módulo de Estoque/PDV. Não existe guarda de rota por
+                  pdvHabilitado de propósito: quem chegar aqui sem o módulo
+                  recebe 403 do PdvGateFilter na primeira chamada. Repetir a
+                  regra no front criaria dois lugares para ela divergir, e o
+                  que vale é o do servidor. */}
+              <Route path="produtos" element={<ProdutosPage />} />
+              <Route path="venda" element={<VendaPage />} />
+              <Route path="venda/relatorio" element={<RelatorioVendasPage />} />
             </Route>
           </Routes>
         </BrowserRouter>

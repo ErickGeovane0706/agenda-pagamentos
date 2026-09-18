@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Store, Pencil, Trash2, ChevronRight, LogOut } from 'lucide-react';
+import { Plus, Store, Pencil, Trash2, ChevronRight, LogOut, Calendar, ShoppingCart } from 'lucide-react';
 import { useState } from 'react';
 import api from '../api/client';
 import { useAuthStore } from '../store/authStore';
@@ -31,6 +31,8 @@ export default function SelecionarLojaPage() {
   };
   const [modalAberto, setModalAberto] = useState(false);
   const [lojaEditando, setLojaEditando] = useState<Loja | null>(null);
+  /** Loja já escolhida, esperando o usuário dizer Financeiro ou PDV. */
+  const [lojaEscolhida, setLojaEscolhida] = useState<Loja | null>(null);
 
   const { data: lojas = [], isLoading } = useQuery({
     queryKey: ['lojas', usuario?.empresaId],
@@ -42,9 +44,27 @@ export default function SelecionarLojaPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['lojas'] }),
   });
 
+  // O flag do módulo vem de /assinaturas/minha, que o AvisoAssinatura já
+  // consulta com esta mesma chave — então isto reaproveita o cache do
+  // react-query em vez de pedir de novo.
+  const { data: assinatura } = useQuery<{ pdvHabilitado: boolean }>({
+    queryKey: ['minha-assinatura'],
+    queryFn: () => api.get('/assinaturas/minha').then((r) => r.data),
+    enabled: usuario != null && usuario.perfil !== 'MASTER',
+  });
+  const temPdv = assinatura?.pdvHabilitado === true;
+
   const handleSelecionarLoja = (loja: Loja) => {
     setLojaAtiva(loja.id);
-    navigate('/agenda');
+    // Sem o módulo não há escolha a fazer: uma tela com um único caminho seria
+    // só um clique a mais para todo cliente que não tem PDV. Com o módulo, a
+    // bifurcação aparece — inclusive para quem tem uma loja só, que é o mesmo
+    // caminho para todo mundo, sem caso especial.
+    if (temPdv) {
+      setLojaEscolhida(loja);
+    } else {
+      navigate('/agenda');
+    }
   };
 
   if (isLoading) {
@@ -154,6 +174,80 @@ export default function SelecionarLojaPage() {
           }}
         />
       )}
+
+      {lojaEscolhida && (
+        <EscolherModulo
+          loja={lojaEscolhida}
+          onFechar={() => setLojaEscolhida(null)}
+          onEscolher={(destino) => navigate(destino)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * A bifurcação do §4 do plano: dentro da loja, Financeiro (o que já existia) ou
+ * PDV (o módulo novo). Só é montada quando a empresa tem o módulo liberado.
+ */
+function EscolherModulo({
+  loja, onFechar, onEscolher,
+}: {
+  loja: Loja;
+  onFechar: () => void;
+  onEscolher: (destino: string) => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-slate-900/50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+      <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
+        <div className="flex items-center gap-3 mb-1">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+               style={{ backgroundColor: loja.cor + '20' }}>
+            <Store className="w-5 h-5" style={{ color: loja.cor }} />
+          </div>
+          <div className="min-w-0">
+            <p className="font-bold text-slate-900 truncate">{loja.nome}</p>
+            <p className="text-xs text-slate-500">O que você quer fazer?</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 mt-5">
+          <button
+            onClick={() => onEscolher('/agenda')}
+            className="flex items-center gap-4 p-4 border border-slate-200 rounded-xl hover:border-[#0c4a6e] hover:bg-slate-50 text-left transition-colors"
+          >
+            <div className="w-11 h-11 rounded-xl bg-[#0c4a6e]/10 flex items-center justify-center flex-shrink-0">
+              <Calendar className="w-5 h-5 text-[#0c4a6e]" />
+            </div>
+            <div className="min-w-0">
+              <p className="font-semibold text-slate-900">Financeiro</p>
+              <p className="text-xs text-slate-500">Boletos, cheques e PIX a pagar</p>
+            </div>
+            <ChevronRight className="w-4 h-4 text-slate-300 ml-auto flex-shrink-0" />
+          </button>
+
+          <button
+            onClick={() => onEscolher('/venda')}
+            className="flex items-center gap-4 p-4 border border-slate-200 rounded-xl hover:border-emerald-600 hover:bg-emerald-50/50 text-left transition-colors"
+          >
+            <div className="w-11 h-11 rounded-xl bg-emerald-600/10 flex items-center justify-center flex-shrink-0">
+              <ShoppingCart className="w-5 h-5 text-emerald-700" />
+            </div>
+            <div className="min-w-0">
+              <p className="font-semibold text-slate-900">Vendas e estoque</p>
+              <p className="text-xs text-slate-500">Registrar venda e controlar produtos</p>
+            </div>
+            <ChevronRight className="w-4 h-4 text-slate-300 ml-auto flex-shrink-0" />
+          </button>
+        </div>
+
+        <button
+          onClick={onFechar}
+          className="w-full mt-4 py-3 text-slate-500 font-medium text-sm"
+        >
+          Voltar
+        </button>
+      </div>
     </div>
   );
 }

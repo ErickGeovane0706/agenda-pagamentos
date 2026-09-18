@@ -104,3 +104,62 @@ export interface FiltrosRelatorio {
   tipo?: 'BOLETO' | 'PIX' | 'CHEQUE' | 'TODOS';
   status?: string;
 }
+
+// ─────────────────── Módulo de Estoque e PDV ───────────────────
+
+export interface Produto {
+  id: string;
+  lojaId: string;
+  nome: string;
+  quantidade: number;
+  precoCusto: number;
+  precoVenda: number;
+  ativo: boolean;
+}
+
+export type StatusVenda = 'CONCLUIDA' | 'CANCELADA';
+
+/**
+ * Item de uma venda. `precoCusto` e `precoVenda` são o que foi praticado
+ * naquele instante, não o preço atual do produto — é assim que o histórico
+ * sobrevive a um reajuste de cadastro.
+ */
+export interface VendaItem {
+  produtoId: string;
+  produtoNome: string;
+  quantidade: number;
+  precoCusto: number;
+  precoVenda: number;
+}
+
+export interface Venda {
+  id: string;
+  lojaId: string;
+  clienteNome?: string;
+  total: number;
+  custoTotal: number;
+  lucro: number;
+  status: StatusVenda;
+  vendidoEm: string;
+  itens: VendaItem[];
+}
+
+/** Relatório de vendas de um período, numa loja. */
+export interface RelatorioVendas {
+  receita: number;
+  custo: number;
+  lucro: number;
+  /** Nulo quando não houve venda no período — a tela mostra "—", nunca 0%. */
+  margemPercentual: number | null;
+  quantidadeVendas: number;
+  porProduto: LinhaProdutoRelatorio[];
+}
+
+export interface LinhaProdutoRelatorio {
+  produtoId: string;
+  produtoNome: string;
+  quantidade: number;
+  receita: number;
+  custo: number;
+  lucro: number;
+}
