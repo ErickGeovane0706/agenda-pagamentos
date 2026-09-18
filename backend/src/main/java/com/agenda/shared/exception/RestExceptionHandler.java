@@ -61,6 +61,19 @@ public class RestExceptionHandler {
     }
 
     /**
+     * Estoque insuficiente no instante da venda → 409 CONFLICT.
+     * <p>
+     * 409 e não 400 de propósito: o PDV precisa distinguir "seu formulário está
+     * errado" de "não tem gelo suficiente agora". A primeira se corrige
+     * digitando; a segunda não, e a tela reage de outro jeito.
+     */
+    @ExceptionHandler(com.agenda.domain.venda.EstoqueInsuficienteException.class)
+    public ResponseEntity<ErrorResponse> handleEstoqueInsuficiente(
+            com.agenda.domain.venda.EstoqueInsuficienteException ex) {
+        return error(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    /**
      * Argumento inválido → 400 BAD_REQUEST.
      * Ex.: UUID mal formatado, parâmetro obrigatório ausente.
      */
