@@ -1,10 +1,83 @@
 # Agenda de Pagamentos
 
+![Java](https://img.shields.io/badge/Java-21-007396?logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.3.5-6DB33F?logo=springboot&logoColor=white)
+![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)
+![Testes](https://img.shields.io/badge/testes-397-success)
+
 Sistema de gestão de contas a pagar para redes com múltiplas lojas: boletos, PIX e cheques
 num só lugar, com lembretes e consultas por WhatsApp.
 
 O diferencial do projeto é o **agente de WhatsApp**: o usuário pergunta *"quanto tenho pra pagar
 essa semana?"* — por texto ou por áudio — e recebe a resposta pronta, sem abrir o app.
+
+> **Em produção, com clientes reais.** O sistema roda em
+> [diadepagar.com.br](https://www.diadepagar.com.br) — multi-empresa, multi-loja,
+> com assinatura cobrada por loja, webhook de pagamento e agente de WhatsApp atendendo.
+> Não é um projeto de demonstração: cada decisão registrada em
+> [`docs/adr/`](docs/adr/README.md) foi tomada com alguém dependendo do resultado.
+
+[![A landing do produto](docs/img/landing.jpg)](https://www.diadepagar.com.br/comecar)
+
+<p align="center"><sub>A landing pública. O balão à direita é o formato em que o lembrete
+chega — o público é dono de loja que vive no WhatsApp, e para ele metade da venda é tirar o
+medo, não criar desejo.</sub></p>
+
+---
+
+## Arquitetura
+
+```mermaid
+flowchart LR
+    U["Lojista<br/>navegador / PWA"] --> NG
+    ZAP["WhatsApp<br/>do lojista"] --> META
+
+    subgraph HOST["Railway"]
+        NG["nginx<br/>estáticos + proxy"]
+        API["Spring Boot 3.3<br/>Java 21"]
+        DB[("PostgreSQL 18<br/>schema via Flyway")]
+        NG -->|"/api, /webhook"| API
+        API --> DB
+    end
+
+    META["WhatsApp Cloud API"] -->|"POST /webhook/whatsapp"| NG
+    API -->|"responde"| META
+    PAY["Gateway de pagamento"] -->|"POST /webhook/asaas"| NG
+    API -->|"cria cobrança"| PAY
+    API --> R2[("Cloudflare R2<br/>anexos")]
+    API --> LLM["LLM<br/>classificação de intenção"]
+    API --> STT["Whisper<br/>transcrição de áudio"]
+    API --> MAIL["Resend<br/>e-mail transacional"]
+```
+
+O nginx não é só servidor de estáticos: ele **re-resolve o endereço do backend a cada
+requisição**, porque o IP muda a cada deploy — ver
+[ADR-0010](docs/adr/0010-nginx-re-resolve-o-backend.md).
+
+### O caminho de uma pergunta no WhatsApp
+
+```mermaid
+sequenceDiagram
+    participant L as Lojista
+    participant M as WhatsApp Cloud API
+    participant C as WhatsAppWebhookController
+    participant S as Agente (@Async)
+    participant D as PostgreSQL
+
+    L->>M: "quanto tenho pra pagar essa semana?"
+    M->>C: POST /webhook/whatsapp
+    C-->>M: 200 OK (imediato)
+    Note over C,S: a Meta exige resposta em poucos<br/>segundos; o processamento é assíncrono
+    S->>S: áudio? baixa a mídia e transcreve
+    S->>S: classifica a intenção e extrai filtros
+    S->>D: consulta pendências da empresa
+    D-->>S: resultado
+    S->>M: envia a resposta
+    M->>L: mensagem pronta
+```
 
 ---
 
