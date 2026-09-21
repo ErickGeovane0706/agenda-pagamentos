@@ -1,0 +1,34 @@
+# Existe por uma licao concreta: o projeto ficou oito releases de patch atras
+# no Spring Boot sem ninguem perceber. Patch e onde entram correcoes de
+# seguranca, e num repositorio publico a versao exata fica a vista de todos.
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Um PR por grupo, e nao um por dependencia: dezenas de PRs abertos
+      # acabam ignorados, que e o mesmo que nao ter Dependabot.
+      spring:
+        patterns: ["org.springframework*"]
+      demais:
+        patterns: ["*"]
+        exclude-patterns: ["org.springframework*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      demais:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
