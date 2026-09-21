@@ -70,7 +70,7 @@ sequenceDiagram
     L->>M: "quanto tenho pra pagar essa semana?"
     M->>C: POST /webhook/whatsapp
     C-->>M: 200 OK (imediato)
-    Note over C,S: a Meta exige resposta em poucos<br/>segundos; o processamento é assíncrono
+    Note over C,S: a Meta exige resposta em poucos segundos, então o processamento é assíncrono
     S->>S: áudio? baixa a mídia e transcreve
     S->>S: classifica a intenção e extrai filtros
     S->>D: consulta pendências da empresa
