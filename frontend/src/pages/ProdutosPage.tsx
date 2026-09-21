@@ -186,16 +186,20 @@ function ModalProduto({
   const addToast = useToastStore((s) => s.addToast);
 
   const salvar = useMutationToast({
-    mutationFn: () => {
+    // Sem `return` das chamadas: criar e editar mandam corpos diferentes (o
+    // POST leva lojaId), e o axios carrega o tipo do corpo na resposta — então
+    // devolver o ternário produz dois tipos incompatíveis. A resposta não é
+    // usada por ninguém (o onSuccess não recebe argumento), então o tipo certo
+    // aqui é void.
+    mutationFn: async () => {
       const corpo = {
         nome: nome.trim(),
         quantidade: Number(quantidade || 0),
         precoCusto: Number(precoCusto || 0),
         precoVenda: Number(precoVenda || 0),
       };
-      return produto
-        ? api.put(`/produtos/${produto.id}`, corpo)
-        : api.post('/produtos', { ...corpo, lojaId });
+      if (produto) await api.put(`/produtos/${produto.id}`, corpo);
+      else await api.post('/produtos', { ...corpo, lojaId });
     },
     successMessage: produto ? 'Produto atualizado' : 'Produto cadastrado',
     onSuccess: onSalvo,
