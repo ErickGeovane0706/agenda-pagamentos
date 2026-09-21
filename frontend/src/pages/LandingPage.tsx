@@ -33,12 +33,18 @@ import './registro/registro.css';
  * (WhatsAppAgentService), e o único e-mail publicado é o da LGPD, escondido
  * na política de privacidade.
  *
- * PROVISÓRIO: é o número pessoal do Erick. Troca por um chip dedicado quando
- * ele comprar — e é só esta linha que muda.
+ * O número vem de VITE_WHATSAPP_SUPORTE, e não do código, por dois motivos: é
+ * um número pessoal enquanto não houver chip dedicado, e trocá-lo não devia
+ * exigir um commit.
+ *
+ * Sem a variável o convite inteiro some, em vez de virar um link vazio: um
+ * "Chama no WhatsApp" que não abre nada é pior do que não oferecer o canal.
+ * Como toda VITE_*, é lida na COMPILAÇÃO — ver os ARG/ENV do Dockerfile.
  */
-const WHATSAPP_SUPORTE =
-  'https://wa.me/5583988887777?text=' +
-  encodeURIComponent('Oi! Vim pelo site do Dia de Pagar e queria tirar uma dúvida.');
+const WHATSAPP_SUPORTE = import.meta.env.VITE_WHATSAPP_SUPORTE
+  ? `https://wa.me/${import.meta.env.VITE_WHATSAPP_SUPORTE}?text=` +
+    encodeURIComponent('Oi! Vim pelo site do Dia de Pagar e queria tirar uma dúvida.')
+  : null;
 
 export default function LandingPage() {
   return (
@@ -78,13 +84,15 @@ export default function LandingPage() {
           {/* Fica DEPOIS do CTA de propósito: quem já decidiu não deve tropeçar
               numa segunda opção antes de clicar. Quem tem dúvida lê tudo e
               chega aqui. */}
-          <p className="reg-land-suporte">
-            Ficou com dúvida?{' '}
-            <a href={WHATSAPP_SUPORTE} target="_blank" rel="noopener noreferrer">
-              Chama no WhatsApp
-            </a>{' '}
-            — responde uma pessoa, não um robô.
-          </p>
+          {WHATSAPP_SUPORTE && (
+            <p className="reg-land-suporte">
+              Ficou com dúvida?{' '}
+              <a href={WHATSAPP_SUPORTE} target="_blank" rel="noopener noreferrer">
+                Chama no WhatsApp
+              </a>{' '}
+              — responde uma pessoa, não um robô.
+            </p>
+          )}
 
           <p className="reg-lede reg-land-founder">
             Feito por quem cansou de ver dono de loja pagando multa por esquecimento.
