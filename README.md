@@ -1,12 +1,12 @@
 # Agenda de Pagamentos
 
+[![CI](https://github.com/ErickGeovane0706/agenda-pagamentos/actions/workflows/ci.yml/badge.svg)](https://github.com/ErickGeovane0706/agenda-pagamentos/actions/workflows/ci.yml)
 ![Java](https://img.shields.io/badge/Java-21-007396?logo=openjdk&logoColor=white)
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.3.5-6DB33F?logo=springboot&logoColor=white)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)
-![Testes](https://img.shields.io/badge/testes-397-success)
 
 Sistema de gestão de contas a pagar para redes com múltiplas lojas: boletos, PIX e cheques
 num só lugar, com lembretes e consultas por WhatsApp.

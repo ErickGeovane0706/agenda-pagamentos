@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+# Leitura basta: nada aqui publica, comenta ou escreve no repositorio.
+permissions:
+  contents: read
+
+# Push novo na mesma ref cancela a execucao anterior, que ja nao interessa.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend — testes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      # Os testes de schema e de relatorio sobem um Postgres real via
+      # Testcontainers — e por isso que eles provam alguma coisa. O runner
+      # ubuntu-latest ja vem com Docker, entao nao ha passo de setup aqui.
+      # Nenhuma variavel de ambiente e necessaria: o perfil `test` preenche
+      # com valores de fachada tudo que o application.yml exige.
+      - name: mvn test
+        working-directory: backend
+        run: mvn -B test
+
+  frontend:
+    name: Frontend — typecheck e build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: npm ci
+        working-directory: frontend
+        run: npm ci
+
+      # `npm run build` roda `tsc -b` antes do Vite, entao este passo e o
+      # typecheck do frontend — que e toda a verificacao que ele tem hoje.
+      - name: npm run build
+        working-directory: frontend
+        run: npm run build
