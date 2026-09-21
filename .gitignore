@@ -110,3 +110,24 @@ zap-report.json
 # nome, CNPJ, valores). NUNCA versionar - o repositorio esta no GitHub e
 # no git apagar depois nao resolve, fica no historico.
 boletos/
+
+# ══════════════════════════════════════════════
+# AMBIENTE - EXEMPLOS SOBEM, VALORES REAIS NAO
+# ══════════════════════════════════════════════
+!.env.example
+!**/.env.example
+
+# ══════════════════════════════════════════════
+# FERRAMENTAS DE IA E DOCUMENTOS INTERNOS
+# (o historico do projeto vive fora deste repositorio;
+#  as decisoes tecnicas estao em docs/adr/)
+# ══════════════════════════════════════════════
+.opencode/
+.claude/
+.graphifyignore
+docs-internos/
+ESTADO.md
+CONTINUAR-*.md
+PLANO-*.md
+RELATORIO-*.md
+RUNBOOK-*.md
