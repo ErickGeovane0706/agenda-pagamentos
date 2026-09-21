@@ -40,9 +40,9 @@ public interface VendaRepository extends JpaRepository<Venda, UUID> {
      * Totais do período: receita, custo e quantidade de vendas.
      * <p>
      * <b>A soma é do Postgres, não de Java.</b> Trazer as vendas do período
-     * para somar na aplicação funciona com 50 vendas e morre com 50 mil — e o
-     * {@code ESTADO.md} §5 já registra que o cliente real tem centenas de boletos e que
-     * o volume cresce mais rápido do que a intuição sugere.
+     * para somar na aplicação funciona com 50 vendas e morre com 50 mil, e o
+     * volume de uma loja em operação cresce mais rápido do que a intuição
+     * sugere.
      * <p>
      * O {@code COALESCE} existe porque {@code SUM} de conjunto vazio é
      * {@code NULL}, não zero: sem ele, um período sem venda viraria

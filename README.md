@@ -101,11 +101,17 @@ frontend/src/
 
 ### 1. Variáveis de ambiente
 
-Crie um `.env` na raiz com as variáveis da [tabela abaixo](#variáveis-de-ambiente).
-Ele está no `.gitignore` e nunca é commitado.
+```bash
+cp .env.example .env                    # backend e docker-compose
+cp frontend/.env.example frontend/.env  # frontend
+```
+
+Os dois `.env.example` são a lista completa e comentada; os `.env` estão no `.gitignore` e
+nunca são commitados.
 
 Para rodar o básico (login, agenda, paginação), só o banco e o `JWT_SECRET` precisam ser reais
-— as chaves de integração podem ficar com valor de teste.
+— as chaves de integração podem ficar vazias. Sem Asaas não há cobrança, sem R2 não há anexo,
+sem Resend não há e-mail, sem chave de IA o agente não classifica intenção. O resto funciona.
 
 ### 2. Banco
 
@@ -113,7 +119,7 @@ Para rodar o básico (login, agenda, paginação), só o banco e o `JWT_SECRET` 
 docker compose up db
 ```
 
-O Flyway aplica as migrations (`V1` a `V16`) sozinho na subida do backend.
+O Flyway aplica as migrations (`V1` a `V25`) sozinho na subida do backend.
 `ddl-auto` é `validate`: o schema **nunca** é alterado pelo Hibernate, só por migration.
 
 ### 3. Backend
@@ -135,33 +141,35 @@ npm run dev             # http://localhost:5173
 
 ## Variáveis de ambiente
 
-| Variável | Obrigatória | Para quê |
-|---|---|---|
-| `DATABASE_URL` / `DATABASE_USER` / `DATABASE_PASS` | sim | Postgres |
-| `DB_POOL_SIZE` | não (5) | tamanho do pool Hikari |
-| `JWT_SECRET` | sim | assinatura dos tokens |
-| `JWT_EXPIRATION` / `JWT_REFRESH_EXPIRATION` | não | validade dos tokens |
-| `CORS_ALLOWED_ORIGINS` | não | origens liberadas (vazio = localhost) |
-| `R2_ACCOUNT_ID` / `R2_ACCESS_KEY` / `R2_SECRET_KEY` / `R2_BUCKET` | anexos | Cloudflare R2 |
-| `WHATSAPP_PHONE_NUMBER_ID` / `WHATSAPP_TOKEN` | WhatsApp | envio de mensagens e download de mídia |
-| `WHATSAPP_WEBHOOK_VERIFY_TOKEN` / `WHATSAPP_APP_SECRET` | WhatsApp | verificação e assinatura HMAC do webhook |
-| `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` | agente | classificação de intenção (default: `claude-haiku-4-5`) |
-| `OPENAI_API_KEY` / `OPENAI_TRANSCRIPTION_MODEL` | áudio | transcrição de voz (default: `whisper-1`) |
-| `SPRING_PROFILES_ACTIVE` / `PORT` | não | perfil e porta |
-| `TZ` | **ver limitações** | fuso da JVM — afeta a hora dos lembretes |
+A lista completa, comentada e agrupada por função está nos dois arquivos de exemplo —
+[`.env.example`](.env.example) (backend) e [`frontend/.env.example`](frontend/.env.example).
+Eles são a fonte: uma tabela aqui envelheceria em silêncio.
+
+Três que não se explicam sozinhas:
+
+| Variável | Por que merece atenção |
+|---|---|
+| `ASAAS_WEBHOOK_TOKEN` | sem ela o webhook **falha fechada** e recusa tudo — é proposital, e não um bug de configuração |
+| `APP_FRONTEND_URL` | tem que ser o mesmo domínio cadastrado no gateway; ele recusa uma `successUrl` de outro domínio com `400` |
+| toda `VITE_*` | é lida na **compilação**, não em runtime: precisa chegar ao `npm run build`, e por isso o `Dockerfile` do frontend declara um `ARG`/`ENV` para cada uma. Definir só no painel da hospedagem não basta, e a falha é silenciosa |
 
 ---
 
 ## Testes
 
 ```bash
-cd backend && mvn test          # 155 testes
+cd backend && mvn test          # 397 testes
 cd frontend && npm run build    # typecheck (tsc -b) + build
 ```
 
 O backend tem cobertura de serviço e controller nos caminhos que importam: isolamento
-multi-tenant, agente de WhatsApp, validação de upload, JWT, scheduler. O frontend **não tem
-suíte de testes** — a verificação é o typecheck e o build.
+multi-tenant, agente de WhatsApp, validação de upload, JWT, scheduler, estoque e relatório.
+O frontend **não tem suíte de testes** — a verificação é o typecheck e o build.
+
+⚠️ **`mvn test` exige o Docker ligado.** Os testes de schema e de relatório sobem um Postgres
+real via Testcontainers, porque são a única forma honesta de provar que as migrations aplicam
+e de qual tabela a agregação lê preço. Com o Docker desligado eles falham com `ContainerFetch`
+— problema de ambiente, não de código.
 
 ---
 
@@ -195,10 +203,6 @@ As variáveis de ambiente são cadastradas no painel do Railway — o `.env` é 
 ---
 
 ## Limitações conhecidas
-
-**Fuso horário dos lembretes.** O `NotificacaoWhatsAppScheduler` usa o fuso padrão da JVM. No
-Railway ele não é o do Brasil, então um lembrete marcado para "09:00" pode sair em hora errada.
-A correção é setar `TZ=America/Sao_Paulo` no ambiente.
 
 **Rate limiter em memória.** Os buckets vivem na memória da instância: com mais de uma
 instância, o teto real é multiplicado, e um restart zera as contagens. Serve para cortar abuso,
