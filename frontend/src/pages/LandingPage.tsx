@@ -40,8 +40,32 @@ import './registro/registro.css';
  * "Chama no WhatsApp" que não abre nada é pior do que não oferecer o canal.
  * Como toda VITE_*, é lida na COMPILAÇÃO — ver os ARG/ENV do Dockerfile.
  */
-const WHATSAPP_SUPORTE = import.meta.env.VITE_WHATSAPP_SUPORTE
-  ? `https://wa.me/${import.meta.env.VITE_WHATSAPP_SUPORTE}?text=` +
+const NUMERO_SUPORTE = String(import.meta.env.VITE_WHATSAPP_SUPORTE ?? '').replace(/\D/g, '');
+
+/**
+ * O wa.me exige o número internacional COMPLETO, com o 55 na frente.
+ *
+ * Sem essa conferência, cadastrar a variável sem o DDI monta um link que
+ * parece certo, abre normalmente e não chega em ninguém — e ninguém percebe,
+ * porque nada quebra na tela. Já aconteceu em produção: a variável entrou
+ * como `83999999999` e o botão virou `wa.me/83999999999`, que o WhatsApp lê
+ * como outro país.
+ *
+ * Número malformado esconde o convite, em vez de publicar um canal de suporte
+ * que não existe. Ausência de botão alguém nota; botão que não leva a lugar
+ * nenhum, não.
+ */
+const NUMERO_VALIDO = /^55\d{10,11}$/.test(NUMERO_SUPORTE);
+
+if (import.meta.env.DEV && NUMERO_SUPORTE && !NUMERO_VALIDO) {
+  console.warn(
+    `[landing] VITE_WHATSAPP_SUPORTE="${NUMERO_SUPORTE}" não é um número com DDI. ` +
+      'Esperado: 55 + DDD + número (ex.: 5583999999999). O convite ao WhatsApp não será exibido.'
+  );
+}
+
+const WHATSAPP_SUPORTE = NUMERO_VALIDO
+  ? `https://wa.me/${NUMERO_SUPORTE}?text=` +
     encodeURIComponent('Oi! Vim pelo site do Dia de Pagar e queria tirar uma dúvida.')
   : null;
 
