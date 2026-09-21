@@ -131,3 +131,8 @@ CONTINUAR-*.md
 PLANO-*.md
 RELATORIO-*.md
 RUNBOOK-*.md
+
+# Override local do Compose: supre PORT e BACKEND_URL, que em producao o
+# Railway injeta. E por definicao da maquina de quem roda — convencao do
+# proprio Compose. Estava em .git/info/exclude, que nao viaja no clone.
+docker-compose.override.yml
