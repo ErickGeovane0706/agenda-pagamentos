@@ -23,7 +23,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * As quatro verificações da Fase 2 do {@code PLANO-PDV-ESTOQUE.md}: isolamento
+ * As quatro verificações do módulo de produtos: isolamento
  * entre empresas, nome duplicado recusado, desativar-e-recriar liberado (a regra
  * do índice parcial) e produto que não se apaga.
  * <p>

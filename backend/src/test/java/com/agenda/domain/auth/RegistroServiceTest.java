@@ -43,8 +43,9 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * Cobre o "critério de pronto" de segurança do PLANO-REGISTRO.md para o
- * cadastro público: anti-enumeração (inclusive por tempo), perfil sempre ADMIN,
+ * Cobre o critério de segurança do cadastro público
+ * ({@code docs/adr/0003-cadastro-verify-first.md}): anti-enumeração
+ * (inclusive por tempo), perfil sempre ADMIN,
  * token de uso único com erro genérico, rate limit nas duas dimensões, honeypot
  * e a corrida de dois pendentes do mesmo email.
  * <p>

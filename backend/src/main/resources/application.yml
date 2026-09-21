@@ -65,7 +65,7 @@ anthropic:
 # para a tela pelo MinhaAssinaturaDTO, então nenhuma tela tem preço chumbado.
 # EXCEÇÃO: a landing e os termos de uso escrevem o número na mão (é texto
 # corrido). Mudar aqui exige mudar LandingPage.tsx e TermosPage.tsx junto —
-# o segundo é contrato de adesão. Ver PLANO-MONETIZACAO.md.
+# o segundo é contrato de adesão. Ver docs/adr/0004-preco-como-fonte-unica.md.
 assinatura:
   preco-base: ${ASSINATURA_PRECO_BASE:48.60}
   preco-loja-adicional: ${ASSINATURA_PRECO_LOJA_ADICIONAL:17.84}
@@ -76,7 +76,7 @@ assinatura:
 # (header asaas-access-token, definido ao cadastrar o webhook no painel).
 # base-url aponta para o SANDBOX por padrão — trocar para https://api.asaas.com/v3
 # em produção. api-key é a chave da API (sandbox primeiro); sem ela a criação de
-# customer/subscription via API não funciona (Fase 2 item 4 do PLANO-MONETIZACAO.md).
+# customer/subscription via API não funciona. Ver docs/adr/0004-preco-como-fonte-unica.md.
 asaas:
   base-url: ${ASAAS_BASE_URL:https://api-sandbox.asaas.com/v3}
   api-key: ${ASAAS_API_KEY:}

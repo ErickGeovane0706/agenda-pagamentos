@@ -11,7 +11,7 @@ import java.util.Set;
  * cliente na hora de assinar.
  * <p>
  * Ficam fora do cadastro público de propósito (decisão nº 2 do
- * PLANO-REGISTRO.md): pedir documento a quem ainda está decidindo se vai usar o
+ * docs/adr/0003): pedir documento a quem ainda está decidindo se vai usar o
  * sistema é a maior fricção possível no funil. São exigidos só aqui, quando ele
  * já decidiu pagar.
  */

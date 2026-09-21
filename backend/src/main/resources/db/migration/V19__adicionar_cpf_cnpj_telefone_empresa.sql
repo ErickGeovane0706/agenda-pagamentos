@@ -1,5 +1,5 @@
 -- Dados do responsável pela empresa exigidos pelo gateway (Asaas) para criar o
--- customer e emitir Pix/boleto: cpfCnpj + mobilePhone. Ver PLANO-PAGAMENTO-ASAAS.md.
+-- customer e emitir Pix/boleto: cpfCnpj + mobilePhone. Ver docs/adr/0004.
 --
 -- Nullable de propósito: empresas já existentes não possuem esses dados e não
 -- devem quebrar no deploy; os campos só são obrigatórios no momento de assinar

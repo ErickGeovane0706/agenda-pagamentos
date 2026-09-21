@@ -69,6 +69,14 @@ Perfis: `MASTER` (gestão de empresas), `ADMIN` e `OPERADOR`.
 
 ---
 
+## Decisões de arquitetura
+
+As decisões que não são óbvias no código — e que alguém tentaria "melhorar" sem saber o que
+estão segurando — estão registradas em [`docs/adr/`](docs/adr/README.md): por que o item de
+venda copia o preço em vez de lê-lo do cadastro, por que a baixa de estoque é um `UPDATE`
+condicional, por que módulo não contratado responde `403` e não `402`, por que o hash da senha
+é calculado antes da consulta ao banco.
+
 ## Estrutura
 
 ```

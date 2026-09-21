@@ -16,9 +16,9 @@ import './registro.css';
  * Cada passo grava a etapa NO SERVIDOR antes de avançar. É o que faz o wizard
  * retomar de onde parou se ele fechar a aba — "não trabalho com cheque" não
  * deixa rastro nenhum nos dados, então sem persistir o sistema perguntaria para
- * sempre (decisão nº 7 do PLANO-REGISTRO.md).
+ * sempre (ver docs/adr/0003-cadastro-verify-first.md).
  *
- * Todo passo é pulável (decisão nº 6): o cliente é dono de comércio ocupado, e
+ * Todo passo é pulável: o cliente é dono de comércio ocupado, e
  * sensação de cárcere fecha a aba.
  */
 

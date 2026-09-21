@@ -2,9 +2,9 @@ import { Link } from 'react-router-dom';
 import './registro/registro.css';
 
 /**
- * Landing pública (/comecar) — a tela que o anúncio do Facebook/Instagram deveria
- * abrir, e que hoje não existe: o tráfego cai direto no formulário de /registro
- * sem nunca dizer o que o produto faz nem quanto custa.
+ * Landing pública (/comecar) — a tela que o tráfego de anúncio abre. Existe
+ * porque mandar quem clicou direto para o formulário de cadastro é pedir dado
+ * antes de dizer o que o produto faz e quanto custa.
  *
  * NÃO é uma página "viral" — o público é dono de loja 40+, e para ele metade da
  * venda é TIRAR O MEDO, não criar desejo. Por isso o eixo é o reasseguramento
@@ -15,16 +15,15 @@ import './registro/registro.css';
  * As mensagens do mockup espelham os templates reais aprovados na Meta
  * (MensagemNotificacaoBuilder): primeiro o RESUMO, depois um ITEM por pendência.
  *
- * PLACEHOLDERS (decisão de negócio, não de código — ver POS-REGISTRO §5):
- * - marca/nome do agente ainda não decidida (o avatar da conversa usa um rótulo
- *   neutro; nada de marca gritada);
- * - a linha do fundador entra com nome/rosto quando existir;
- * - preço (R$48,60) ainda não validado com pagante — texto, não bandeira.
- *   Baixado de R$79 em 08/08 por decisão de negócio; se mudar de novo, o
- *   TermosPage e o `assinatura.preco-*` mudam junto;
- * - o TEXTO FIXO do template de RESUMO não está no código (mora no painel da
- *   Meta); o balão abaixo é uma reconstrução a partir dos parâmetros — CONFIRMAR
- *   a redação exata com o painel da Meta antes de divulgar.
+ * Dois pontos de manutenção que não se enxergam daqui:
+ *
+ * - O PREÇO está escrito à mão neste arquivo porque é texto corrido dentro de
+ *   uma frase. Mudá-lo exige mudar `TermosPage.tsx` e `assinatura.preco-*`
+ *   junto — o termo de uso é contrato de adesão, então divergir ali é problema
+ *   jurídico, não estético. Ver `docs/adr/0004-preco-como-fonte-unica.md`.
+ * - O TEXTO FIXO do template de RESUMO não está no código: mora no painel da
+ *   Meta, que é quem aprova os templates. O balão abaixo é uma reconstrução a
+ *   partir dos parâmetros, e pode divergir da redação aprovada.
  */
 /**
  * Suporte pré-venda. Quem chega do anúncio e ainda não tem conta não consegue

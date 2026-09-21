@@ -27,8 +27,9 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * Cobre o "critério de pronto" de segurança do PLANO-REGISTRO.md para o
- * fluxo de redefinição: anti-enumeração, token de uso único, rate limit
+ * Cobre o critério de segurança do fluxo de redefinição
+ * ({@code docs/adr/0003-cadastro-verify-first.md}), que vale igual aqui:
+ * anti-enumeração, token de uso único, rate limit
  * nas duas dimensões e revogação de sessões.
  */
 @ExtendWith(MockitoExtension.class)

@@ -33,7 +33,7 @@ class ApplicationContextSmokeTest {
     @Container
     @ServiceConnection
     static final PostgreSQLContainer<?> POSTGRES =
-            // Acompanha a produção (18), como os scripts de backup; ver ESTADO.md §4.
+            // Acompanha a major da produção; ver docs/adr/0002-schema-so-por-migration.md.
             new PostgreSQLContainer<>("postgres:18-alpine");
 
     /**

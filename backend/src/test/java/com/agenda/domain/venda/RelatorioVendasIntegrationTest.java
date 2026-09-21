@@ -33,9 +33,9 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * <b>O teste que justifica o plano inteiro</b> (Fase 5 do
- * {@code PLANO-PDV-ESTOQUE.md}), e o único jeito honesto de escrevê-lo é
- * contra um Postgres de verdade.
+ * <b>O teste que justifica o módulo inteiro</b>
+ * ({@code docs/adr/0007-venda-itens-congela-preco.md}), e o único jeito
+ * honesto de escrevê-lo é contra um Postgres de verdade.
  * <p>
  * Com repositório mockado ele não provaria nada: o que está sob teste não é a
  * aritmética em Java, é <b>de qual tabela a query de agregação lê o preço</b>.

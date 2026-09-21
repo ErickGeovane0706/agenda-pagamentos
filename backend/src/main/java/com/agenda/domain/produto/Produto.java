@@ -21,7 +21,7 @@ import java.util.UUID;
  * <p>
  * Produto <b>não se apaga, desativa</b> ({@code ativo = false}): produto com
  * venda registrada nunca pode sumir, senão o relatório perde a referência e a FK
- * estoura. Ver {@code PLANO-PDV-ESTOQUE.md} §5.4.
+ * estoura. Ver {@code docs/adr/0009-produto-desativa-nao-apaga.md}.
  */
 @Entity
 @Table(name = "produtos")
