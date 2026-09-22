@@ -47,9 +47,9 @@ const NUMERO_SUPORTE = String(import.meta.env.VITE_WHATSAPP_SUPORTE ?? '').repla
  *
  * Sem essa conferência, cadastrar a variável sem o DDI monta um link que
  * parece certo, abre normalmente e não chega em ninguém — e ninguém percebe,
- * porque nada quebra na tela. Já aconteceu em produção: a variável entrou
- * como `83999999999` e o botão virou `wa.me/83999999999`, que o WhatsApp lê
- * como outro país.
+ * porque nada quebra na tela. Já aconteceu em produção: a variável entrou sem
+ * o `55` e o link virou `wa.me/<DDD><número>`, que o WhatsApp lê como outro
+ * país.
  *
  * Número malformado esconde o convite, em vez de publicar um canal de suporte
  * que não existe. Ausência de botão alguém nota; botão que não leva a lugar
