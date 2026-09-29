@@ -80,7 +80,7 @@ class BoletoControllerTest {
     @Test
     void criar_DeveRetornar201() throws Exception {
         var req = new CriarBoletoRequest(UUID.randomUUID(), "Fornecedor",
-            new BigDecimal("150"), LocalDate.now().plusDays(30), null, null);
+            new BigDecimal("150"), LocalDate.now().plusDays(30), null, null, null);
         var dto = new BoletoDTO(UUID.randomUUID(), req.lojaId(), "Loja", "#1e40af",
             req.fornecedor(), req.valor(), req.vencimento(), StatusBoleto.PENDENTE,
             null, null, null, null, null, null, null);
@@ -164,7 +164,7 @@ class BoletoControllerTest {
     @Test
     void criar_DeveRetornar422QuandoDadosInvalidos() throws Exception {
         var req = new CriarBoletoRequest(null, "",
-            null, null, null, null);
+            null, null, null, null, null);
 
         mockMvc.perform(post("/api/boletos")
                 .with(user("admin@teste.com").roles("ADMIN"))

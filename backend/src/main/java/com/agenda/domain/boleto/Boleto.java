@@ -58,6 +58,13 @@ public class Boleto {
     @Column(name = "codigo_barras", columnDefinition = "TEXT")
     private String codigoBarras;
 
+    /**
+     * {@code codigoBarras} reduzido aos 44 dígitos, qualquer que seja a forma
+     * digitada — é a chave da detecção de duplicata. Derivado, nunca setar à mão.
+     */
+    @Column(name = "codigo_normalizado", length = 44)
+    private String codigoNormalizado;
+
     @Column(name = "url_arquivo")
     private String urlArquivo;
 
@@ -82,6 +89,12 @@ public class Boleto {
     @Builder.Default
     private LocalDateTime atualizadoEm = LocalDateTime.now();
 
+    @PrePersist
+    void prePersist() { this.codigoNormalizado = CodigoBoleto.normalizar(codigoBarras); }
+
     @PreUpdate
-    void preUpdate() { this.atualizadoEm = LocalDateTime.now(); }
+    void preUpdate() {
+        this.atualizadoEm = LocalDateTime.now();
+        this.codigoNormalizado = CodigoBoleto.normalizar(codigoBarras);
+    }
 }

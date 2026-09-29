@@ -20,6 +20,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
 /**
@@ -38,6 +39,8 @@ public class BoletoService {
     private final LojaRepository lojaRepository;
     private final ArquivoService arquivoService;
     private final AuditoriaService auditoriaService;
+
+    private static final DateTimeFormatter DATA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     /**
      * Lista paginada com filtros dinâmicos via {@link BoletoSpecification}.
@@ -121,6 +124,18 @@ public class BoletoService {
         var loja = lojaRepository.findById(req.lojaId())
                 .orElseThrow(() -> new NotFoundException("Loja não encontrada"));
         if (!loja.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
+
+        String codigo = CodigoBoleto.normalizar(req.codigoBarras());
+        if (codigo != null && !Boolean.TRUE.equals(req.confirmarDuplicado())) {
+            boletoRepository.findFirstByEmpresa_IdAndCodigoNormalizadoOrderByCriadoEmAsc(empresaId, codigo)
+                    .ifPresent(existente -> {
+                        throw new BoletoDuplicadoException(String.format(
+                                "Este boleto já foi cadastrado em %s na loja %s (%s, vence em %s).",
+                                existente.getCriadoEm().format(DATA), existente.getLoja().getNome(),
+                                existente.getStatus().name().toLowerCase(),
+                                existente.getVencimento().format(DATA)));
+                    });
+        }
 
         var boleto = Boleto.builder()
                 .empresa(loja.getEmpresa())
