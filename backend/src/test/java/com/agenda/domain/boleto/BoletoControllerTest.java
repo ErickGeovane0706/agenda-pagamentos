@@ -96,6 +96,47 @@ class BoletoControllerTest {
             .andExpect(jsonPath("$.fornecedor").value("Fornecedor"));
     }
 
+    /** O front só oferece "cadastrar mesmo assim?" se receber 409 com a mensagem. */
+    @Test
+    void criar_BoletoDuplicado_Retorna409ComAMensagem() throws Exception {
+        var req = new CriarBoletoRequest(UUID.randomUUID(), "Fornecedor",
+            new BigDecimal("150"), LocalDate.now().plusDays(30), "00193373700000001000500940144816060680935031", null, null);
+        when(boletoService.criar(any())).thenThrow(new BoletoDuplicadoException(
+            "Este boleto já foi cadastrado em 12/09/2026 na loja Centro (pendente, vence em 05/10/2026)."));
+
+        mockMvc.perform(post("/api/boletos")
+                .with(user("operador@teste.com").roles("OPERADOR"))
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(req)))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.mensagem").value(
+                "Este boleto já foi cadastrado em 12/09/2026 na loja Centro (pendente, vence em 05/10/2026)."));
+    }
+
+    /** A confirmação do usuário precisa chegar do JSON ao service — é ela que libera o salvar. */
+    @Test
+    void criar_ConfirmarDuplicadoChegaAoService() throws Exception {
+        var dto = new BoletoDTO(UUID.randomUUID(), UUID.randomUUID(), "Loja", "#1e40af",
+            "Fornecedor", new BigDecimal("150"), LocalDate.now(), StatusBoleto.PENDENTE,
+            null, null, null, null, null, null, null);
+        when(boletoService.criar(any())).thenReturn(dto);
+
+        mockMvc.perform(post("/api/boletos")
+                .with(user("operador@teste.com").roles("OPERADOR"))
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"lojaId":"%s","fornecedor":"Fornecedor","valor":150,"vencimento":"2026-10-05",
+                     "codigoBarras":"00193373700000001000500940144816060680935031","confirmarDuplicado":true}
+                    """.formatted(UUID.randomUUID())))
+            .andExpect(status().isOk());
+
+        var captor = ArgumentCaptor.forClass(CriarBoletoRequest.class);
+        verify(boletoService).criar(captor.capture());
+        assertEquals(Boolean.TRUE, captor.getValue().confirmarDuplicado());
+    }
+
     @Test
     void editar_DeveRetornar200() throws Exception {
         var id = UUID.randomUUID();

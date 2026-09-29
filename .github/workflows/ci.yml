@@ -53,8 +53,12 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: npm test
+        working-directory: frontend
+        run: npm test
+
       # `npm run build` roda `tsc -b` antes do Vite, entao este passo e o
-      # typecheck do frontend — que e toda a verificacao que ele tem hoje.
+      # typecheck do frontend.
       - name: npm run build
         working-directory: frontend
         run: npm run build
