@@ -10,6 +10,8 @@ import java.util.UUID;
  * <p>
  * {@code lojaId}, {@code fornecedor}, {@code valor} e {@code vencimento} são obrigatórios.
  * {@code codigoBarras} e {@code observacoes} são opcionais.
+ * {@code confirmarDuplicado = true} é a resposta do usuário ao aviso de boleto
+ * já cadastrado (409): grava mesmo assim.
  * </p>
  */
 public record CriarBoletoRequest(
@@ -18,5 +20,6 @@ public record CriarBoletoRequest(
     @NotNull @DecimalMin("0.01") BigDecimal valor,
     @NotNull LocalDate vencimento,
     String codigoBarras,
-    String observacoes
+    String observacoes,
+    Boolean confirmarDuplicado
 ) {}

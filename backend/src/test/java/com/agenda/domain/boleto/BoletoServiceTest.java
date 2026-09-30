@@ -63,7 +63,7 @@ class BoletoServiceTest {
     @Test
     void criar_DeveSalvarBoleto() {
         var req = new CriarBoletoRequest(loja.getId(), "Fornecedor X",
-            new BigDecimal("150.00"), LocalDate.now().plusDays(30), null, null);
+            new BigDecimal("150.00"), LocalDate.now().plusDays(30), null, null, null);
 
         when(lojaRepository.findById(loja.getId())).thenReturn(Optional.of(loja));
         when(boletoRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -82,7 +82,7 @@ class BoletoServiceTest {
         var outraEmpresa = Empresa.builder().id(UUID.randomUUID()).build();
         var lojaOutra = Loja.builder().id(UUID.randomUUID()).empresa(outraEmpresa).build();
         var req = new CriarBoletoRequest(lojaOutra.getId(), "Fornecedor X",
-            new BigDecimal("100"), LocalDate.now(), null, null);
+            new BigDecimal("100"), LocalDate.now(), null, null, null);
 
         when(lojaRepository.findById(lojaOutra.getId())).thenReturn(Optional.of(lojaOutra));
 
@@ -124,6 +124,74 @@ class BoletoServiceTest {
         assertEquals("Novo Fornecedor", result.fornecedor());
         assertEquals(0, new BigDecimal("200").compareTo(result.valor()));
         verify(auditoriaService).registrar(eq("EDITAR"), eq("BOLETO"), eq(boleto.getId()), anyString());
+    }
+
+    // ─── Boleto duplicado ────────────────────────────────────────────────────
+    // Mesmo boleto em formas diferentes: o existente foi lido pela câmera (44),
+    // o novo foi digitado a partir do papel (47, com pontos e espaços).
+    private static final String BARRAS = "00193373700000001000500940144816060680935031";
+    private static final String LINHA = "00190.50095 40144.816069 06809.350314 3 37370000000100";
+
+    @Test
+    void criar_ComCodigoJaCadastradoNaEmpresa_AvisaSemSalvar() {
+        var existente = Boleto.builder()
+            .id(UUID.randomUUID()).empresa(empresa).loja(loja)
+            .fornecedor("Fornecedor X").valor(new BigDecimal("100"))
+            .vencimento(LocalDate.of(2026, 10, 5)).codigoBarras(BARRAS)
+            .criadoEm(java.time.LocalDateTime.of(2026, 9, 12, 10, 0))
+            .build();
+        var req = new CriarBoletoRequest(loja.getId(), "Fornecedor X",
+            new BigDecimal("100"), LocalDate.of(2026, 10, 5), LINHA, null, null);
+
+        when(lojaRepository.findById(loja.getId())).thenReturn(Optional.of(loja));
+        when(boletoRepository.findFirstByEmpresa_IdAndCodigoNormalizadoOrderByCriadoEmAsc(empresa.getId(), BARRAS))
+            .thenReturn(Optional.of(existente));
+
+        var ex = assertThrows(BoletoDuplicadoException.class, () -> boletoService.criar(req));
+
+        assertTrue(ex.getMessage().contains("12/09/2026"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("Loja Teste"), ex.getMessage());
+        verify(boletoRepository, never()).save(any());
+    }
+
+    @Test
+    void criar_DuplicadoConfirmadoPeloUsuario_Salva() {
+        var req = new CriarBoletoRequest(loja.getId(), "Fornecedor X",
+            new BigDecimal("100"), LocalDate.of(2026, 10, 5), LINHA, null, true);
+
+        when(lojaRepository.findById(loja.getId())).thenReturn(Optional.of(loja));
+        when(boletoRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        boletoService.criar(req);
+
+        verify(boletoRepository).save(any());
+        verify(boletoRepository, never()).findFirstByEmpresa_IdAndCodigoNormalizadoOrderByCriadoEmAsc(any(), any());
+    }
+
+    @Test
+    void criar_ComCodigoInedito_Salva() {
+        var req = new CriarBoletoRequest(loja.getId(), "Fornecedor X",
+            new BigDecimal("100"), LocalDate.of(2026, 10, 5), LINHA, null, null);
+
+        when(lojaRepository.findById(loja.getId())).thenReturn(Optional.of(loja));
+        when(boletoRepository.findFirstByEmpresa_IdAndCodigoNormalizadoOrderByCriadoEmAsc(empresa.getId(), BARRAS))
+            .thenReturn(Optional.empty());
+        when(boletoRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        boletoService.criar(req);
+
+        verify(boletoRepository).save(any());
+    }
+
+    @Test
+    void boleto_GuardaOCodigoNormalizadoAoSalvarEAoEditar() {
+        var boleto = Boleto.builder().codigoBarras(LINHA).build();
+        boleto.prePersist();
+        assertEquals(BARRAS, boleto.getCodigoNormalizado());
+
+        boleto.setCodigoBarras(null);
+        boleto.preUpdate();
+        assertNull(boleto.getCodigoNormalizado());
     }
 
     @Test

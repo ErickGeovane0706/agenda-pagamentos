@@ -180,6 +180,10 @@ export function ModalLeitorCodigo({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [paginasPDF, setPaginasPDF] = useState<string[]>([]);
   const [pdfRef, setPdfRef] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
+  // PDF com senha esperando o usuário digitá-la. A senha só vive aqui e no
+  // pdf.js — o PDF é aberto no navegador, nada disso vai ao servidor.
+  const [pdfProtegido, setPdfProtegido] = useState<{ file: File; senhaErrada: boolean } | null>(null);
+  const [senhaPdf, setSenhaPdf] = useState('');
   const [paginaCarregando, setPaginaCarregando] = useState<number | null>(null);
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [cameraStarted, setCameraStarted] = useState(false);
@@ -345,12 +349,14 @@ export function ModalLeitorCodigo({
       setPreviewUrl(null);
       setPaginasPDF([]);
       setPdfRef(null);
+      setPdfProtegido(null);
     } else {
       setAba(APARELHO_DE_TOQUE ? 'camera' : 'imagem');
       resultadoRef.current = null;
       setPreviewUrl(null);
       setPaginasPDF([]);
       setPdfRef(null);
+      setPdfProtegido(null);
       // Pré-carrega worker ao abrir (sem bloqueio)
       getWorker().catch(() => {});
     }
@@ -633,7 +639,7 @@ export function ModalLeitorCodigo({
     }
   }
 
-  async function lerDePDF(file: File) {
+  async function lerDePDF(file: File, senha?: string) {
     log(`Arquivo: ${file.name} | Tamanho: ${(file.size / 1024).toFixed(0)}KB`);
     setLendo(true);
 
@@ -642,7 +648,8 @@ export function ModalLeitorCodigo({
       const buffer = await file.arrayBuffer();
       log('ArrayBuffer OK. Carregando PDF...');
 
-      const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+      const pdf = await pdfjsLib.getDocument({ data: buffer, password: senha }).promise;
+      setPdfProtegido(null);
       log(`PDF carregado: ${pdf.numPages} página(s)`);
 
       if (pdf.numPages === 1) {
@@ -672,6 +679,12 @@ export function ModalLeitorCodigo({
       log('Seletor de páginas exibido');
     } catch (err: any) {
       log(`ERRO lerDePDF: ${err?.name} - ${err?.message}`);
+      // Sem senha (NEED_PASSWORD) ou senha errada (INCORRECT_PASSWORD): pede a senha.
+      if (err?.name === 'PasswordException') {
+        setSenhaPdf('');
+        setPdfProtegido({ file, senhaErrada: err.code === pdfjsLib.PasswordResponses.INCORRECT_PASSWORD });
+        return;
+      }
       addToast('error', `Erro ao processar PDF: ${err?.message || 'desconhecido'}`);
     } finally {
       setLendo(false);
@@ -786,7 +799,7 @@ export function ModalLeitorCodigo({
                   <div className="space-y-4">
 
                     {/* Seletor de arquivo — escondido enquanto seletor de páginas PDF estiver ativo */}
-                    {paginasPDF.length === 0 && (
+                    {paginasPDF.length === 0 && !(pdfProtegido && aba === 'pdf') && (
                         <label
                             htmlFor="file-input"
                             className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center cursor-pointer hover:border-[#0ea5e9] transition-colors block"
@@ -805,6 +818,47 @@ export function ModalLeitorCodigo({
                               </>
                           )}
                         </label>
+                    )}
+
+                    {pdfProtegido && aba === 'pdf' && (
+                        <form
+                            onSubmit={(e) => { e.preventDefault(); lerDePDF(pdfProtegido.file, senhaPdf); }}
+                            className="space-y-3"
+                        >
+                          <div>
+                            <p className="text-sm font-semibold text-slate-700">Este PDF tem senha</p>
+                            <p className="text-xs text-slate-400 mt-0.5">
+                              Digite a senha para abrir. Ela não sai do seu aparelho.
+                            </p>
+                          </div>
+                          <input
+                              type="password"
+                              autoFocus
+                              value={senhaPdf}
+                              onChange={(e) => setSenhaPdf(e.target.value)}
+                              placeholder="Senha do PDF"
+                              className="w-full px-4 py-3 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9]"
+                          />
+                          {pdfProtegido.senhaErrada && (
+                              <p className="text-red-500 text-xs">Senha incorreta. Tente de novo.</p>
+                          )}
+                          <div className="flex gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setPdfProtegido(null)}
+                                className="flex-1 px-4 py-3 border border-slate-200 rounded-xl text-sm font-medium text-slate-600"
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={lendo || !senhaPdf}
+                                className="flex-1 px-4 py-3 bg-[#0c4a6e] text-white rounded-xl text-sm font-medium disabled:opacity-50"
+                            >
+                              {lendo ? 'Abrindo...' : 'Abrir PDF'}
+                            </button>
+                          </div>
+                        </form>
                     )}
 
                     {previewUrl && aba === 'imagem' && (

@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -19,6 +20,9 @@ import java.util.UUID;
 public interface BoletoRepository extends JpaRepository<Boleto, UUID>, JpaSpecificationExecutor<Boleto> {
 
     List<Boleto> findByEmpresa_Id(UUID empresaId);
+
+    /** Boleto mais antigo da empresa com o mesmo código → aviso de duplicata. Usa o índice da V26. */
+    Optional<Boleto> findFirstByEmpresa_IdAndCodigoNormalizadoOrderByCriadoEmAsc(UUID empresaId, String codigoNormalizado);
 
     /**
      * Agrupa boletos por status no período — usado pelo dashboard

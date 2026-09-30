@@ -239,13 +239,15 @@ Três que não se explicam sozinhas:
 ## Testes
 
 ```bash
-cd backend && mvn test          # 397 testes
+cd backend && mvn test          # 407 testes
+cd frontend && npm test         # Vitest + Testing Library (jsdom)
 cd frontend && npm run build    # typecheck (tsc -b) + build
 ```
 
 O backend tem cobertura de serviço e controller nos caminhos que importam: isolamento
 multi-tenant, agente de WhatsApp, validação de upload, JWT, scheduler, estoque e relatório.
-O frontend **não tem suíte de testes** — a verificação é o typecheck e o build.
+O frontend tem testes de componente só onde há regra de tela: o PDF com senha no leitor e o
+aviso de boleto duplicado. O resto segue verificado pelo typecheck e pelo build.
 
 ⚠️ **`mvn test` exige o Docker ligado.** Os testes de schema e de relatório sobem um Postgres
 real via Testcontainers, porque são a única forma honesta de provar que as migrations aplicam

@@ -4,7 +4,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation } from '@tanstack/react-query';
 import { X, ScanLine } from 'lucide-react';
+import { AxiosError } from 'axios';
 import api from '../../api/client';
+import { mensagemDoErro } from '../../utils/erroApi';
 import { Boleto } from '../../types';
 import { ModalLeitorCodigo } from './ModalLeitorCodigo';
 
@@ -51,7 +53,7 @@ export function ModalBoleto({
   });
 
   const mutation = useMutation({
-    mutationFn: (data: FormData) => {
+    mutationFn: ({ data, confirmarDuplicado }: { data: FormData; confirmarDuplicado?: boolean }): Promise<unknown> => {
       const payload = {
         lojaId: data.lojaId,
         fornecedor: data.fornecedor,
@@ -62,9 +64,18 @@ export function ModalBoleto({
       };
       return boleto
         ? api.put(`/boletos/${boleto.id}`, payload)
-        : api.post('/boletos', payload);
+        : api.post('/boletos', { ...payload, confirmarDuplicado });
     },
     onSuccess: onSalvo,
+    // 409 = código já cadastrado na empresa. É aviso, não bloqueio: quem está
+    // cadastrando decide, e confirmar reenvia o mesmo formulário.
+    onError: (erro, { data }) => {
+      if ((erro as AxiosError).response?.status !== 409) return;
+      const aviso = mensagemDoErro(erro, 'Este boleto já foi cadastrado.');
+      if (confirm(`${aviso}\n\nCadastrar mesmo assim?`)) {
+        mutation.mutate({ data, confirmarDuplicado: true });
+      }
+    },
   });
 
   useEffect(() => {
@@ -84,7 +95,7 @@ export function ModalBoleto({
           </div>
           
           <div className="flex-1 overflow-y-auto overscroll-contain px-6 min-h-0">
-            <form id="boleto-form" onSubmit={handleSubmit(d => mutation.mutate(d))} className="space-y-4 py-4">
+            <form id="boleto-form" onSubmit={handleSubmit(d => mutation.mutate({ data: d }))} className="space-y-4 py-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Fornecedor</label>
                 <input {...register('fornecedor')} placeholder="Nome do fornecedor"

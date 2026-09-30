@@ -74,6 +74,15 @@ public class RestExceptionHandler {
     }
 
     /**
+     * Boleto com código já cadastrado na empresa → 409 CONFLICT.
+     * O front trata como aviso: mostra a mensagem e deixa o usuário confirmar.
+     */
+    @ExceptionHandler(com.agenda.domain.boleto.BoletoDuplicadoException.class)
+    public ResponseEntity<ErrorResponse> handleBoletoDuplicado(com.agenda.domain.boleto.BoletoDuplicadoException ex) {
+        return error(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    /**
      * Argumento inválido → 400 BAD_REQUEST.
      * Ex.: UUID mal formatado, parâmetro obrigatório ausente.
      */
