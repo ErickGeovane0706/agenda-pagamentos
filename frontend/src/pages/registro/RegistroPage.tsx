@@ -7,7 +7,7 @@ import { useMutation } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
 import api from '../../api/client';
 import Turnstile from '../../components/Turnstile';
-import { pixelEvento } from '../../pixel';
+import { rastrear } from '../../rastreamento';
 import './registro.css';
 
 /**
@@ -70,7 +70,7 @@ export default function RegistroPage() {
       // Serve também de volume para o aprendizado da Meta, que precisa de
       // dezenas de conversões por semana e não teria isso só com cadastros
       // confirmados.
-      pixelEvento('Lead');
+      rastrear('cadastroEnviado');
     },
   });
 

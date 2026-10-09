@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import api from '../../api/client';
 import { useAuthStore } from '../../store/authStore';
-import { pixelEvento } from '../../pixel';
+import { rastrear } from '../../rastreamento';
 import './registro.css';
 
 /**
@@ -71,14 +71,14 @@ export default function ConfirmarRegistroPage() {
           window.setTimeout(() => {
             navigate(destino, { replace: true });
             // Só DEPOIS do navigate: aqui a URL já é /bem-vindo, sem o token que
-            // vinha na query string. O pixel manda a URL corrente junto com o
-            // evento, e disparar antes entregaria o token à Meta.
+            // vinha na query string. Disparado antes, o evento seria descartado:
+            // com token na URL nenhum pixel carrega (ver src/rastreamento).
             //
             // Este é o ponto exato em que a conta passa a existir — a transação
             // do backend já criou empresa, loja, usuário e trial. É o evento que
             // a campanha otimiza: esperar a assinatura daria menos de um evento
             // por semana, e o algoritmo nunca sairia do aprendizado.
-            pixelEvento('CompleteRegistration');
+            rastrear('cadastroConfirmado');
           }, 600);
         }, Math.max(restante, 0));
       })
