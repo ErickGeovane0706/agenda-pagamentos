@@ -266,7 +266,7 @@ function LojaCard({
       <div className="h-2 w-full" style={{ backgroundColor: loja.cor }} />
 
       {perfil === 'ADMIN' && (
-        <div className="absolute top-4 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="absolute top-4 right-3 flex gap-1">
           <button
             onClick={(e) => { e.stopPropagation(); onEditar(); }}
             className="p-2 rounded-lg bg-white/90 hover:bg-slate-100 shadow-sm"
@@ -293,7 +293,7 @@ function LojaCard({
           <Store className="w-6 h-6" style={{ color: loja.cor }} />
         </div>
 
-        <div className="flex-1 min-w-0">
+        <div className={`flex-1 min-w-0 ${perfil === 'ADMIN' ? 'pr-16' : ''}`}>
           <p className="font-semibold text-slate-900 truncate">{loja.nome}</p>
           {loja.cnpj && (
             <p className="text-xs text-slate-400 mt-0.5">{loja.cnpj}</p>
@@ -303,7 +303,7 @@ function LojaCard({
           )}
         </div>
 
-        <ChevronRight className="w-4 h-4 text-slate-300 flex-shrink-0" />
+        {perfil !== 'ADMIN' && <ChevronRight className="w-4 h-4 text-slate-300 flex-shrink-0" />}
       </button>
     </div>
   );
