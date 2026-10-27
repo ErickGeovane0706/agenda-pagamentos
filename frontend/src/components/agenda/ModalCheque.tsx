@@ -1,11 +1,12 @@
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import api from '../../api/client';
 import { Cheque, Banco } from '../../types';
+import { SeletorBanco } from './SeletorBanco';
 
 const schema = z.object({
   lojaId: z.string().min(1, 'Selecione uma loja'),
@@ -35,7 +36,7 @@ export function ModalCheque({
     queryFn: () => api.get('/bancos').then(r => r.data),
   });
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, control, getValues, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: cheque ? {
       lojaId: cheque.lojaId,
@@ -73,6 +74,13 @@ export function ModalCheque({
     },
     onSuccess: onSalvo,
   });
+
+  // Com um banco só não há o que escolher: já vem preenchido no cheque novo.
+  useEffect(() => {
+    if (!cheque && bancos?.length === 1 && !getValues('bancoId')) {
+      setValue('bancoId', bancos[0].id);
+    }
+  }, [cheque, bancos, getValues, setValue]);
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
@@ -120,13 +128,13 @@ export function ModalCheque({
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Banco</label>
-                <select {...register('bancoId')}
-                        className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9]">
-                  <option value="">Selecione um banco</option>
-                  {bancos?.map(b => (
-                      <option key={b.id} value={b.id}>{b.nome}</option>
-                  ))}
-                </select>
+                <Controller
+                    control={control}
+                    name="bancoId"
+                    render={({ field }) => (
+                        <SeletorBanco bancos={bancos ?? []} value={field.value} onChange={field.onChange} />
+                    )}
+                />
                 {errors.bancoId && <p className="text-red-500 text-xs mt-1">{errors.bancoId.message}</p>}
               </div>
 

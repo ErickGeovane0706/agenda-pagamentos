@@ -91,6 +91,8 @@ export interface Banco {
   id: string;
   nome: string;
   codigo?: string;
+  agencia?: string;
+  conta?: string;
   ativo: boolean;
 }
 

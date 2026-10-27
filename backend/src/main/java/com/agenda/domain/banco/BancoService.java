@@ -45,7 +45,8 @@ public class BancoService {
     public BancoDTO criar(CriarBancoRequest req) {
         UUID empresaId = TenantContext.getEmpresaId();
         var empresa = empresaRepository.getReferenceById(empresaId);
-        var banco = Banco.builder().empresa(empresa).nome(req.nome()).codigo(req.codigo()).build();
+        var banco = Banco.builder().empresa(empresa).nome(req.nome()).codigo(req.codigo())
+            .agencia(vazioViraNulo(req.agencia())).conta(vazioViraNulo(req.conta())).build();
         banco = bancoRepository.save(banco);
         auditoriaService.registrar("CRIAR", "BANCO", banco.getId(), "Nome: " + req.nome());
         return BancoDTO.from(banco);
@@ -64,6 +65,8 @@ public class BancoService {
         if (!banco.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
         banco.setNome(req.nome());
         banco.setCodigo(req.codigo());
+        banco.setAgencia(vazioViraNulo(req.agencia()));
+        banco.setConta(vazioViraNulo(req.conta()));
         banco = bancoRepository.save(banco);
         auditoriaService.registrar("EDITAR", "BANCO", banco.getId(), "Nome: " + req.nome());
         return BancoDTO.from(banco);
@@ -81,5 +84,10 @@ public class BancoService {
         if (!banco.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
         bancoRepository.delete(banco);
         auditoriaService.registrar("EXCLUIR", "BANCO", id, "Nome: " + banco.getNome());
+    }
+
+    /** O formulário manda "" no campo vazio; guardado assim, a tela mostraria "Ag " sem número. */
+    private static String vazioViraNulo(String s) {
+        return s == null || s.isBlank() ? null : s.trim();
     }
 }

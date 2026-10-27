@@ -29,6 +29,12 @@ public class Banco {
     @Column(length = 10)
     private String codigo;
 
+    @Column(length = 10)
+    private String agencia;
+
+    @Column(length = 20)
+    private String conta;
+
     @Column(nullable = false)
     @Builder.Default
     private Boolean ativo = true;
