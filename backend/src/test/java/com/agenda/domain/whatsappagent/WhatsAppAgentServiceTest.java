@@ -207,7 +207,7 @@ class WhatsAppAgentServiceTest {
         preferencia.setLojaIds(java.util.Set.of(lojaPermitida.getId()));
 
         when(preferenciaRepository.findByTelefoneNormalizadoIn(List.of("5583999990000", "558399990000"))).thenReturn(List.of(preferencia));
-        when(lojaRepository.findByEmpresaIdOrderByNome(empresa.getId())).thenReturn(List.of(lojaPermitida, lojaNaoPermitida));
+        when(lojaRepository.findByEmpresaIdOrderByOrdemAscNomeAsc(empresa.getId())).thenReturn(List.of(lojaPermitida, lojaNaoPermitida));
         when(classifierService.classificar(any(), any())).thenReturn(
                 ResultadoClassificacao.builder()
                         .intencao(IntencaoAgente.CONSULTAR_PENDENCIAS)

@@ -43,7 +43,7 @@ public class LgpdService {
         var empresa = empresaRepository.findById(empresaId)
             .orElseThrow(() -> new NotFoundException("Empresa não encontrada"));
 
-        java.util.List<LojaLgpd> lojas = lojaRepository.findByEmpresaIdOrderByNome(empresaId).stream()
+        java.util.List<LojaLgpd> lojas = lojaRepository.findByEmpresaIdOrderByOrdemAscNomeAsc(empresaId).stream()
             .map(l -> new LojaLgpd(l.getId().toString(), l.getNome(), l.getCnpj(), l.getDescricao()))
             .toList();
 

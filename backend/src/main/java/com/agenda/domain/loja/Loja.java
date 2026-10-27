@@ -40,6 +40,11 @@ public class Loja {
     @Builder.Default
     private Boolean ativo = true;
 
+    /** Posição na lista de lojas, escolhida pelo cliente (0 = primeira). */
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer ordem = 0;
+
     @Column(name = "criado_em", nullable = false, updatable = false)
     @Builder.Default
     private LocalDateTime criadoEm = LocalDateTime.now();

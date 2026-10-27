@@ -36,6 +36,14 @@ public class LojaController {
         return ResponseEntity.ok(lojaService.criar(req));
     }
 
+    /** Recebe os IDs de todas as lojas da empresa, na ordem em que devem aparecer. */
+    @PutMapping("/ordem")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> reordenar(@RequestBody List<UUID> idsNaOrdem) {
+        lojaService.reordenar(idsNaOrdem);
+        return ResponseEntity.noContent().build();
+    }
+
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<LojaDTO> editar(@PathVariable UUID id,

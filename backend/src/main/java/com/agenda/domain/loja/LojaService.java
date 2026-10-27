@@ -31,7 +31,7 @@ public class LojaService {
     @Transactional(readOnly = true)
     public List<LojaDTO> listar() {
         UUID empresaId = TenantContext.getEmpresaId();
-        return lojaRepository.findByEmpresaIdOrderByNome(empresaId)
+        return lojaRepository.findByEmpresaIdOrderByOrdemAscNomeAsc(empresaId)
             .stream().map(LojaDTO::from).toList();
     }
 
@@ -81,6 +81,7 @@ public class LojaService {
             .cnpj(req.cnpj())
             .descricao(req.descricao())
             .cor(req.cor() != null ? req.cor() : "#3B82F6")
+            .ordem((int) lojasExistentes) // loja nova entra no fim da lista
             .build();
         loja = lojaRepository.save(loja);
         auditoriaService.registrar("CRIAR", "LOJA", loja.getId(), "Nome: " + req.nome());
@@ -103,6 +104,26 @@ public class LojaService {
         loja = lojaRepository.save(loja);
         auditoriaService.registrar("EDITAR", "LOJA", loja.getId(), "Nome: " + req.nome());
         return LojaDTO.from(loja);
+    }
+
+    @Transactional
+    public void reordenar(List<UUID> idsNaOrdem) {
+        UUID empresaId = TenantContext.getEmpresaId();
+        var lojas = lojaRepository.findByEmpresaIdOrderByOrdemAscNomeAsc(empresaId);
+        // A lista tem de ser exatamente as lojas da empresa, cada uma uma vez:
+        // é o que impede mexer em loja de outra empresa e deixar posição furada.
+        var porId = new java.util.HashMap<UUID, Loja>();
+        lojas.forEach(l -> porId.put(l.getId(), l));
+        if (idsNaOrdem.size() != lojas.size()
+                || !porId.keySet().equals(new java.util.HashSet<>(idsNaOrdem))) {
+            throw new IllegalArgumentException("A lista precisa conter todas as lojas da empresa, sem repetir.");
+        }
+
+        for (int i = 0; i < idsNaOrdem.size(); i++) {
+            porId.get(idsNaOrdem.get(i)).setOrdem(i);
+        }
+        lojaRepository.saveAll(lojas);
+        auditoriaService.registrar("REORDENAR", "LOJA", null, lojas.size() + " lojas");
     }
 
     @Transactional

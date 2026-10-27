@@ -10,6 +10,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -47,7 +48,7 @@ class LojaServiceTest {
     @Test
     void listar_DeveRetornarApenasLojasDaEmpresa() {
         var loja = Loja.builder().id(UUID.randomUUID()).empresa(empresa).nome("Loja A").cor("#1e40af").build();
-        when(lojaRepository.findByEmpresaIdOrderByNome(empresa.getId()))
+        when(lojaRepository.findByEmpresaIdOrderByOrdemAscNomeAsc(empresa.getId()))
             .thenReturn(List.of(loja));
 
         var result = lojaService.listar();
@@ -131,5 +132,56 @@ class LojaServiceTest {
 
         assertThrows(RuntimeException.class, () -> lojaService.excluir(loja.getId()));
         verify(lojaRepository, never()).delete(any());
+    }
+
+    @Test
+    void criar_DeveColocarLojaNovaNoFimDaOrdem() {
+        var req = new CriarLojaRequest("Loja Nova", null, null, null);
+        when(lojaRepository.countByEmpresaId(empresa.getId())).thenReturn(3L);
+        when(assinaturaService.podeCriarLoja(empresa.getId(), 3L)).thenReturn(true);
+        when(empresaRepository.getReferenceById(empresa.getId())).thenReturn(empresa);
+        when(lojaRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        lojaService.criar(req);
+
+        var captor = ArgumentCaptor.forClass(Loja.class);
+        verify(lojaRepository).save(captor.capture());
+        assertEquals(3, captor.getValue().getOrdem());
+    }
+
+    @Test
+    void reordenar_DeveGravarAPosicaoDeCadaLoja() {
+        var a = Loja.builder().id(UUID.randomUUID()).empresa(empresa).nome("A").ordem(0).build();
+        var b = Loja.builder().id(UUID.randomUUID()).empresa(empresa).nome("B").ordem(1).build();
+        var c = Loja.builder().id(UUID.randomUUID()).empresa(empresa).nome("C").ordem(2).build();
+        when(lojaRepository.findByEmpresaIdOrderByOrdemAscNomeAsc(empresa.getId())).thenReturn(List.of(a, b, c));
+
+        lojaService.reordenar(List.of(c.getId(), a.getId(), b.getId()));
+
+        assertEquals(0, c.getOrdem());
+        assertEquals(1, a.getOrdem());
+        assertEquals(2, b.getOrdem());
+        verify(lojaRepository).saveAll(anyList());
+    }
+
+    @Test
+    void reordenar_DeveRecusarListaQueNaoForExatamenteAsLojasDaEmpresa() {
+        var a = Loja.builder().id(UUID.randomUUID()).empresa(empresa).nome("A").ordem(0).build();
+        var b = Loja.builder().id(UUID.randomUUID()).empresa(empresa).nome("B").ordem(1).build();
+        when(lojaRepository.findByEmpresaIdOrderByOrdemAscNomeAsc(empresa.getId())).thenReturn(List.of(a, b));
+
+        // Loja de outra empresa no lugar da B: o tamanho bate, o conjunto não.
+        assertThrows(IllegalArgumentException.class,
+            () -> lojaService.reordenar(List.of(a.getId(), UUID.randomUUID())));
+        // Faltando uma loja.
+        assertThrows(IllegalArgumentException.class,
+            () -> lojaService.reordenar(List.of(a.getId())));
+        // A mesma loja duas vezes.
+        assertThrows(IllegalArgumentException.class,
+            () -> lojaService.reordenar(List.of(a.getId(), a.getId())));
+
+        verify(lojaRepository, never()).saveAll(anyList());
+        assertEquals(0, a.getOrdem());
+        assertEquals(1, b.getOrdem());
     }
 }

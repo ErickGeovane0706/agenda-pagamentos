@@ -6,9 +6,10 @@ import java.util.UUID;
 
 /**
  * Repository de Loja. A listagem é sempre filtrada por empresa
- * (isolamento multi-tenant) e ordenada alfabeticamente.
+ * (isolamento multi-tenant) e segue a ordem escolhida pelo cliente,
+ * com o nome desempatando.
  */
 public interface LojaRepository extends JpaRepository<Loja, UUID> {
-    List<Loja> findByEmpresaIdOrderByNome(UUID empresaId);
+    List<Loja> findByEmpresaIdOrderByOrdemAscNomeAsc(UUID empresaId);
     long countByEmpresaId(UUID empresaId);
 }

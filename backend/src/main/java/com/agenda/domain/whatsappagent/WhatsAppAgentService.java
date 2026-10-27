@@ -723,7 +723,7 @@ public class WhatsAppAgentService {
         if (nomeLoja == null || nomeLoja.isBlank()) {
             return null;
         }
-        List<Loja> lojas = lojaRepository.findByEmpresaIdOrderByNome(empresaId);
+        List<Loja> lojas = lojaRepository.findByEmpresaIdOrderByOrdemAscNomeAsc(empresaId);
         String termo = nomeLoja.trim().toLowerCase();
 
         return lojas.stream()
