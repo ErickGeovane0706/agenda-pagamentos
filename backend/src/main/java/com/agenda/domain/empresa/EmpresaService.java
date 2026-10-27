@@ -115,7 +115,7 @@ public class EmpresaService {
         if (!usuarios.isEmpty()) {
             motivos.add(usuarios.size() + " usuário(s)");
         }
-        var lojas = lojaRepository.findByEmpresaIdOrderByNome(id);
+        var lojas = lojaRepository.findByEmpresaIdOrderByOrdemAscNomeAsc(id);
         if (!lojas.isEmpty()) {
             motivos.add(lojas.size() + " loja(s)");
         }

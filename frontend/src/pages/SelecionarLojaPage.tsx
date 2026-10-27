@@ -1,11 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Store, Pencil, Trash2, ChevronRight, LogOut, Calendar, ShoppingCart } from 'lucide-react';
+import { Plus, Store, Pencil, Trash2, ChevronRight, LogOut, Calendar, ShoppingCart, ArrowUpDown } from 'lucide-react';
 import { useState } from 'react';
 import api from '../api/client';
 import { useAuthStore } from '../store/authStore';
 import { Loja } from '../types';
 import { ModalCriarLoja } from '../components/ModalCriarLoja';
+import { ModalOrdenarLojas } from '../components/ModalOrdenarLojas';
 import { SkeletonCard } from '../components/Skeleton';
 
 export const CORES_LOJA = [
@@ -31,6 +32,7 @@ export default function SelecionarLojaPage() {
   };
   const [modalAberto, setModalAberto] = useState(false);
   const [lojaEditando, setLojaEditando] = useState<Loja | null>(null);
+  const [ordenando, setOrdenando] = useState(false);
   /** Loja já escolhida, esperando o usuário dizer Financeiro ou PDV. */
   const [lojaEscolhida, setLojaEscolhida] = useState<Loja | null>(null);
 
@@ -126,13 +128,24 @@ export default function SelecionarLojaPage() {
             </p>
           </div>
           {usuario?.perfil === 'ADMIN' && (
-            <button
-              onClick={() => { setLojaEditando(null); setModalAberto(true); }}
-              className="flex items-center gap-2 bg-[#0c4a6e] hover:bg-[#0a3d5c] text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors shadow-sm"
-            >
-              <Plus className="w-4 h-4" />
-              Nova loja
-            </button>
+            <div className="flex gap-2 flex-shrink-0">
+              {lojas.length > 1 && (
+                <button
+                  onClick={() => setOrdenando(true)}
+                  className="flex items-center gap-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium px-3 py-2 rounded-xl transition-colors shadow-sm"
+                >
+                  <ArrowUpDown className="w-4 h-4" />
+                  <span className="hidden sm:inline">Ordenar</span>
+                </button>
+              )}
+              <button
+                onClick={() => { setLojaEditando(null); setModalAberto(true); }}
+                className="flex items-center gap-2 bg-[#0c4a6e] hover:bg-[#0a3d5c] text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors shadow-sm"
+              >
+                <Plus className="w-4 h-4" />
+                Nova loja
+              </button>
+            </div>
           )}
         </div>
 
@@ -170,6 +183,17 @@ export default function SelecionarLojaPage() {
           onFechar={() => setModalAberto(false)}
           onSalvo={() => {
             setModalAberto(false);
+            queryClient.invalidateQueries({ queryKey: ['lojas'] });
+          }}
+        />
+      )}
+
+      {ordenando && (
+        <ModalOrdenarLojas
+          lojas={lojas}
+          onFechar={() => setOrdenando(false)}
+          onSalvo={() => {
+            setOrdenando(false);
             queryClient.invalidateQueries({ queryKey: ['lojas'] });
           }}
         />

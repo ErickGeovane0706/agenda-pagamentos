@@ -8,6 +8,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
 import org.springframework.http.MediaType;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -17,14 +20,24 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+// Sem o @EnableMethodSecurity o @WebMvcTest ignora o @PreAuthorize (ver
+// AssinaturaControllerTest) e o teste de 403 passaria sem testar nada.
 @WebMvcTest(LojaController.class)
+@Import(LojaControllerTest.MethodSecurityHabilitada.class)
 class LojaControllerTest {
+
+    @TestConfiguration
+    @EnableMethodSecurity
+    static class MethodSecurityHabilitada {
+    }
 
     @Autowired
     private MockMvc mockMvc;
@@ -123,6 +136,32 @@ class LojaControllerTest {
                 .with(user("admin@teste.com").roles("ADMIN"))
                 .with(csrf()))
             .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void reordenar_DeveRetornar204ParaAdmin() throws Exception {
+        var ids = List.of(UUID.randomUUID(), UUID.randomUUID());
+
+        mockMvc.perform(put("/api/lojas/ordem")
+                .with(user("admin@teste.com").roles("ADMIN"))
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(ids)))
+            .andExpect(status().isNoContent());
+
+        verify(lojaService).reordenar(ids);
+    }
+
+    @Test
+    void reordenar_DeveRetornar403ParaQuemNaoEAdmin() throws Exception {
+        mockMvc.perform(put("/api/lojas/ordem")
+                .with(user("viewer@teste.com").roles("VIEWER"))
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(List.of(UUID.randomUUID()))))
+            .andExpect(status().isForbidden());
+
+        verify(lojaService, never()).reordenar(any());
     }
 
 }
