@@ -18,7 +18,7 @@ public record ChequeDTO(
     UUID bancoId, String bancoNome,
     String fornecedor, BigDecimal valor, LocalDate vencimento,
     StatusCheque status, String numeroCheque,
-    String arquivoKey, String observacoes, LocalDateTime compensadoEm, LocalDateTime criadoEm
+    int qtdAnexos, String observacoes, LocalDateTime compensadoEm, LocalDateTime criadoEm
 ) {
     /** Converte entidade JPA em DTO — banco pode ser null (cheque sem banco cadastrado). */
     public static ChequeDTO from(Cheque c) {
@@ -27,7 +27,7 @@ public record ChequeDTO(
             c.getBanco() != null ? c.getBanco().getId() : null,
             c.getBanco() != null ? c.getBanco().getNome() : null,
             c.getFornecedor(), c.getValor(), c.getVencimento(), c.getStatus(),
-            c.getNumeroCheque(), c.getArquivoKey(), c.getObservacoes(), c.getCompensadoEm(), c.getCriadoEm()
+            c.getNumeroCheque(), c.getQtdAnexos(), c.getObservacoes(), c.getCompensadoEm(), c.getCriadoEm()
         );
     }
 }

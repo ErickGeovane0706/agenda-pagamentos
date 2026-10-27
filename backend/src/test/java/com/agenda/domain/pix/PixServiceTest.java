@@ -1,7 +1,7 @@
 package com.agenda.domain.pix;
 
 import com.agenda.auditoria.AuditoriaService;
-import com.agenda.domain.arquivo.ArquivoService;
+import com.agenda.domain.arquivo.AnexoService;
 import com.agenda.domain.empresa.Empresa;
 import com.agenda.domain.loja.Loja;
 import com.agenda.domain.loja.LojaRepository;
@@ -40,7 +40,7 @@ class PixServiceTest {
 
     @Mock private PagamentoPixRepository pixRepository;
     @Mock private LojaRepository lojaRepository;
-    @Mock private ArquivoService arquivoService;
+    @Mock private AnexoService anexoService;
     @Mock private AuditoriaService auditoriaService;
 
     private PixService pixService;
@@ -49,7 +49,7 @@ class PixServiceTest {
 
     @BeforeEach
     void setUp() {
-        pixService = new PixService(pixRepository, lojaRepository, arquivoService, auditoriaService);
+        pixService = new PixService(pixRepository, lojaRepository, anexoService, auditoriaService);
         empresa = Empresa.builder().id(UUID.randomUUID()).build();
         loja = Loja.builder().id(UUID.randomUUID()).empresa(empresa).nome("Loja Teste").cor("#3B82F6").build();
         TenantContext.setEmpresaId(empresa.getId());

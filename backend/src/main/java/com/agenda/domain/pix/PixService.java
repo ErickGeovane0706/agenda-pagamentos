@@ -1,7 +1,7 @@
 package com.agenda.domain.pix;
 
 import com.agenda.auditoria.AuditoriaService;
-import com.agenda.domain.arquivo.ArquivoService;
+import com.agenda.domain.arquivo.AnexoService;
 import com.agenda.domain.arquivo.TipoDocumento;
 import com.agenda.domain.loja.LojaRepository;
 import com.agenda.shared.TenantContext;
@@ -15,9 +15,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -36,7 +34,7 @@ public class PixService {
 
     private final PagamentoPixRepository pixRepository;
     private final LojaRepository lojaRepository;
-    private final ArquivoService arquivoService;
+    private final AnexoService anexoService;
     private final AuditoriaService auditoriaService;
 
     /**
@@ -177,47 +175,8 @@ public class PixService {
         var pix = pixRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("PIX não encontrado"));
         if (!pix.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
-        if (pix.getArquivoKey() != null) {
-            arquivoService.deletar(pix.getArquivoKey());
-        }
+        anexoService.removerArquivosDo(TipoDocumento.PIX, id);
         pixRepository.delete(pix);
         auditoriaService.registrar("EXCLUIR", "PIX", id, "Fornecedor: " + pix.getFornecedor());
-    }
-
-    /**
-     * Faz upload de um arquivo (comprovante, nota) associado ao PIX.
-     * Substitui arquivo anterior se existir (deleta o antigo no S3 antes de salvar o novo).
-     */
-    @Transactional
-    public PixDTO uploadArquivo(UUID id, MultipartFile arquivo) {
-        UUID empresaId = TenantContext.getEmpresaId();
-        var pix = pixRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("PIX não encontrado"));
-        if (!pix.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
-
-        try {
-            String key = arquivoService.upload(arquivo, TipoDocumento.PIX, pix.getLoja().getId());
-            if (pix.getArquivoKey() != null) {
-                arquivoService.deletar(pix.getArquivoKey());
-            }
-            pix.setArquivoKey(key);
-        } catch (IOException e) {
-            throw new RuntimeException("Erro ao fazer upload do arquivo: " + e.getMessage());
-        }
-
-        pix = pixRepository.save(pix);
-        auditoriaService.registrar("UPLOAD", "PIX", pix.getId(), "Arquivo: " + arquivo.getOriginalFilename());
-        return PixDTO.from(pix);
-    }
-
-    /** Remove apenas a referência ao arquivo (key) sem deletar do S3 — usado quando o S3 já foi limpo. */
-    @Transactional
-    public void removerArquivoKey(UUID id) {
-        UUID empresaId = TenantContext.getEmpresaId();
-        var pix = pixRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("PIX não encontrado"));
-        if (!pix.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
-        pix.setArquivoKey(null);
-        pixRepository.save(pix);
     }
 }

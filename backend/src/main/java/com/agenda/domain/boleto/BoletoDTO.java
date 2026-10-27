@@ -15,8 +15,7 @@ import java.util.UUID;
 public record BoletoDTO(
     UUID id, UUID lojaId, String lojaNome, String lojaCor,
     String fornecedor, BigDecimal valor, LocalDate vencimento,
-    StatusBoleto status, String codigoBarras, String urlArquivo,
-    String nomeArquivo, String arquivoKey, String observacoes, LocalDateTime pagoEm,
+    StatusBoleto status, String codigoBarras, int qtdAnexos, String observacoes, LocalDateTime pagoEm,
     LocalDateTime criadoEm
 ) {
     /** Converte entidade JPA em DTO — navega loja para extrair id, nome e cor. */
@@ -24,7 +23,7 @@ public record BoletoDTO(
         return new BoletoDTO(
             b.getId(), b.getLoja().getId(), b.getLoja().getNome(), b.getLoja().getCor(),
             b.getFornecedor(), b.getValor(), b.getVencimento(), b.getStatus(),
-            b.getCodigoBarras(), b.getUrlArquivo(), b.getNomeArquivo(), b.getArquivoKey(),
+            b.getCodigoBarras(), b.getQtdAnexos(),
             b.getObservacoes(), b.getPagoEm(), b.getCriadoEm()
         );
     }

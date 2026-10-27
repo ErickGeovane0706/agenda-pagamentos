@@ -40,9 +40,7 @@ export interface Boleto {
   vencimento: string;
   status: StatusBoleto;
   codigoBarras?: string;
-  urlArquivo?: string;
-  nomeArquivo?: string;
-  arquivoKey?: string;
+  qtdAnexos: number;
   observacoes?: string;
   pagoEm?: string;
   criadoEm: string;
@@ -60,7 +58,7 @@ export interface PagamentoPix {
   chavePix: string;
   tipoChave?: string;
   observacoes?: string;
-  arquivoKey?: string;
+  qtdAnexos: number;
   pagoEm?: string;
   criadoEm: string;
 }
@@ -78,8 +76,14 @@ export interface Cheque {
   status: StatusCheque;
   numeroCheque?: string;
   observacoes?: string;
-  arquivoKey?: string;
+  qtdAnexos: number;
   compensadoEm?: string;
+  criadoEm: string;
+}
+
+export interface Anexo {
+  id: string;
+  nomeArquivo?: string;
   criadoEm: string;
 }
 

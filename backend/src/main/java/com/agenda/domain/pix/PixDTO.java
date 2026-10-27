@@ -16,14 +16,14 @@ public record PixDTO(
     UUID id, UUID lojaId, String lojaNome, String lojaCor,
     String fornecedor, BigDecimal valor, LocalDate vencimento,
     StatusPix status, String chavePix, String tipoChave,
-    String arquivoKey, String observacoes, LocalDateTime pagoEm, LocalDateTime criadoEm
+    int qtdAnexos, String observacoes, LocalDateTime pagoEm, LocalDateTime criadoEm
 ) {
     /** Converte entidade JPA em DTO — navega loja para extrair id, nome e cor. */
     public static PixDTO from(PagamentoPix p) {
         return new PixDTO(
             p.getId(), p.getLoja().getId(), p.getLoja().getNome(), p.getLoja().getCor(),
             p.getFornecedor(), p.getValor(), p.getVencimento(), p.getStatus(),
-            p.getChavePix(), p.getTipoChave(), p.getArquivoKey(), p.getObservacoes(), p.getPagoEm(), p.getCriadoEm()
+            p.getChavePix(), p.getTipoChave(), p.getQtdAnexos(), p.getObservacoes(), p.getPagoEm(), p.getCriadoEm()
         );
     }
 }

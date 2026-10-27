@@ -5,6 +5,7 @@ import com.agenda.domain.empresa.Empresa;
 import com.agenda.domain.loja.Loja;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Formula;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -64,8 +65,9 @@ public class Cheque {
     @Column(columnDefinition = "TEXT")
     private String observacoes;
 
-    @Column(name = "arquivo_key", length = 500)
-    private String arquivoKey;
+    /** Quantos arquivos estão anexados. Calculado na mesma consulta da listagem. */
+    @Formula("(select count(*) from anexos a where a.cheque_id = id)")
+    private int qtdAnexos;
 
     /** Seta quando status muda para COMPENSADO; limpa quando sai de COMPENSADO. */
     @Column(name = "compensado_em")

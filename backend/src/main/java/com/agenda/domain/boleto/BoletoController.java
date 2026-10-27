@@ -1,6 +1,5 @@
 package com.agenda.domain.boleto;
 
-import com.agenda.domain.arquivo.ArquivoService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -8,7 +7,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.data.domain.Sort;
 
@@ -21,7 +19,7 @@ import java.util.UUID;
  * <p>
  * Endpoints protegidos por {@code @PreAuthorize} exigem role ADMIN ou OPERADOR.
  * A listagem é pública (autenticado) e suporta filtros opcionais via query params.
- * Upload/download/deleção de arquivo são endpoints separados do CRUD principal.
+ * Os arquivos anexados ficam em {@link com.agenda.domain.arquivo.AnexoController}.
  * </p>
  */
 @RestController
@@ -30,7 +28,6 @@ import java.util.UUID;
 public class BoletoController {
 
     private final BoletoService boletoService;
-    private final ArquivoService arquivoService;
 
     /**
      * Lista paginada com filtros opcionais: loja, status, período, fornecedor.
@@ -91,35 +88,6 @@ public class BoletoController {
     @PreAuthorize("hasAnyRole('ADMIN','OPERADOR')")
     public ResponseEntity<Void> excluir(@PathVariable UUID id) {
         boletoService.excluir(id);
-        return ResponseEntity.noContent().build();
-    }
-
-    /** Faz upload do arquivo (PDF/imagem) do boleto e substitui o anterior se existir. */
-    @PostMapping("/{id}/arquivo")
-    @PreAuthorize("hasAnyRole('ADMIN','OPERADOR')")
-    public ResponseEntity<BoletoDTO> uploadArquivo(@PathVariable UUID id,
-                                                     @RequestParam("arquivo") MultipartFile arquivo) {
-        return ResponseEntity.ok(boletoService.uploadArquivo(id, arquivo));
-    }
-
-    /** Gera URL temporária (assinada) para download do arquivo. Retorna 404 se não houver arquivo. */
-    @GetMapping("/{id}/arquivo")
-    public ResponseEntity<Map<String, String>> getUrlArquivo(@PathVariable UUID id) {
-        var boleto = boletoService.buscarPorId(id);
-        if (boleto.getArquivoKey() == null) {
-            return ResponseEntity.notFound().build();
-        }
-        String url = arquivoService.gerarUrlTemporaria(boleto.getArquivoKey());
-        return ResponseEntity.ok(Map.of("url", url));
-    }
-
-    /** Remove o arquivo do storage e limpa os metadados do boleto. */
-    @DeleteMapping("/{id}/arquivo")
-    @PreAuthorize("hasAnyRole('ADMIN','OPERADOR')")
-    public ResponseEntity<Void> deletarArquivo(@PathVariable UUID id) {
-        var boleto = boletoService.buscarPorId(id);
-        arquivoService.deletar(boleto.getArquivoKey());
-        boletoService.removerArquivoKey(id);
         return ResponseEntity.noContent().build();
     }
 }

@@ -48,8 +48,8 @@ class BoletoServiceTest {
 
     @BeforeEach
     void setUp() {
-        var arquivoService = mock(com.agenda.domain.arquivo.ArquivoService.class);
-        boletoService = new BoletoService(boletoRepository, lojaRepository, arquivoService, auditoriaService);
+        var anexoService = mock(com.agenda.domain.arquivo.AnexoService.class);
+        boletoService = new BoletoService(boletoRepository, lojaRepository, anexoService, auditoriaService);
         empresa = Empresa.builder().id(UUID.randomUUID()).build();
         loja = Loja.builder().id(UUID.randomUUID()).empresa(empresa).nome("Loja Teste").cor("#3B82F6").build();
         TenantContext.setEmpresaId(empresa.getId());

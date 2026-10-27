@@ -1,9 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Copy, Check, Pencil, Trash2,
-  Plus, ExternalLink, Upload, FileX
+  Plus
 } from 'lucide-react';
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { format, isPast, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import api from '../../api/client';
@@ -13,6 +13,7 @@ import { ValorMonetario } from '../ValorMonetario';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { ModalBoleto } from './ModalBoleto';
 import { CardBoleto } from './CardBoleto';
+import { ModalAnexos, BotaoAnexos } from './ModalAnexos';
 import { Pagination } from '../Pagination';
 import { SkeletonTable } from '../Skeleton';
 import { clsx } from 'clsx';
@@ -34,8 +35,7 @@ export function TabelaBoletos({
   const [copiado, setCopiado] = useState<string | null>(null);
   const [modalAberto, setModalAberto] = useState(false);
   const [boletoEditando, setBoletoEditando] = useState<Boleto | null>(null);
-  const uploadRef = useRef<HTMLInputElement>(null);
-  const [boletoUpload, setBoletoUpload] = useState<string | null>(null);
+  const [anexosDe, setAnexosDe] = useState<Boleto | null>(null);
   const pageSize = 15;
   const [page, setPage] = usePaginaInicialPendente('boletos', lojaId, filtros, pageSize);
 
@@ -81,47 +81,10 @@ export function TabelaBoletos({
     onError: () => {},
   });
 
-  const uploadMutation = useMutation({
-    mutationFn: ({ id, arquivo }: { id: string; arquivo: File }) => {
-      const form = new FormData();
-      form.append('arquivo', arquivo);
-      return api.post(`/boletos/${id}/arquivo`, form, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['boletos', lojaId] }),
-    onError: () => {},
-  });
-
-  const deletarArquivoMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/boletos/${id}/arquivo`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['boletos', lojaId] }),
-  });
-
-  const abrirArquivo = async (boletoId: string) => {
-    try {
-      const { data } = await api.get(`/boletos/${boletoId}/arquivo`);
-      window.open(data.url, '_blank');
-    } catch {}
-  };
-
   const copiarCodigo = (codigo: string, id: string) => {
     copiarTexto(codigo);
     setCopiado(id);
     setTimeout(() => setCopiado(null), 2000);
-  };
-
-  const handleUpload = (boletoId: string) => {
-    setBoletoUpload(boletoId);
-    uploadRef.current?.click();
-  };
-
-  const onArquivoSelecionado = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const arquivo = e.target.files?.[0];
-    if (arquivo && boletoUpload) {
-      uploadMutation.mutate({ id: boletoUpload, arquivo });
-    }
-    e.target.value = '';
   };
 
   const proximoStatus = (atual: StatusBoleto): StatusBoleto => {
@@ -167,8 +130,7 @@ export function TabelaBoletos({
                   onCopiar={copiarCodigo}
                   onEditar={() => { setBoletoEditando(boleto); setModalAberto(true); }}
                   onExcluir={() => excluirMutation.mutate(boleto.id)}
-                  onUpload={() => handleUpload(boleto.id)}
-                  onDeletarArquivo={() => deletarArquivoMutation.mutate(boleto.id)}
+                  onAnexos={() => setAnexosDe(boleto)}
                   onMudarStatus={(status) => mudarStatusMutation.mutate({ id: boleto.id, status })}
                   copiado={copiado}
                 />
@@ -287,32 +249,7 @@ export function TabelaBoletos({
 
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-1">
-                              {boleto.arquivoKey ? (
-                                <>
-                                  <button
-                                    onClick={() => abrirArquivo(boleto.id)}
-                                    title={boleto.nomeArquivo || 'Ver arquivo'}
-                                    className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500"
-                                  >
-                                    <ExternalLink className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => { if (confirm('Remover arquivo?')) deletarArquivoMutation.mutate(boleto.id); }}
-                                    title="Remover arquivo"
-                                    className="p-2 rounded-lg bg-red-100 hover:bg-red-200 text-red-600"
-                                  >
-                                    <FileX className="w-4 h-4" />
-                                  </button>
-                                </>
-                              ) : (
-                                <button
-                                  onClick={() => handleUpload(boleto.id)}
-                                  title="Anexar arquivo"
-                                  className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500"
-                                >
-                                  <Upload className="w-4 h-4" />
-                                </button>
-                              )}
+                              <BotaoAnexos qtd={boleto.qtdAnexos} onClick={() => setAnexosDe(boleto)} className="p-2" />
 
                               {boleto.codigoBarras && (
                                 <button
@@ -364,13 +301,15 @@ export function TabelaBoletos({
         </div>
       )}
 
-      <input
-        type="file"
-        ref={uploadRef}
-        className="hidden"
-        onChange={onArquivoSelecionado}
-        accept=".pdf,.jpg,.jpeg,.png,.webp"
-      />
+      {anexosDe && (
+        <ModalAnexos
+          recurso="boletos"
+          lancamentoId={anexosDe.id}
+          titulo={anexosDe.fornecedor}
+          onFechar={() => setAnexosDe(null)}
+          onAlterado={() => queryClient.invalidateQueries({ queryKey: ['boletos', lojaId] })}
+        />
+      )}
 
       {modalAberto && (
         <ModalBoleto

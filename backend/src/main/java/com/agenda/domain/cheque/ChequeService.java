@@ -1,7 +1,7 @@
 package com.agenda.domain.cheque;
 
 import com.agenda.auditoria.AuditoriaService;
-import com.agenda.domain.arquivo.ArquivoService;
+import com.agenda.domain.arquivo.AnexoService;
 import com.agenda.domain.arquivo.TipoDocumento;
 import com.agenda.domain.banco.BancoRepository;
 import com.agenda.domain.loja.LojaRepository;
@@ -16,9 +16,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -40,7 +38,7 @@ public class ChequeService {
     private final ChequeRepository chequeRepository;
     private final LojaRepository lojaRepository;
     private final BancoRepository bancoRepository;
-    private final ArquivoService arquivoService;
+    private final AnexoService anexoService;
     private final AuditoriaService auditoriaService;
 
     @Transactional(readOnly = true)
@@ -177,42 +175,8 @@ public class ChequeService {
         var cheque = chequeRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Cheque não encontrado"));
         if (!cheque.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
-        if (cheque.getArquivoKey() != null) {
-            arquivoService.deletar(cheque.getArquivoKey());
-        }
+        anexoService.removerArquivosDo(TipoDocumento.CHEQUE, id);
         chequeRepository.delete(cheque);
         auditoriaService.registrar("EXCLUIR", "CHEQUE", id, "Fornecedor: " + cheque.getFornecedor());
-    }
-
-    @Transactional
-    public ChequeDTO uploadArquivo(UUID id, MultipartFile arquivo) {
-        UUID empresaId = TenantContext.getEmpresaId();
-        var cheque = chequeRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Cheque não encontrado"));
-        if (!cheque.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
-
-        try {
-            String key = arquivoService.upload(arquivo, TipoDocumento.CHEQUE, cheque.getLoja().getId());
-            if (cheque.getArquivoKey() != null) {
-                arquivoService.deletar(cheque.getArquivoKey());
-            }
-            cheque.setArquivoKey(key);
-        } catch (IOException e) {
-            throw new RuntimeException("Erro ao fazer upload do arquivo: " + e.getMessage());
-        }
-
-        cheque = chequeRepository.save(cheque);
-        auditoriaService.registrar("UPLOAD", "CHEQUE", cheque.getId(), "Arquivo: " + arquivo.getOriginalFilename());
-        return ChequeDTO.from(cheque);
-    }
-
-    @Transactional
-    public void removerArquivoKey(UUID id) {
-        UUID empresaId = TenantContext.getEmpresaId();
-        var cheque = chequeRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Cheque não encontrado"));
-        if (!cheque.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
-        cheque.setArquivoKey(null);
-        chequeRepository.save(cheque);
     }
 }

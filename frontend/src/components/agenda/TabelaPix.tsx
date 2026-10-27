@@ -1,9 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Copy, Check, Pencil, Trash2, Plus,
-  ExternalLink, Upload, FileX
+  Copy, Check, Pencil, Trash2, Plus
 } from 'lucide-react';
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { format, isPast, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import api from '../../api/client';
@@ -13,6 +12,7 @@ import { ValorMonetario } from '../ValorMonetario';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { ModalPix } from './ModalPix';
 import { CardPix } from './CardPix';
+import { ModalAnexos, BotaoAnexos } from './ModalAnexos';
 import { Pagination } from '../Pagination';
 import { SkeletonTable } from '../Skeleton';
 import { clsx } from 'clsx';
@@ -34,8 +34,7 @@ export function TabelaPix({
   const [copiado, setCopiado] = useState<string | null>(null);
   const [modalAberto, setModalAberto] = useState(false);
   const [pixEditando, setPixEditando] = useState<PagamentoPix | null>(null);
-  const uploadRef = useRef<HTMLInputElement>(null);
-  const [pixUpload, setPixUpload] = useState<string | null>(null);
+  const [anexosDe, setAnexosDe] = useState<PagamentoPix | null>(null);
   const pageSize = 15;
   const [page, setPage] = usePaginaInicialPendente('pix', lojaId, filtros, pageSize);
 
@@ -66,43 +65,6 @@ export function TabelaPix({
     mutationFn: (id: string) => api.delete(`/pix/${id}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pix', lojaId] }),
   });
-
-  const uploadMutation = useMutation({
-    mutationFn: ({ id, arquivo }: { id: string; arquivo: File }) => {
-      const form = new FormData();
-      form.append('arquivo', arquivo);
-      return api.post(`/pix/${id}/arquivo`, form, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pix', lojaId] }),
-    onError: () => {},
-  });
-
-  const deletarArquivoMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/pix/${id}/arquivo`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pix', lojaId] }),
-  });
-
-  const abrirArquivo = async (pixId: string) => {
-    try {
-      const { data } = await api.get(`/pix/${pixId}/arquivo`);
-      window.open(data.url, '_blank');
-    } catch {}
-  };
-
-  const handleUpload = (pixId: string) => {
-    setPixUpload(pixId);
-    uploadRef.current?.click();
-  };
-
-  const onArquivoSelecionado = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const arquivo = e.target.files?.[0];
-    if (arquivo && pixUpload) {
-      uploadMutation.mutate({ id: pixUpload, arquivo });
-    }
-    e.target.value = '';
-  };
 
   const copiarChave = (chave: string, id: string) => {
     copiarTexto(chave);
@@ -153,8 +115,7 @@ export function TabelaPix({
                   onCopiar={copiarChave}
                   onEditar={() => { setPixEditando(pix); setModalAberto(true); }}
                   onExcluir={() => excluirMutation.mutate(pix.id)}
-                  onUpload={() => handleUpload(pix.id)}
-                  onDeletarArquivo={() => deletarArquivoMutation.mutate(pix.id)}
+                  onAnexos={() => setAnexosDe(pix)}
                   onMudarStatus={(status) => mudarStatusMutation.mutate({ id: pix.id, status })}
                   copiado={copiado}
                 />
@@ -273,32 +234,7 @@ export function TabelaPix({
 
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-1">
-                              {pix.arquivoKey ? (
-                                <>
-                                  <button
-                                    onClick={() => abrirArquivo(pix.id)}
-                                    title="Ver arquivo"
-                                    className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500"
-                                  >
-                                    <ExternalLink className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => { if (confirm('Remover arquivo?')) deletarArquivoMutation.mutate(pix.id); }}
-                                    title="Remover arquivo"
-                                    className="p-2 rounded-lg bg-red-100 hover:bg-red-200 text-red-600"
-                                  >
-                                    <FileX className="w-4 h-4" />
-                                  </button>
-                                </>
-                              ) : (
-                                <button
-                                  onClick={() => handleUpload(pix.id)}
-                                  title="Anexar arquivo"
-                                  className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500"
-                                >
-                                  <Upload className="w-4 h-4" />
-                                </button>
-                              )}
+                              <BotaoAnexos qtd={pix.qtdAnexos} onClick={() => setAnexosDe(pix)} className="p-2" />
 
                               {pix.chavePix && (
                                 <button
@@ -350,13 +286,15 @@ export function TabelaPix({
         </div>
       )}
 
-      <input
-        type="file"
-        ref={uploadRef}
-        className="hidden"
-        onChange={onArquivoSelecionado}
-        accept=".pdf,.jpg,.jpeg,.png,.webp"
-      />
+      {anexosDe && (
+        <ModalAnexos
+          recurso="pix"
+          lancamentoId={anexosDe.id}
+          titulo={anexosDe.fornecedor}
+          onFechar={() => setAnexosDe(null)}
+          onAlterado={() => queryClient.invalidateQueries({ queryKey: ['pix', lojaId] })}
+        />
+      )}
 
       {modalAberto && (
         <ModalPix
