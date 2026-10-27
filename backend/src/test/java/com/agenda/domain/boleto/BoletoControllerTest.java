@@ -1,6 +1,5 @@
 package com.agenda.domain.boleto;
 
-import com.agenda.domain.arquivo.ArquivoService;
 import com.agenda.domain.assinatura.AssinaturaService;
 import com.agenda.domain.empresa.EmpresaService;
 import com.agenda.security.JwtService;
@@ -51,9 +50,6 @@ class BoletoControllerTest {
     @MockBean
     private JpaMetamodelMappingContext jpaMappingContext;
 
-    @MockBean
-    private ArquivoService arquivoService;
-
     // Exigido pelo AssinaturaGateFilter (@Component Filter, escaneado pelo @WebMvcTest).
     @MockBean
     private AssinaturaService assinaturaService;
@@ -66,7 +62,7 @@ class BoletoControllerTest {
     void listar_DeveRetornar200() throws Exception {
         var dto = new BoletoDTO(UUID.randomUUID(), UUID.randomUUID(), "Loja", "#1e40af",
             "Fornecedor", new BigDecimal("100"), LocalDate.now(), StatusBoleto.PENDENTE,
-            null, null, null, null, null, null, null);
+            null, 0, null, null, null);
         var page = new PageImpl<>(List.of(dto), PageRequest.of(0, 10), 1);
 
         when(boletoService.listar(any(), any(), any(), any(), any(), any())).thenReturn(page);
@@ -83,7 +79,7 @@ class BoletoControllerTest {
             new BigDecimal("150"), LocalDate.now().plusDays(30), null, null, null);
         var dto = new BoletoDTO(UUID.randomUUID(), req.lojaId(), "Loja", "#1e40af",
             req.fornecedor(), req.valor(), req.vencimento(), StatusBoleto.PENDENTE,
-            null, null, null, null, null, null, null);
+            null, 0, null, null, null);
 
         when(boletoService.criar(any())).thenReturn(dto);
 
@@ -119,7 +115,7 @@ class BoletoControllerTest {
     void criar_ConfirmarDuplicadoChegaAoService() throws Exception {
         var dto = new BoletoDTO(UUID.randomUUID(), UUID.randomUUID(), "Loja", "#1e40af",
             "Fornecedor", new BigDecimal("150"), LocalDate.now(), StatusBoleto.PENDENTE,
-            null, null, null, null, null, null, null);
+            null, 0, null, null, null);
         when(boletoService.criar(any())).thenReturn(dto);
 
         mockMvc.perform(post("/api/boletos")
@@ -144,7 +140,7 @@ class BoletoControllerTest {
             new BigDecimal("200"), LocalDate.now(), "12345678901", null);
         var dto = new BoletoDTO(id, req.lojaId(), "Loja", "#1e40af",
             req.fornecedor(), req.valor(), req.vencimento(), StatusBoleto.PENDENTE,
-            null, null, null, null, null, null, null);
+            null, 0, null, null, null);
 
         when(boletoService.editar(eq(id), any())).thenReturn(dto);
 
@@ -173,7 +169,7 @@ class BoletoControllerTest {
         var req = new MudarStatusRequest(StatusBoleto.PAGO);
         var dto = new BoletoDTO(id, UUID.randomUUID(), "Loja", "#1e40af",
             "Fornecedor", new BigDecimal("100"), LocalDate.now(), StatusBoleto.PAGO,
-            null, null, null, null, null, null, null);
+            null, 0, null, null, null);
 
         when(boletoService.mudarStatus(eq(id), eq(StatusBoleto.PAGO))).thenReturn(dto);
 

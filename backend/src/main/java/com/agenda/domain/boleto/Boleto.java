@@ -4,6 +4,7 @@ import com.agenda.domain.empresa.Empresa;
 import com.agenda.domain.loja.Loja;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Formula;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -20,8 +21,8 @@ import java.util.UUID;
  * <ul>
  *   <li>{@code status} inicia como PENDENTE — não é informado na criação.</li>
  *   <li>{@code pagoEm} só é preenchido quando status = PAGO (service seta).</li>
- *   <li>{@code codigoBarras} e {@code arquivoKey} são independentes: um boleto pode
- *       ter apenas o código de barras, apenas o arquivo, ambos, ou nenhum.</li>
+ *   <li>{@code codigoBarras} e os anexos são independentes: um boleto pode
+ *       ter apenas o código de barras, apenas arquivos, ambos, ou nenhum.</li>
  *   <li>{@code atualizadoEm} é atualizado automaticamente pelo callback {@code @PreUpdate}.</li>
  * </ul>
  */
@@ -65,14 +66,9 @@ public class Boleto {
     @Column(name = "codigo_normalizado", length = 44)
     private String codigoNormalizado;
 
-    @Column(name = "url_arquivo")
-    private String urlArquivo;
-
-    @Column(name = "nome_arquivo", length = 300)
-    private String nomeArquivo;
-
-    @Column(name = "arquivo_key", length = 500)
-    private String arquivoKey;
+    /** Quantos arquivos estão anexados. Calculado na mesma consulta da listagem. */
+    @Formula("(select count(*) from anexos a where a.boleto_id = id)")
+    private int qtdAnexos;
 
     @Column(columnDefinition = "TEXT")
     private String observacoes;

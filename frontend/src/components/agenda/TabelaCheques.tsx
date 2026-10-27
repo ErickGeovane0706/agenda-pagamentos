@@ -1,9 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Pencil, Trash2, Plus,
-  ExternalLink, Upload, FileX
+  Pencil, Trash2, Plus
 } from 'lucide-react';
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { format, isPast, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import api from '../../api/client';
@@ -13,6 +12,7 @@ import { ValorMonetario } from '../ValorMonetario';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { ModalCheque } from './ModalCheque';
 import { CardCheque } from './CardCheque';
+import { ModalAnexos, BotaoAnexos } from './ModalAnexos';
 import { Pagination } from '../Pagination';
 import { SkeletonTable } from '../Skeleton';
 import { clsx } from 'clsx';
@@ -31,8 +31,7 @@ export function TabelaCheques({
   const queryClient = useQueryClient();
   const [modalAberto, setModalAberto] = useState(false);
   const [chequeEditando, setChequeEditando] = useState<Cheque | null>(null);
-  const uploadRef = useRef<HTMLInputElement>(null);
-  const [chequeUpload, setChequeUpload] = useState<string | null>(null);
+  const [anexosDe, setAnexosDe] = useState<Cheque | null>(null);
   const pageSize = 15;
   const [page, setPage] = usePaginaInicialPendente('cheques', lojaId, filtros, pageSize);
 
@@ -63,43 +62,6 @@ export function TabelaCheques({
     mutationFn: (id: string) => api.delete(`/cheques/${id}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['cheques', lojaId] }),
   });
-
-  const uploadMutation = useMutation({
-    mutationFn: ({ id, arquivo }: { id: string; arquivo: File }) => {
-      const form = new FormData();
-      form.append('arquivo', arquivo);
-      return api.post(`/cheques/${id}/arquivo`, form, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['cheques', lojaId] }),
-    onError: () => {},
-  });
-
-  const deletarArquivoMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/cheques/${id}/arquivo`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['cheques', lojaId] }),
-  });
-
-  const abrirArquivo = async (chequeId: string) => {
-    try {
-      const { data } = await api.get(`/cheques/${chequeId}/arquivo`);
-      window.open(data.url, '_blank');
-    } catch {}
-  };
-
-  const handleUpload = (chequeId: string) => {
-    setChequeUpload(chequeId);
-    uploadRef.current?.click();
-  };
-
-  const onArquivoSelecionado = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const arquivo = e.target.files?.[0];
-    if (arquivo && chequeUpload) {
-      uploadMutation.mutate({ id: chequeUpload, arquivo });
-    }
-    e.target.value = '';
-  };
 
   const proximoStatus = (atual: StatusCheque): StatusCheque => {
     if (atual === 'PENDENTE') return 'COMPENSADO';
@@ -144,8 +106,7 @@ export function TabelaCheques({
                   cheque={cheque}
                   onEditar={() => { setChequeEditando(cheque); setModalAberto(true); }}
                   onExcluir={() => excluirMutation.mutate(cheque.id)}
-                  onUpload={() => handleUpload(cheque.id)}
-                  onDeletarArquivo={() => deletarArquivoMutation.mutate(cheque.id)}
+                  onAnexos={() => setAnexosDe(cheque)}
                   onMudarStatus={(status) => mudarStatusMutation.mutate({ id: cheque.id, status })}
                 />
               ))}
@@ -265,32 +226,7 @@ export function TabelaCheques({
 
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-1">
-                              {cheque.arquivoKey ? (
-                                <>
-                                  <button
-                                    onClick={() => abrirArquivo(cheque.id)}
-                                    title="Ver arquivo"
-                                    className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500"
-                                  >
-                                    <ExternalLink className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => { if (confirm('Remover arquivo?')) deletarArquivoMutation.mutate(cheque.id); }}
-                                    title="Remover arquivo"
-                                    className="p-2 rounded-lg bg-red-100 hover:bg-red-200 text-red-600"
-                                  >
-                                    <FileX className="w-4 h-4" />
-                                  </button>
-                                </>
-                              ) : (
-                                <button
-                                  onClick={() => handleUpload(cheque.id)}
-                                  title="Anexar arquivo"
-                                  className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500"
-                                >
-                                  <Upload className="w-4 h-4" />
-                                </button>
-                              )}
+                              <BotaoAnexos qtd={cheque.qtdAnexos} onClick={() => setAnexosDe(cheque)} className="p-2" />
 
                               <button
                                 onClick={() => { setChequeEditando(cheque); setModalAberto(true); }}
@@ -327,13 +263,15 @@ export function TabelaCheques({
         </div>
       )}
 
-      <input
-        type="file"
-        ref={uploadRef}
-        className="hidden"
-        onChange={onArquivoSelecionado}
-        accept=".pdf,.jpg,.jpeg,.png,.webp"
-      />
+      {anexosDe && (
+        <ModalAnexos
+          recurso="cheques"
+          lancamentoId={anexosDe.id}
+          titulo={anexosDe.fornecedor}
+          onFechar={() => setAnexosDe(null)}
+          onAlterado={() => queryClient.invalidateQueries({ queryKey: ['cheques', lojaId] })}
+        />
+      )}
 
       {modalAberto && (
         <ModalCheque

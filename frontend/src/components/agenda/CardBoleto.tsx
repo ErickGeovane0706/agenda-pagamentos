@@ -1,37 +1,29 @@
-import { Copy, Check, Pencil, Trash2, ExternalLink, Upload, FileX } from 'lucide-react';
+import { Copy, Check, Pencil, Trash2 } from 'lucide-react';
 import { format, isPast, parseISO } from 'date-fns';
 import { Boleto, StatusBoleto } from '../../types';
 import { BadgeStatus } from '../BadgeStatus';
 import { ValorMonetario } from '../ValorMonetario';
 import { BotaoPagar } from './BotaoPagar';
 import { clsx } from 'clsx';
-import api from '../../api/client';
+import { BotaoAnexos } from './ModalAnexos';
 
 export function CardBoleto({
   boleto,
   onCopiar,
   onEditar,
   onExcluir,
-  onUpload,
+  onAnexos,
   onMudarStatus,
   copiado,
-  onDeletarArquivo,
 }: {
   boleto: Boleto;
   onCopiar: (codigo: string, id: string) => void;
   onEditar: () => void;
   onExcluir: () => void;
-  onUpload?: () => void;
+  onAnexos: () => void;
   onMudarStatus: (status: StatusBoleto) => void;
   copiado: string | null;
-  onDeletarArquivo?: () => void;
 }) {
-  const abrirArquivo = async () => {
-    try {
-      const { data } = await api.get(`/boletos/${boleto.id}/arquivo`);
-      window.open(data.url, '_blank');
-    } catch {}
-  };
   const vencido = boleto.status === 'PENDENTE' &&
     isPast(parseISO(boleto.vencimento + 'T23:59:59'));
 
@@ -67,29 +59,7 @@ export function CardBoleto({
 
       <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-50">
         <div className="flex gap-1.5">
-          {boleto.arquivoKey ? (
-            <>
-              <button
-                onClick={abrirArquivo}
-                className="flex items-center justify-center w-11 h-11 rounded-lg bg-[#e0f2fe] text-[#0c4a6e]"
-              >
-                <ExternalLink className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => { if (confirm('Remover arquivo?')) onDeletarArquivo?.(); }}
-                className="flex items-center justify-center w-11 h-11 rounded-lg bg-red-100 hover:bg-red-200 text-red-600"
-              >
-                <FileX className="w-4 h-4" />
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={onUpload}
-              className="flex items-center justify-center w-11 h-11 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500"
-            >
-              <Upload className="w-4 h-4" />
-            </button>
-          )}
+          <BotaoAnexos qtd={boleto.qtdAnexos} onClick={onAnexos} className="w-11 h-11" />
           {boleto.codigoBarras && (
             <button
               onClick={() => onCopiar(boleto.codigoBarras!, boleto.id)}

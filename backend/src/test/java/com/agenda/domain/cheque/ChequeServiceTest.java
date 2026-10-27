@@ -1,7 +1,7 @@
 package com.agenda.domain.cheque;
 
 import com.agenda.auditoria.AuditoriaService;
-import com.agenda.domain.arquivo.ArquivoService;
+import com.agenda.domain.arquivo.AnexoService;
 import com.agenda.domain.banco.BancoRepository;
 import com.agenda.domain.empresa.Empresa;
 import com.agenda.domain.loja.Loja;
@@ -41,7 +41,7 @@ class ChequeServiceTest {
     @Mock private ChequeRepository chequeRepository;
     @Mock private LojaRepository lojaRepository;
     @Mock private BancoRepository bancoRepository;
-    @Mock private ArquivoService arquivoService;
+    @Mock private AnexoService anexoService;
     @Mock private AuditoriaService auditoriaService;
 
     private ChequeService chequeService;
@@ -50,7 +50,7 @@ class ChequeServiceTest {
 
     @BeforeEach
     void setUp() {
-        chequeService = new ChequeService(chequeRepository, lojaRepository, bancoRepository, arquivoService, auditoriaService);
+        chequeService = new ChequeService(chequeRepository, lojaRepository, bancoRepository, anexoService, auditoriaService);
         empresa = Empresa.builder().id(UUID.randomUUID()).build();
         loja = Loja.builder().id(UUID.randomUUID()).empresa(empresa).nome("Loja Teste").cor("#3B82F6").build();
         TenantContext.setEmpresaId(empresa.getId());

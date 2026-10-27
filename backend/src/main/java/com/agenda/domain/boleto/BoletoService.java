@@ -1,7 +1,7 @@
 package com.agenda.domain.boleto;
 
 import com.agenda.auditoria.AuditoriaService;
-import com.agenda.domain.arquivo.ArquivoService;
+import com.agenda.domain.arquivo.AnexoService;
 import com.agenda.domain.arquivo.TipoDocumento;
 import com.agenda.domain.loja.LojaRepository;
 import com.agenda.shared.TenantContext;
@@ -15,9 +15,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -37,7 +35,7 @@ public class BoletoService {
 
     private final BoletoRepository boletoRepository;
     private final LojaRepository lojaRepository;
-    private final ArquivoService arquivoService;
+    private final AnexoService anexoService;
     private final AuditoriaService auditoriaService;
 
     private static final DateTimeFormatter DATA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
@@ -211,52 +209,8 @@ public class BoletoService {
         var boleto = boletoRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Boleto não encontrado"));
         if (!boleto.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
-        if (boleto.getArquivoKey() != null) {
-            arquivoService.deletar(boleto.getArquivoKey());
-        }
+        anexoService.removerArquivosDo(TipoDocumento.BOLETO, id);
         boletoRepository.delete(boleto);
         auditoriaService.registrar("EXCLUIR", "BOLETO", id, "Fornecedor: " + boleto.getFornecedor());
-    }
-
-    /**
-     * Faz upload do arquivo do boleto.
-     * Se já existia um arquivo anterior, ele é deletado do storage (substituição).
-     */
-    @Transactional
-    public BoletoDTO uploadArquivo(UUID id, MultipartFile arquivo) {
-        UUID empresaId = TenantContext.getEmpresaId();
-        var boleto = boletoRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Boleto não encontrado"));
-        if (!boleto.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
-
-        try {
-            String key = arquivoService.upload(arquivo, TipoDocumento.BOLETO, boleto.getLoja().getId());
-            if (boleto.getArquivoKey() != null) {
-                arquivoService.deletar(boleto.getArquivoKey());
-            }
-            boleto.setArquivoKey(key);
-            boleto.setNomeArquivo(arquivo.getOriginalFilename());
-        } catch (IOException e) {
-            throw new RuntimeException("Erro ao fazer upload do arquivo: " + e.getMessage());
-        }
-
-        boleto = boletoRepository.save(boleto);
-        auditoriaService.registrar("UPLOAD", "BOLETO", boleto.getId(), "Arquivo: " + arquivo.getOriginalFilename());
-        return BoletoDTO.from(boleto);
-    }
-
-    /**
-     * Apenas limpa a referência do arquivo no boleto (não deleta do storage).
-     * Usado pelo controller após já ter deletado o arquivo no storage.
-     */
-    @Transactional
-    public void removerArquivoKey(UUID id) {
-        UUID empresaId = TenantContext.getEmpresaId();
-        var boleto = boletoRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Boleto não encontrado"));
-        if (!boleto.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
-        boleto.setArquivoKey(null);
-        boleto.setNomeArquivo(null);
-        boletoRepository.save(boleto);
     }
 }
