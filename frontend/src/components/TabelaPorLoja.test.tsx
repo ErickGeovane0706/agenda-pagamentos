@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TabelaPorLoja } from './TabelaPorLoja';
 
@@ -11,19 +11,17 @@ const lojas = [{ id: 'c', nome: 'Centro' }, { id: 'n', nome: 'Norte' }, { id: 's
 
 describe('TabelaPorLoja', () => {
   it('uma linha por loja na ordem que veio, atraso em destaque, total no pé e as lojas zeradas citadas', () => {
-    render(<TabelaPorLoja porLoja={porLoja} lojas={lojas} onEscolher={() => {}} />);
+    const { container } = render(<TabelaPorLoja porLoja={porLoja} lojas={lojas} onEscolher={() => {}} />);
 
-    const linhas = screen.getAllByRole('row');
-    expect(linhas[1].textContent).toContain('Norte');
-    expect(linhas[1].textContent).toMatch(/800,00/);
-    expect(linhas[1].textContent).toMatch(/300,00 em atraso/);
-    expect(linhas[2].textContent).toContain('Centro');
-    expect(linhas[2].textContent).not.toContain('em atraso');
+    const linhas = screen.getAllByRole('listitem');
+    expect(linhas[0].textContent).toContain('Norte');
+    expect(linhas[0].textContent).toMatch(/800,00/);
+    expect(linhas[0].textContent).toMatch(/300,00 em atraso/);
+    expect(linhas[1].textContent).toContain('Centro');
+    expect(linhas[1].textContent).not.toContain('em atraso');
+    expect(linhas[1].textContent).toMatch(/pago R\$\s1\.000,00/);
 
-    const total = within(linhas[3]);
-    expect(total.getByText(/1\.000,00/)).toBeTruthy();
-    expect(total.getByText(/1\.050,00/)).toBeTruthy();
-
+    expect(container.textContent).toMatch(/Total.*1\.050,00/);
     expect(screen.getByText(/Sem lançamento no período: Sul/)).toBeTruthy();
   });
 
@@ -31,7 +29,7 @@ describe('TabelaPorLoja', () => {
     const onEscolher = vi.fn();
     render(<TabelaPorLoja porLoja={porLoja} lojas={lojas} onEscolher={onEscolher} />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Centro' }));
+    await userEvent.click(screen.getByRole('button', { name: /Centro/ }));
 
     expect(onEscolher).toHaveBeenCalledWith('c');
   });
