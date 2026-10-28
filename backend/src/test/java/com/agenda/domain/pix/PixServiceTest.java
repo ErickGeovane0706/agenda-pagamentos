@@ -77,6 +77,57 @@ class PixServiceTest {
     }
 
     @Test
+    void criarRecorrente_CriaUmPixPorData_TodosNoMesmoGrupo() {
+        var datas = List.of(LocalDate.of(2026, 11, 27), LocalDate.of(2026, 12, 27), LocalDate.of(2027, 1, 27));
+        var req = new CriarPixRecorrenteRequest(loja.getId(), "Aluguel",
+            new BigDecimal("1500.00"), datas, "chave-pix", "CPF", null);
+
+        when(lojaRepository.findById(loja.getId())).thenReturn(Optional.of(loja));
+        when(pixRepository.saveAll(anyList())).thenAnswer(i -> i.getArgument(0));
+
+        var result = pixService.criarRecorrente(req);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<PagamentoPix>> captor = ArgumentCaptor.forClass(List.class);
+        verify(pixRepository).saveAll(captor.capture());
+        var salvos = captor.getValue();
+        assertEquals(datas, salvos.stream().map(PagamentoPix::getVencimento).toList());
+        assertTrue(salvos.stream().allMatch(p -> p.getFornecedor().equals("Aluguel")
+            && p.getValor().equals(new BigDecimal("1500.00")) && p.getChavePix().equals("chave-pix")));
+        var grupo = salvos.get(0).getRecorrenciaId();
+        assertNotNull(grupo);
+        assertTrue(salvos.stream().allMatch(p -> grupo.equals(p.getRecorrenciaId())));
+        assertEquals(3, result.size());
+    }
+
+    @Test
+    void criarRecorrente_LojaDeOutraEmpresa_NaoCriaNenhum() {
+        var lojaAlheia = Loja.builder().id(UUID.randomUUID())
+            .empresa(Empresa.builder().id(UUID.randomUUID()).build()).build();
+        var req = new CriarPixRecorrenteRequest(lojaAlheia.getId(), "Aluguel",
+            new BigDecimal("1500.00"), List.of(LocalDate.of(2026, 11, 27)), "chave-pix", "CPF", null);
+
+        when(lojaRepository.findById(lojaAlheia.getId())).thenReturn(Optional.of(lojaAlheia));
+
+        assertThrows(com.agenda.shared.exception.AccessDeniedException.class, () -> pixService.criarRecorrente(req));
+        verify(pixRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void criarRecorrenteRequest_RecusaListaVaziaEMaisDe36Datas() {
+        var validator = jakarta.validation.Validation.buildDefaultValidatorFactory().getValidator();
+        var muitas = java.util.stream.IntStream.range(0, 37)
+            .mapToObj(i -> LocalDate.of(2026, 11, 27).plusMonths(i)).toList();
+
+        assertFalse(validator.validate(new CriarPixRecorrenteRequest(loja.getId(), "Aluguel",
+            BigDecimal.TEN, List.of(), "chave", "CPF", null)).isEmpty());
+        assertFalse(validator.validate(new CriarPixRecorrenteRequest(loja.getId(), "Aluguel",
+            BigDecimal.TEN, muitas, "chave", "CPF", null)).isEmpty());
+        assertTrue(validator.validate(new CriarPixRecorrenteRequest(loja.getId(), "Aluguel",
+            BigDecimal.TEN, muitas.subList(0, 36), "chave", "CPF", null)).isEmpty());
+    }
+
+    @Test
     void mudarStatus_DeveAtualizarPagoEmQuandoPAGO() {
         var pix = PagamentoPix.builder()
             .id(UUID.randomUUID()).empresa(empresa).loja(loja)

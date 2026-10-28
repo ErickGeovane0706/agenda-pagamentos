@@ -66,6 +66,10 @@ public class PagamentoPix {
     @Column(columnDefinition = "TEXT")
     private String observacoes;
 
+    /** Mesmo valor em todos os PIX criados juntos pelo "PIX recorrente"; null no PIX avulso. */
+    @Column(name = "recorrencia_id")
+    private UUID recorrenciaId;
+
     /** Quantos arquivos estão anexados. Calculado na mesma consulta da listagem. */
     @Formula("(select count(*) from anexos a where a.pix_id = id)")
     private int qtdAnexos;
