@@ -64,11 +64,16 @@ export function ModalAnexos({
     onError: aoErrar,
   });
 
+  // A aba abre no próprio toque e só depois recebe a URL: o Safari do iPhone
+  // bloqueia sem aviso um window.open feito depois do await.
   const abrir = async (anexoId: string) => {
+    const aba = window.open('', '_blank');
     try {
       const { data } = await api.get(`${base}/${anexoId}/url`);
-      window.open(data.url, '_blank');
+      if (aba) aba.location.href = data.url;
+      else window.location.href = data.url;
     } catch (e) {
+      aba?.close();
       aoErrar(e);
     }
   };
