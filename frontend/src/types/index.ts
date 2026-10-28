@@ -70,6 +70,8 @@ export interface Cheque {
   lojaCor: string;
   bancoId?: string;
   bancoNome?: string;
+  bancoAgencia?: string;
+  bancoConta?: string;
   fornecedor: string;
   valor: number;
   vencimento: string;

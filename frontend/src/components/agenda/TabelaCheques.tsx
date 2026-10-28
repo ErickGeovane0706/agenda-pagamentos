@@ -17,6 +17,7 @@ import { Pagination } from '../Pagination';
 import { SkeletonTable } from '../Skeleton';
 import { clsx } from 'clsx';
 import { usePaginaInicialPendente } from '../../hooks/usePaginaInicialPendente';
+import { detalheConta } from '../../utils/banco';
 
 import type { FiltrosAgenda } from '../../types';
 
@@ -216,6 +217,11 @@ export function TabelaCheques({
                             <span className="text-sm text-slate-700">
                               {cheque.bancoNome || '—'}
                             </span>
+                            {cheque.bancoNome && (cheque.bancoAgencia || cheque.bancoConta) && (
+                              <p className="text-xs text-slate-400 whitespace-nowrap">
+                                {detalheConta({ agencia: cheque.bancoAgencia, conta: cheque.bancoConta })}
+                              </p>
+                            )}
                           </td>
 
                           <td className="px-4 py-3">

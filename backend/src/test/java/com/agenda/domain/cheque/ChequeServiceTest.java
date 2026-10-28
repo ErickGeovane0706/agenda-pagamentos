@@ -2,6 +2,7 @@ package com.agenda.domain.cheque;
 
 import com.agenda.auditoria.AuditoriaService;
 import com.agenda.domain.arquivo.AnexoService;
+import com.agenda.domain.banco.Banco;
 import com.agenda.domain.banco.BancoRepository;
 import com.agenda.domain.empresa.Empresa;
 import com.agenda.domain.loja.Loja;
@@ -75,6 +76,24 @@ class ChequeServiceTest {
         assertEquals("Fornecedor X", result.fornecedor());
         assertEquals(StatusCheque.PENDENTE, result.status());
         verify(auditoriaService).registrar(eq("CRIAR"), eq("CHEQUE"), any(), anyString());
+    }
+
+    @Test
+    void criar_ComBanco_DtoTrazAgenciaEContaParaAListaDeCheques() {
+        var banco = Banco.builder().id(UUID.randomUUID()).empresa(empresa)
+            .nome("Banco do Brasil").agencia("4321").conta("11111-2").build();
+        var req = new CriarChequeRequest(loja.getId(), "Fornecedor X",
+            new BigDecimal("500.00"), LocalDate.now().plusDays(30), banco.getId(), "12345", null);
+
+        when(lojaRepository.findById(loja.getId())).thenReturn(Optional.of(loja));
+        when(bancoRepository.findById(banco.getId())).thenReturn(Optional.of(banco));
+        when(chequeRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        var result = chequeService.criar(req);
+
+        assertEquals("Banco do Brasil", result.bancoNome());
+        assertEquals("4321", result.bancoAgencia());
+        assertEquals("11111-2", result.bancoConta());
     }
 
     @Test
