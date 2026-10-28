@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -118,6 +119,30 @@ public class PixService {
         pix = pixRepository.save(pix);
         auditoriaService.registrar("CRIAR", "PIX", pix.getId(), "Fornecedor: " + req.fornecedor());
         return PixDTO.from(pix);
+    }
+
+    /** Cria um PIX por data, todos ou nenhum, ligados pelo mesmo {@code recorrenciaId}. */
+    @Transactional
+    public List<PixDTO> criarRecorrente(CriarPixRecorrenteRequest req) {
+        UUID empresaId = TenantContext.getEmpresaId();
+        var loja = lojaRepository.findById(req.lojaId())
+                .orElseThrow(() -> new NotFoundException("Loja não encontrada"));
+        if (!loja.getEmpresa().getId().equals(empresaId)) throw new AccessDeniedException("Acesso negado");
+
+        UUID recorrenciaId = UUID.randomUUID();
+        var lista = req.vencimentos().stream()
+                .map(vencimento -> PagamentoPix.builder()
+                        .empresa(loja.getEmpresa()).loja(loja)
+                        .fornecedor(req.fornecedor()).valor(req.valor())
+                        .vencimento(vencimento).chavePix(req.chavePix())
+                        .tipoChave(req.tipoChave()).observacoes(req.observacoes())
+                        .recorrenciaId(recorrenciaId)
+                        .build())
+                .toList();
+        var salvos = pixRepository.saveAll(lista);
+        salvos.forEach(pix -> auditoriaService.registrar("CRIAR", "PIX", pix.getId(),
+                "Fornecedor: " + req.fornecedor() + " (recorrente)"));
+        return salvos.stream().map(PixDTO::from).toList();
     }
 
     @Transactional

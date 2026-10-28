@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Copy, Check, Pencil, Trash2, Plus
+  Copy, Check, Pencil, Trash2, Plus, Repeat
 } from 'lucide-react';
 import { useState } from 'react';
 import { format, isPast, parseISO } from 'date-fns';
@@ -11,6 +11,7 @@ import { BadgeStatus } from '../BadgeStatus';
 import { ValorMonetario } from '../ValorMonetario';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { ModalPix } from './ModalPix';
+import { ModalPixRecorrente } from './ModalPixRecorrente';
 import { CardPix } from './CardPix';
 import { ModalAnexos, BotaoAnexos } from './ModalAnexos';
 import { Pagination } from '../Pagination';
@@ -34,6 +35,7 @@ export function TabelaPix({
   const [copiado, setCopiado] = useState<string | null>(null);
   const [modalAberto, setModalAberto] = useState(false);
   const [pixEditando, setPixEditando] = useState<PagamentoPix | null>(null);
+  const [recorrenteAberto, setRecorrenteAberto] = useState(false);
   const [anexosDe, setAnexosDe] = useState<PagamentoPix | null>(null);
   const pageSize = 15;
   const [page, setPage] = usePaginaInicialPendente('pix', lojaId, filtros, pageSize);
@@ -82,7 +84,16 @@ export function TabelaPix({
 
   return (
     <div>
-      <div className="flex justify-end mb-4">
+      <div className="flex justify-between gap-2 mb-4">
+        <button
+          onClick={() => setRecorrenteAberto(true)}
+          className="flex items-center gap-2 bg-white hover:bg-slate-50 border border-slate-200
+                     text-[#0c4a6e] text-sm font-medium px-4 py-2 rounded-xl
+                     transition-colors shadow-sm"
+        >
+          <Repeat className="w-4 h-4" />
+          PIX recorrente
+        </button>
         <button
           onClick={() => { setPixEditando(null); setModalAberto(true); }}
           className="flex items-center gap-2 bg-[#0c4a6e] hover:bg-[#0a3d5c]
@@ -301,6 +312,14 @@ export function TabelaPix({
           pix={pixEditando}
           lojaId={lojaId}
           onFechar={() => setModalAberto(false)} onSalvo={() => { setModalAberto(false); setPixEditando(null); queryClient.invalidateQueries({ queryKey: ['pix', lojaId] }); }}
+        />
+      )}
+
+      {recorrenteAberto && (
+        <ModalPixRecorrente
+          lojaId={lojaId}
+          onFechar={() => setRecorrenteAberto(false)}
+          onSalvo={() => { setRecorrenteAberto(false); queryClient.invalidateQueries({ queryKey: ['pix', lojaId] }); }}
         />
       )}
     </div>

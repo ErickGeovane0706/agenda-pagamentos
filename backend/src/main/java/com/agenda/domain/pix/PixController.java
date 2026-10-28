@@ -11,6 +11,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -61,6 +62,12 @@ public class PixController {
     @PreAuthorize("hasAnyRole('ADMIN','OPERADOR')")
     public ResponseEntity<PixDTO> criar(@RequestBody @Valid CriarPixRequest req) {
         return ResponseEntity.ok(pixService.criar(req));
+    }
+
+    @PostMapping("/recorrente")
+    @PreAuthorize("hasAnyRole('ADMIN','OPERADOR')")
+    public ResponseEntity<List<PixDTO>> criarRecorrente(@RequestBody @Valid CriarPixRecorrenteRequest req) {
+        return ResponseEntity.ok(pixService.criarRecorrente(req));
     }
 
     @PutMapping("/{id}")
