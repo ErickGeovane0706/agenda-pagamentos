@@ -164,4 +164,61 @@ class RelatorioServiceTest {
         assertEquals(1L, cheques.get("total"));
         assertEquals(1L, cheques.get("pendente"));
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void gerar_TodasAsLojas_QuebraPorLojaDoMaiorAPagarParaOMenor() {
+        var centro = UUID.randomUUID();
+        var norte = UUID.randomUUID();
+        var boletos = new ArrayList<Object[]>();
+        boletos.add(new Object[]{"PAGO", centro, "Centro", BigDecimal.valueOf(1000)});
+        boletos.add(new Object[]{"PENDENTE", norte, "Norte", BigDecimal.valueOf(500)});
+        boletos.add(new Object[]{"VENCIDO", norte, "Norte", BigDecimal.valueOf(300)});
+        boletos.add(new Object[]{"CANCELADO", centro, "Centro", BigDecimal.valueOf(9999)});
+        when(boletoRepository.resumoPorLoja(any(), any(), any())).thenReturn(boletos);
+        var cheques = new ArrayList<Object[]>();
+        cheques.add(new Object[]{"PENDENTE", centro, "Centro", BigDecimal.valueOf(200)});
+        cheques.add(new Object[]{"DEVOLVIDO", centro, "Centro", BigDecimal.valueOf(50)});
+        when(chequeRepository.resumoPorLoja(any(), any(), any())).thenReturn(cheques);
+
+        var result = relatorioService.gerar(empresaId, de, ate, null, "TODOS", null);
+
+        var porLoja = (java.util.List<java.util.Map<String, Object>>) result.get("porLoja");
+        assertEquals(2, porLoja.size());
+        assertEquals("Norte", porLoja.get(0).get("nome"));
+        assertEquals(norte, porLoja.get(0).get("lojaId"));
+        assertEquals(BigDecimal.ZERO, porLoja.get(0).get("valorPago"));
+        assertEquals(BigDecimal.valueOf(800), porLoja.get(0).get("valorAPagar"));
+        assertEquals(BigDecimal.valueOf(300), porLoja.get(0).get("valorEmAtraso"));
+        assertEquals("Centro", porLoja.get(1).get("nome"));
+        assertEquals(BigDecimal.valueOf(1000), porLoja.get(1).get("valorPago"));
+        assertEquals(BigDecimal.valueOf(250), porLoja.get(1).get("valorAPagar"));
+        assertEquals(BigDecimal.valueOf(50), porLoja.get(1).get("valorEmAtraso"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void gerar_TodasAsLojas_PorLojaRespeitaTipoEStatus() {
+        var centro = UUID.randomUUID();
+        var boletos = new ArrayList<Object[]>();
+        boletos.add(new Object[]{"PAGO", centro, "Centro", BigDecimal.valueOf(1000)});
+        boletos.add(new Object[]{"PENDENTE", centro, "Centro", BigDecimal.valueOf(500)});
+        when(boletoRepository.resumoPorLoja(any(), any(), any())).thenReturn(boletos);
+
+        var result = relatorioService.gerar(empresaId, de, ate, null, "BOLETO", "PAGO");
+
+        var porLoja = (java.util.List<java.util.Map<String, Object>>) result.get("porLoja");
+        assertEquals(BigDecimal.valueOf(1000), porLoja.get(0).get("valorPago"));
+        assertEquals(BigDecimal.ZERO, porLoja.get(0).get("valorAPagar"));
+        verify(chequeRepository, never()).resumoPorLoja(any(), any(), any());
+        verify(pagamentoPixRepository, never()).resumoPorLoja(any(), any(), any());
+    }
+
+    @Test
+    void gerar_UmaLojaSo_NaoQuebraPorLoja() {
+        var result = relatorioService.gerar(empresaId, de, ate, UUID.randomUUID(), "TODOS", null);
+
+        assertNull(result.get("porLoja"));
+        verify(boletoRepository, never()).resumoPorLoja(any(), any(), any());
+    }
 }

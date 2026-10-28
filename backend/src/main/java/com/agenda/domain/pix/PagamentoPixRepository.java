@@ -38,6 +38,19 @@ public interface PagamentoPixRepository extends JpaRepository<PagamentoPix, UUID
             @Param("ate") LocalDate ate
     );
 
+    /** Mesmo resumo de {@link #resumo}, quebrado por loja — relatório com "Todas as lojas". */
+    @Query("""
+        SELECT p.status, p.loja.id, p.loja.nome, SUM(p.valor) FROM PagamentoPix p
+        WHERE p.empresa.id = :empresaId
+        AND p.vencimento BETWEEN :de AND :ate
+        GROUP BY p.status, p.loja.id, p.loja.nome
+    """)
+    List<Object[]> resumoPorLoja(
+            @Param("empresaId") UUID empresaId,
+            @Param("de") LocalDate de,
+            @Param("ate") LocalDate ate
+    );
+
     /** PIX pendentes que vencem exatamente em {@code data} (job notificacao). */
     @Query("SELECT p FROM PagamentoPix p WHERE p.empresa.id = :empresaId AND p.status = 'PENDENTE' AND p.vencimento = :data")
     List<PagamentoPix> findPendentesVencendoEm(@Param("empresaId") UUID empresaId, @Param("data") LocalDate data);

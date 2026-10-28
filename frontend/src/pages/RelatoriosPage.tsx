@@ -4,6 +4,7 @@ import { BarChart3, Download, Loader2, Filter } from 'lucide-react';
 import api from '../api/client';
 import { ValorMonetario } from '../components/ValorMonetario';
 import GraficosRelatorio from '../components/GraficosRelatorio';
+import { TabelaPorLoja } from '../components/TabelaPorLoja';
 import { useAuthStore } from '../store/authStore';
 import type { Loja } from '../types';
 
@@ -179,6 +180,10 @@ export default function RelatoriosPage() {
                 </div>
               ))}
             </div>
+
+            {!lojaId && relatorio.porLoja && (
+              <TabelaPorLoja porLoja={relatorio.porLoja} lojas={lojas} onEscolher={setLojaId} />
+            )}
 
             <GraficosRelatorio relatorio={relatorio} tipo={tipo} />
           </div>

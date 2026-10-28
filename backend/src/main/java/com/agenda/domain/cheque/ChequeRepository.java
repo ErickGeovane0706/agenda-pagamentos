@@ -38,6 +38,19 @@ public interface ChequeRepository extends JpaRepository<Cheque, UUID>, JpaSpecif
             @Param("ate") LocalDate ate
     );
 
+    /** Mesmo resumo de {@link #resumo}, quebrado por loja — relatório com "Todas as lojas". */
+    @Query("""
+        SELECT c.status, c.loja.id, c.loja.nome, SUM(c.valor) FROM Cheque c
+        WHERE c.empresa.id = :empresaId
+        AND c.vencimento BETWEEN :de AND :ate
+        GROUP BY c.status, c.loja.id, c.loja.nome
+    """)
+    List<Object[]> resumoPorLoja(
+            @Param("empresaId") UUID empresaId,
+            @Param("de") LocalDate de,
+            @Param("ate") LocalDate ate
+    );
+
     /** Cheques pendentes que vencem exatamente em {@code data} (job notificacao). */
     @Query("SELECT c FROM Cheque c WHERE c.empresa.id = :empresaId AND c.status = 'PENDENTE' AND c.vencimento = :data")
     List<Cheque> findPendentesVencendoEm(@Param("empresaId") UUID empresaId, @Param("data") LocalDate data);

@@ -54,7 +54,46 @@ public class RelatorioService {
         resultado.put("boletos", resumoBoletos);
         resultado.put("pix", resumoPix);
         resultado.put("cheques", resumoCheques);
+        if (lojaId == null) resultado.put("porLoja", montarPorLoja(empresaId, de, ate, tipo, status));
         return resultado;
+    }
+
+    /**
+     * Com "Todas as lojas", o total somado não diz de qual loja é cada valor.
+     * Uma linha por loja, da que mais tem a pagar para a que menos tem.
+     * Em atraso = boleto/PIX vencido ou cheque devolvido; já está dentro do a pagar.
+     */
+    private List<Map<String, Object>> montarPorLoja(UUID empresaId, LocalDate de, LocalDate ate, String tipo, String status) {
+        boolean todos = tipo == null || tipo.equalsIgnoreCase("TODOS");
+        var rows = new ArrayList<Object[]>();
+        if (todos || tipo.equalsIgnoreCase("BOLETO")) rows.addAll(filtrarPorStatus(
+            boletoRepository.resumoPorLoja(empresaId, de, ate), status, Set.of("PAGO"), Set.of("PENDENTE", "VENCIDO")));
+        if (todos || tipo.equalsIgnoreCase("PIX")) rows.addAll(filtrarPorStatus(
+            pagamentoPixRepository.resumoPorLoja(empresaId, de, ate), status, Set.of("PAGO"), Set.of("PENDENTE", "VENCIDO")));
+        if (todos || tipo.equalsIgnoreCase("CHEQUE")) rows.addAll(filtrarPorStatus(
+            chequeRepository.resumoPorLoja(empresaId, de, ate), status, Set.of("COMPENSADO"), Set.of("PENDENTE", "DEVOLVIDO")));
+
+        Map<UUID, Map<String, Object>> lojas = new LinkedHashMap<>();
+        for (var row : rows) {
+            String s = row[0].toString();
+            if (s.equals("CANCELADO")) continue;
+            var valor = row[3] != null ? (BigDecimal) row[3] : BigDecimal.ZERO;
+            var loja = lojas.computeIfAbsent((UUID) row[1], id -> new HashMap<>(Map.of(
+                "lojaId", id, "nome", str(row[2]),
+                "valorPago", BigDecimal.ZERO, "valorAPagar", BigDecimal.ZERO, "valorEmAtraso", BigDecimal.ZERO)));
+            switch (s) {
+                case "PAGO", "COMPENSADO" -> loja.merge("valorPago", valor, (a, b) -> ((BigDecimal) a).add((BigDecimal) b));
+                case "PENDENTE" -> loja.merge("valorAPagar", valor, (a, b) -> ((BigDecimal) a).add((BigDecimal) b));
+                case "VENCIDO", "DEVOLVIDO" -> {
+                    loja.merge("valorAPagar", valor, (a, b) -> ((BigDecimal) a).add((BigDecimal) b));
+                    loja.merge("valorEmAtraso", valor, (a, b) -> ((BigDecimal) a).add((BigDecimal) b));
+                }
+            }
+        }
+        return lojas.values().stream()
+            .sorted(Comparator.comparing((Map<String, Object> l) -> (BigDecimal) l.get("valorAPagar")).reversed()
+                .thenComparing(l -> (BigDecimal) l.get("valorPago"), Comparator.reverseOrder()))
+            .toList();
     }
 
     @SuppressWarnings("unchecked")
