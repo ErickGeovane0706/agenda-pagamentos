@@ -5,6 +5,7 @@ import { BadgeStatus } from '../BadgeStatus';
 import { ValorMonetario } from '../ValorMonetario';
 import { clsx } from 'clsx';
 import { BotaoAnexos } from './ModalAnexos';
+import { detalheConta } from '../../utils/banco';
 
 export function CardCheque({
   cheque,
@@ -21,6 +22,7 @@ export function CardCheque({
 }) {
   const vencido = cheque.status === 'PENDENTE' &&
     isPast(parseISO(cheque.vencimento + 'T23:59:59'));
+  const contaBanco = detalheConta({ agencia: cheque.bancoAgencia, conta: cheque.bancoConta });
 
   const proximoStatus = (atual: StatusCheque): StatusCheque => {
     if (atual === 'PENDENTE') return 'COMPENSADO';
@@ -54,14 +56,17 @@ export function CardCheque({
           </span>
         </div>
 
-        <div className="flex items-center justify-between text-sm">
+        <div className="flex items-start justify-between gap-3 text-sm">
           {cheque.bancoNome && (
-            <span className="text-slate-600">
-              <span className="text-slate-400">Banco:</span> {cheque.bancoNome}
-            </span>
+            <div className="min-w-0">
+              <p className="text-slate-600 truncate">
+                <span className="text-slate-400">Banco:</span> {cheque.bancoNome}
+              </p>
+              {contaBanco && <p className="text-xs text-slate-500">{contaBanco}</p>}
+            </div>
           )}
           {cheque.numeroCheque && (
-            <span className="text-slate-700 font-mono">
+            <span className="text-slate-700 font-mono shrink-0">
               #{cheque.numeroCheque}
             </span>
           )}

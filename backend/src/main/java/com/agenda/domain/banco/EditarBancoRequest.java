@@ -9,5 +9,7 @@ import jakarta.validation.constraints.Size;
  */
 public record EditarBancoRequest(
     @NotBlank @Size(min = 2) String nome,
-    String codigo
+    String codigo,
+    @Size(max = 10) String agencia,
+    @Size(max = 20) String conta
 ) {}

@@ -3,11 +3,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
     Settings, User, Shield, Building2, Plus, Pencil, Trash2,
-    Mail, X, AlertTriangle, MessageCircle, Store, Check, Download, CreditCard
+    Mail, AlertTriangle, MessageCircle, Store, Check, Download, CreditCard
 } from 'lucide-react';
 import api from '../api/client';
 import { useAuthStore } from '../store/authStore';
 import { Usuario, Banco, Loja } from '../types';
+import { FormBanco } from '../components/FormBanco';
+import { detalheConta } from '../utils/banco';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -397,35 +399,25 @@ function AssinaturaTab({ empresaId }: { empresaId?: string }) {
     );
 }
 
-const bancoSchema = z.object({
-    nome: z.string().min(2, 'Mínimo 2 caracteres'),
-    codigo: z.string().optional(),
-});
-
 function BancosTab({ bancos, mostrarCriar, setMostrarCriar }: {
     bancos: Banco[];
     mostrarCriar: boolean;
     setMostrarCriar: (v: boolean) => void;
 }) {
     const queryClient = useQueryClient();
-    const { register, handleSubmit, reset, formState: { errors } } = useForm<z.infer<typeof bancoSchema>>({
-        resolver: zodResolver(bancoSchema),
-    });
+    const [editandoId, setEditandoId] = useState<string | null>(null);
 
-    const criarMutation = useMutation({
-        mutationFn: (d: z.infer<typeof bancoSchema>) => api.post('/bancos', d),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['bancos'] });
-            setMostrarCriar(false);
-            reset();
-        },
-    });
+    const aoSalvar = () => {
+        queryClient.invalidateQueries({ queryKey: ['bancos'] });
+        setMostrarCriar(false);
+        setEditandoId(null);
+    };
 
     return (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between">
                 <h2 className="font-semibold text-slate-900">Bancos cadastrados</h2>
-                <button onClick={() => setMostrarCriar(true)}
+                <button onClick={() => { setEditandoId(null); setMostrarCriar(true); }}
                         className="flex items-center gap-1.5 text-sm font-medium text-[#0c4a6e] hover:text-blue-800">
                     <Plus className="w-4 h-4" /> Novo banco
                 </button>
@@ -433,27 +425,7 @@ function BancosTab({ bancos, mostrarCriar, setMostrarCriar }: {
 
             {mostrarCriar && (
                 <div className="p-4 bg-[#e0f2fe] border-b border-blue-100">
-                    <form onSubmit={handleSubmit(d => criarMutation.mutate(d))} className="flex gap-3 items-end">
-                        <div className="flex-1">
-                            <label className="block text-xs font-medium text-slate-600 mb-1">Nome</label>
-                            <input {...register('nome')} placeholder="Nome do banco"
-                                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9]" />
-                            {errors.nome && <p className="text-red-500 text-xs mt-1">{errors.nome.message}</p>}
-                        </div>
-                        <div className="w-24">
-                            <label className="block text-xs font-medium text-slate-600 mb-1">Código</label>
-                            <input {...register('codigo')} placeholder="001"
-                                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9]" />
-                        </div>
-                        <button type="submit" disabled={criarMutation.isPending}
-                                className="px-4 py-2 bg-[#0c4a6e] text-white text-sm font-medium rounded-lg hover:bg-[#0a3d5c] disabled:bg-[#0ea5e9]">
-                            Salvar
-                        </button>
-                        <button type="button" onClick={() => { setMostrarCriar(false); reset(); }}
-                                className="p-2 text-slate-400 hover:text-slate-600">
-                            <X className="w-4 h-4" />
-                        </button>
-                    </form>
+                    <FormBanco banco={null} onFechar={() => setMostrarCriar(false)} onSalvo={aoSalvar} />
                 </div>
             )}
 
@@ -461,13 +433,26 @@ function BancosTab({ bancos, mostrarCriar, setMostrarCriar }: {
                 <div className="text-center py-8 text-slate-400 text-sm">Nenhum banco cadastrado</div>
             ) : (
                 <div className="divide-y divide-slate-50">
-                    {bancos.map((banco: Banco) => (
+                    {bancos.map((banco: Banco) => editandoId === banco.id ? (
+                        <div key={banco.id} className="p-4 bg-[#e0f2fe]">
+                            <FormBanco banco={banco} onFechar={() => setEditandoId(null)} onSalvo={aoSalvar} />
+                        </div>
+                    ) : (
                         <div key={banco.id} className="flex items-center gap-3 px-4 py-3">
-                            <Building2 className="w-5 h-5 text-slate-400" />
-                            <div className="flex-1">
-                                <p className="text-sm font-medium text-slate-900">{banco.nome}</p>
-                                {banco.codigo && <p className="text-xs text-slate-400">Código: {banco.codigo}</p>}
+                            <Building2 className="w-5 h-5 text-slate-400 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-slate-900 truncate">{banco.nome}</p>
+                                {(banco.codigo || detalheConta(banco)) && (
+                                    <p className="text-xs text-slate-400 truncate">
+                                        {[banco.codigo && `Código ${banco.codigo}`, detalheConta(banco)].filter(Boolean).join(' · ')}
+                                    </p>
+                                )}
                             </div>
+                            <button onClick={() => { setMostrarCriar(false); setEditandoId(banco.id); }}
+                                    aria-label={`Editar ${banco.nome}`}
+                                    className="p-2 rounded-lg hover:bg-slate-100 flex-shrink-0">
+                                <Pencil className="w-4 h-4 text-slate-500" />
+                            </button>
                         </div>
                     ))}
                 </div>
