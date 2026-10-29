@@ -67,7 +67,7 @@ public interface ChequeRepository extends JpaRepository<Cheque, UUID>, JpaSpecif
      * Projeção enxuta para CSV (sem joins em loja/banco).
      */
     @Query("""
-        SELECT c.fornecedor, c.valor, c.vencimento, c.status FROM Cheque c
+        SELECT c.fornecedor, c.valor, c.vencimento, c.status, c.loja.nome FROM Cheque c
         WHERE c.empresa.id = :empresaId
         AND (:lojaId IS NULL OR c.loja.id = :lojaId)
         AND c.vencimento BETWEEN :de AND :ate

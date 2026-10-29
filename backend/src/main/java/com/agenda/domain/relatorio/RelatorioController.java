@@ -58,9 +58,11 @@ public class RelatorioController {
     public ResponseEntity<byte[]> exportar(
             @RequestParam LocalDate de,
             @RequestParam LocalDate ate,
-            @RequestParam(required = false) UUID lojaId) throws IOException {
+            @RequestParam(required = false) UUID lojaId,
+            @RequestParam(required = false) String tipo,
+            @RequestParam(required = false) String status) throws IOException {
         UUID empresaId = TenantContext.getEmpresaId();
-        var arquivo = relatorioExcelService.gerarExcel(empresaId, lojaId, de, ate);
+        var arquivo = relatorioExcelService.gerarExcel(empresaId, lojaId, de, ate, tipo, status);
         var headers = new HttpHeaders();
         headers.setContentType(MediaType.parseMediaType(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));

@@ -64,3 +64,47 @@ describe('RelatoriosPage — por loja', () => {
     expect(await screen.findByText('Por loja')).toBeTruthy();
   });
 });
+
+describe('RelatoriosPage — download do Excel', () => {
+  beforeEach(() => {
+    get.mockReset();
+    get.mockImplementation((url: string, config?: AxiosRequestConfig) => {
+      if (url === '/lojas') return Promise.resolve({ data: [{ id: 'c', nome: 'Centro' }, { id: 'n', nome: 'Norte' }] });
+      return Promise.resolve({ data: relatorio((config?.params as { lojaId?: string } | undefined)?.lojaId ? undefined : porLoja) });
+    });
+    URL.createObjectURL = vi.fn(() => 'blob:x');
+    URL.revokeObjectURL = vi.fn();
+  });
+
+  it('o arquivo sai com os mesmos filtros da tela: loja, tipo e situação', async () => {
+    const fetch = vi.fn().mockResolvedValue({ blob: () => Promise.resolve(new Blob()) });
+    vi.stubGlobal('fetch', fetch);
+    renderizar();
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Centro/ }));
+    fireEvent.change(screen.getByDisplayValue('Todos'), { target: { value: 'CHEQUE' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Pendentes' }));
+    await userEvent.click(await screen.findByRole('button', { name: /Download Excel/ }));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    const url = new URL(fetch.mock.calls[0][0], 'http://x');
+    expect(url.pathname).toBe('/api/relatorios/exportar');
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      de: '2026-10-01', ate: '2026-10-31', lojaId: 'c', tipo: 'CHEQUE', status: 'PENDENTE',
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it('sem filtro de tipo e situação, não manda esses parâmetros', async () => {
+    const fetch = vi.fn().mockResolvedValue({ blob: () => Promise.resolve(new Blob()) });
+    vi.stubGlobal('fetch', fetch);
+    renderizar();
+
+    await userEvent.click(await screen.findByRole('button', { name: /Download Excel/ }));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    const url = new URL(fetch.mock.calls[0][0], 'http://x');
+    expect(Object.fromEntries(url.searchParams)).toEqual({ de: '2026-10-01', ate: '2026-10-31' });
+    vi.unstubAllGlobals();
+  });
+});
