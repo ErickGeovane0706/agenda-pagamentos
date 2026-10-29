@@ -12,7 +12,7 @@ import { BadgeStatus } from '../BadgeStatus';
 import { ValorMonetario } from '../ValorMonetario';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { ModalBoleto } from './ModalBoleto';
-import { CardBoleto } from './CardBoleto';
+import { CardBoleto, LinhaDocumento } from './CardBoleto';
 import { ModalAnexos, BotaoAnexos } from './ModalAnexos';
 import { Pagination } from '../Pagination';
 import { SkeletonTable } from '../Skeleton';
@@ -195,6 +195,7 @@ export function TabelaBoletos({
                         >
                           <td className="px-4 py-3">
                             <span className="font-medium text-slate-800">{boleto.fornecedor}</span>
+                            <LinhaDocumento numeroDocumento={boleto.numeroDocumento} notaFiscalPedido={boleto.notaFiscalPedido} />
                             {boleto.observacoes && (
                               <p className="text-xs text-slate-400 truncate max-w-[200px]">
                                 {boleto.observacoes}

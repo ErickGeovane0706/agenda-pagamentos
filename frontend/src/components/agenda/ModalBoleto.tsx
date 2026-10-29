@@ -17,6 +17,8 @@ const schema = z.object({
   vencimento: z.string().min(1, 'Informe o vencimento'),
   codigoBarras: z.string().optional(),
   observacoes: z.string().optional(),
+  numeroDocumento: z.string().max(30, 'Máximo 30 caracteres').optional(),
+  notaFiscalPedido: z.string().max(50, 'Máximo 50 caracteres').optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -42,6 +44,8 @@ export function ModalBoleto({
       vencimento: boleto.vencimento,
       codigoBarras: boleto.codigoBarras || '',
       observacoes: boleto.observacoes || '',
+      numeroDocumento: boleto.numeroDocumento || '',
+      notaFiscalPedido: boleto.notaFiscalPedido || '',
     } : {
       lojaId,
       fornecedor: '',
@@ -49,6 +53,8 @@ export function ModalBoleto({
       vencimento: '',
       codigoBarras: '',
       observacoes: '',
+      numeroDocumento: '',
+      notaFiscalPedido: '',
     },
   });
 
@@ -61,6 +67,8 @@ export function ModalBoleto({
         vencimento: data.vencimento,
         codigoBarras: data.codigoBarras || null,
         observacoes: data.observacoes || null,
+        numeroDocumento: data.numeroDocumento?.trim() || null,
+        notaFiscalPedido: data.notaFiscalPedido?.trim() || null,
       };
       return boleto
         ? api.put(`/boletos/${boleto.id}`, payload)
@@ -101,6 +109,22 @@ export function ModalBoleto({
                 <input {...register('fornecedor')} placeholder="Nome do fornecedor"
                   className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9]" />
                 {errors.fornecedor && <p className="text-red-500 text-xs mt-1">{errors.fornecedor.message}</p>}
+              </div>
+
+              {/* Pedido do cliente: conferir o boleto com a NF. Opcionais, como o código de barras. */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="boleto-documento" className="block text-sm font-medium text-slate-700 mb-1">Nº do documento <span className="font-normal text-slate-400">(opcional)</span></label>
+                  <input id="boleto-documento" {...register('numeroDocumento')} maxLength={30} placeholder="Ex.: 000123"
+                    className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9]" />
+                  {errors.numeroDocumento && <p className="text-red-500 text-xs mt-1">{errors.numeroDocumento.message}</p>}
+                </div>
+                <div>
+                  <label htmlFor="boleto-nf" className="block text-sm font-medium text-slate-700 mb-1">Nota fiscal / pedido <span className="font-normal text-slate-400">(opcional)</span></label>
+                  <input id="boleto-nf" {...register('notaFiscalPedido')} maxLength={50} placeholder="Ex.: NF 4521"
+                    className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9]" />
+                  {errors.notaFiscalPedido && <p className="text-red-500 text-xs mt-1">{errors.notaFiscalPedido.message}</p>}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

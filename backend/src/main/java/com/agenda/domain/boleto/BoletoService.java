@@ -143,6 +143,8 @@ public class BoletoService {
                 .vencimento(req.vencimento())
                 .codigoBarras(req.codigoBarras())
                 .observacoes(req.observacoes())
+                .numeroDocumento(textoOuNulo(req.numeroDocumento()))
+                .notaFiscalPedido(textoOuNulo(req.notaFiscalPedido()))
                 .build();
         boleto = boletoRepository.save(boleto);
         auditoriaService.registrar("CRIAR", "BOLETO", boleto.getId(), "Fornecedor: " + req.fornecedor());
@@ -169,6 +171,8 @@ public class BoletoService {
         boleto.setVencimento(req.vencimento());
         boleto.setCodigoBarras(req.codigoBarras());
         boleto.setObservacoes(req.observacoes());
+        boleto.setNumeroDocumento(textoOuNulo(req.numeroDocumento()));
+        boleto.setNotaFiscalPedido(textoOuNulo(req.notaFiscalPedido()));
         boleto = boletoRepository.save(boleto);
         auditoriaService.registrar("EDITAR", "BOLETO", boleto.getId(), "Fornecedor: " + req.fornecedor());
         return BoletoDTO.from(boleto);
@@ -212,5 +216,10 @@ public class BoletoService {
         anexoService.removerArquivosDo(TipoDocumento.BOLETO, id);
         boletoRepository.delete(boleto);
         auditoriaService.registrar("EXCLUIR", "BOLETO", id, "Fornecedor: " + boleto.getFornecedor());
+    }
+
+    /** Campo opcional digitado: sem espaço sobrando, e vazio vira nada. */
+    private static String textoOuNulo(String v) {
+        return v == null || v.isBlank() ? null : v.strip();
     }
 }

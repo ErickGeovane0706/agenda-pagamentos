@@ -39,6 +39,12 @@ só que errado. É o tipo de coisa que uma "limpeza" desfaz sem perceber.
 7. **Cancelado não entra em nenhum total**, igual à tela (ver o teste de
    integração que exige topo = soma das lojas). Fica num bloco à parte.
 
+8. **Nenhuma letra de coluna escrita à mão.** As colunas Nº documento e
+   NF/Pedido só entram quando algum boleto do arquivo tem um deles, e aí
+   Situação e Valor andam duas casas. Cartões, total, filtro, dados dos gráficos
+   e posição dos gráficos pegam a coluna do `record Colunas`. Um `"$F$"` fixo
+   passa nos testes sem documento e zera os cartões com documento.
+
 ## Consequência
 
 Testes que seguram cada item, em `RelatorioExcelServiceTest`:
@@ -48,6 +54,7 @@ Testes que seguram cada item, em `RelatorioExcelServiceTest`:
 | 1, 2, 3, 4 (aba oculta) | `graficos_abaixoDaLinhaFixa_semTextoPorCimaDasBarras_eDadosNumaAbaOculta` |
 | 4, 5 | `cartoesETotal_somamSoAsLinhasVisiveis_eBatemComOsValores`, `dadosDosGraficos_porLojaEPorSemana_batemComOsLancamentos` |
 | 7 | `tabela_temLoja_...`, `cancelados_ficamNumBlocoAParte_...` |
+| 8 | `comDocumentoOuNotaFiscal_ganhaDuasColunas_eAsFormulasAcompanham` |
 
 O POI não calcula `SUBTOTAL(OFFSET(...))` dentro de `SUMPRODUCT`. O teste confere
 o valor gravado e calcula a mesma fórmula sem a parte das linhas visíveis, como

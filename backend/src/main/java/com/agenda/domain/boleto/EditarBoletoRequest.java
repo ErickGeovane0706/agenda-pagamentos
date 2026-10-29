@@ -19,5 +19,7 @@ public record EditarBoletoRequest(
     @NotNull @DecimalMin("0.01") BigDecimal valor,
     @NotNull LocalDate vencimento,
     String codigoBarras,
-    String observacoes
+    String observacoes,
+    @Size(max = 30) String numeroDocumento,
+    @Size(max = 50) String notaFiscalPedido
 ) {}

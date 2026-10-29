@@ -9,7 +9,8 @@ import java.util.UUID;
  * DTO de entrada para criar um novo boleto.
  * <p>
  * {@code lojaId}, {@code fornecedor}, {@code valor} e {@code vencimento} são obrigatórios.
- * {@code codigoBarras} e {@code observacoes} são opcionais.
+ * {@code codigoBarras}, {@code observacoes}, {@code numeroDocumento} e
+ * {@code notaFiscalPedido} são opcionais.
  * {@code confirmarDuplicado = true} é a resposta do usuário ao aviso de boleto
  * já cadastrado (409): grava mesmo assim.
  * </p>
@@ -21,5 +22,7 @@ public record CriarBoletoRequest(
     @NotNull LocalDate vencimento,
     String codigoBarras,
     String observacoes,
-    Boolean confirmarDuplicado
+    Boolean confirmarDuplicado,
+    @Size(max = 30) String numeroDocumento,
+    @Size(max = 50) String notaFiscalPedido
 ) {}

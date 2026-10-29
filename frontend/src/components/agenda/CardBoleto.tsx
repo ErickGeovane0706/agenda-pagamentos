@@ -7,6 +7,16 @@ import { BotaoPagar } from './BotaoPagar';
 import { clsx } from 'clsx';
 import { BotaoAnexos } from './ModalAnexos';
 
+/** "Doc 000123 · NF/Pedido NF 4521/1" — só o que o boleto tiver; nada se não tiver nenhum. */
+export function LinhaDocumento({ numeroDocumento, notaFiscalPedido }: { numeroDocumento?: string; notaFiscalPedido?: string }) {
+  const partes = [
+    numeroDocumento && `Doc ${numeroDocumento}`,
+    notaFiscalPedido && `NF/Pedido ${notaFiscalPedido}`,
+  ].filter(Boolean);
+  if (partes.length === 0) return null;
+  return <p className="text-xs text-slate-500 truncate">{partes.join(' · ')}</p>;
+}
+
 export function CardBoleto({
   boleto,
   onCopiar,
@@ -41,6 +51,7 @@ export function CardBoleto({
       </div>
 
       <div className="px-4 py-3 space-y-2">
+        <LinhaDocumento numeroDocumento={boleto.numeroDocumento} notaFiscalPedido={boleto.notaFiscalPedido} />
         <div className="flex items-center justify-between">
           <ValorMonetario valor={boleto.valor} className="text-lg font-bold text-[#0c4a6e]" />
           <span className={clsx(

@@ -62,7 +62,7 @@ class BoletoControllerTest {
     void listar_DeveRetornar200() throws Exception {
         var dto = new BoletoDTO(UUID.randomUUID(), UUID.randomUUID(), "Loja", "#1e40af",
             "Fornecedor", new BigDecimal("100"), LocalDate.now(), StatusBoleto.PENDENTE,
-            null, 0, null, null, null);
+            null, 0, null, null, null, null, null);
         var page = new PageImpl<>(List.of(dto), PageRequest.of(0, 10), 1);
 
         when(boletoService.listar(any(), any(), any(), any(), any(), any())).thenReturn(page);
@@ -76,10 +76,10 @@ class BoletoControllerTest {
     @Test
     void criar_DeveRetornar201() throws Exception {
         var req = new CriarBoletoRequest(UUID.randomUUID(), "Fornecedor",
-            new BigDecimal("150"), LocalDate.now().plusDays(30), null, null, null);
+            new BigDecimal("150"), LocalDate.now().plusDays(30), null, null, null, null, null);
         var dto = new BoletoDTO(UUID.randomUUID(), req.lojaId(), "Loja", "#1e40af",
             req.fornecedor(), req.valor(), req.vencimento(), StatusBoleto.PENDENTE,
-            null, 0, null, null, null);
+            null, 0, null, null, null, null, null);
 
         when(boletoService.criar(any())).thenReturn(dto);
 
@@ -96,7 +96,7 @@ class BoletoControllerTest {
     @Test
     void criar_BoletoDuplicado_Retorna409ComAMensagem() throws Exception {
         var req = new CriarBoletoRequest(UUID.randomUUID(), "Fornecedor",
-            new BigDecimal("150"), LocalDate.now().plusDays(30), "00193373700000001000500940144816060680935031", null, null);
+            new BigDecimal("150"), LocalDate.now().plusDays(30), "00193373700000001000500940144816060680935031", null, null, null, null);
         when(boletoService.criar(any())).thenThrow(new BoletoDuplicadoException(
             "Este boleto já foi cadastrado em 12/09/2026 na loja Centro (pendente, vence em 05/10/2026)."));
 
@@ -115,7 +115,7 @@ class BoletoControllerTest {
     void criar_ConfirmarDuplicadoChegaAoService() throws Exception {
         var dto = new BoletoDTO(UUID.randomUUID(), UUID.randomUUID(), "Loja", "#1e40af",
             "Fornecedor", new BigDecimal("150"), LocalDate.now(), StatusBoleto.PENDENTE,
-            null, 0, null, null, null);
+            null, 0, null, null, null, null, null);
         when(boletoService.criar(any())).thenReturn(dto);
 
         mockMvc.perform(post("/api/boletos")
@@ -137,10 +137,10 @@ class BoletoControllerTest {
     void editar_DeveRetornar200() throws Exception {
         var id = UUID.randomUUID();
         var req = new EditarBoletoRequest(UUID.randomUUID(), "Novo Fornecedor",
-            new BigDecimal("200"), LocalDate.now(), "12345678901", null);
+            new BigDecimal("200"), LocalDate.now(), "12345678901", null, null, null);
         var dto = new BoletoDTO(id, req.lojaId(), "Loja", "#1e40af",
             req.fornecedor(), req.valor(), req.vencimento(), StatusBoleto.PENDENTE,
-            null, 0, null, null, null);
+            null, 0, null, null, null, null, null);
 
         when(boletoService.editar(eq(id), any())).thenReturn(dto);
 
@@ -169,7 +169,7 @@ class BoletoControllerTest {
         var req = new MudarStatusRequest(StatusBoleto.PAGO);
         var dto = new BoletoDTO(id, UUID.randomUUID(), "Loja", "#1e40af",
             "Fornecedor", new BigDecimal("100"), LocalDate.now(), StatusBoleto.PAGO,
-            null, 0, null, null, null);
+            null, 0, null, null, null, null, null);
 
         when(boletoService.mudarStatus(eq(id), eq(StatusBoleto.PAGO))).thenReturn(dto);
 
@@ -186,7 +186,7 @@ class BoletoControllerTest {
     void editar_DeveRetornar404QuandoNaoEncontrado() throws Exception {
         var id = UUID.randomUUID();
         var req = new EditarBoletoRequest(UUID.randomUUID(), "X",
-            new BigDecimal("1"), LocalDate.now(), null, null);
+            new BigDecimal("1"), LocalDate.now(), null, null, null, null);
 
         when(boletoService.editar(eq(id), any())).thenThrow(new NotFoundException("Boleto não encontrado"));
 
@@ -201,7 +201,20 @@ class BoletoControllerTest {
     @Test
     void criar_DeveRetornar422QuandoDadosInvalidos() throws Exception {
         var req = new CriarBoletoRequest(null, "",
-            null, null, null, null, null);
+            null, null, null, null, null, null, null);
+
+        mockMvc.perform(post("/api/boletos")
+                .with(user("admin@teste.com").roles("ADMIN"))
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(req)))
+            .andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test
+    void criar_NumeroDoDocumentoGrandeDemais_Retorna422() throws Exception {
+        var req = new CriarBoletoRequest(UUID.randomUUID(), "Fornecedor", new BigDecimal("150"),
+            LocalDate.now(), null, null, null, "1".repeat(31), null);
 
         mockMvc.perform(post("/api/boletos")
                 .with(user("admin@teste.com").roles("ADMIN"))

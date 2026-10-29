@@ -44,6 +44,8 @@ export interface Boleto {
   observacoes?: string;
   pagoEm?: string;
   criadoEm: string;
+  numeroDocumento?: string;
+  notaFiscalPedido?: string;
 }
 
 export interface PagamentoPix {
