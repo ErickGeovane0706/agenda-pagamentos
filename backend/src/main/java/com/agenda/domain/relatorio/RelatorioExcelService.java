@@ -40,6 +40,10 @@ import java.util.*;
  * filtra tudo junto. Os filtros da tela (loja, tipo, situação) decidem o que
  * entra no arquivo. Cancelado não entra em nenhum total — fica num bloco à
  * parte, como na tela.
+ * <p>
+ * <b>Antes de mexer, leia {@code docs/adr/0011-excel-do-relatorio.md}.</b> Âncora
+ * do gráfico, overlay, valor em cache, linhas visíveis: cada detalhe já quebrou
+ * uma vez sem dar erro nenhum — o arquivo abre, só que errado.
  */
 @Service
 @RequiredArgsConstructor
@@ -436,7 +440,10 @@ public class RelatorioExcelService {
     }
 
     private XSSFChart novoGrafico(XSSFDrawing desenho, int linhaIni, int linhaFim, String titulo) {
-        var grafico = desenho.createChart(desenho.createAnchor(0, 0, 0, 0, COL_GRAFICO, linhaIni, COL_GRAFICO + 8, linhaFim));
+        var ancora = desenho.createAnchor(0, 0, 0, 0, COL_GRAFICO, linhaIni, COL_GRAFICO + 8, linhaFim);
+        // Preso às células, o gráfico encolhe quando o filtro esconde as linhas que ele cobre.
+        ancora.setAnchorType(ClientAnchor.AnchorType.DONT_MOVE_AND_RESIZE);
+        var grafico = desenho.createChart(ancora);
         grafico.setTitleText(titulo);
         // Sem overlay explícito o Excel desenha título e legenda por cima das barras.
         grafico.setTitleOverlay(false);

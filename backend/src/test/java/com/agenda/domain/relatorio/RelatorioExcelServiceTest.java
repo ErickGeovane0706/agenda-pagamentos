@@ -201,6 +201,11 @@ class RelatorioExcelServiceTest {
             assertTrue(ancora.getRow1() >= 9, "começa abaixo da área fixa");
             assertTrue(ancora.getCol1() >= 7, "fica à direita da tabela");
         }
+        // O POI não relê o editAs ao abrir o arquivo; confere direto no XML, que é o que o Excel lê.
+        for (var a : aba.getDrawingPatriarch().getCTDrawing().getTwoCellAnchorList()) {
+            assertEquals(org.openxmlformats.schemas.drawingml.x2006.spreadsheetDrawing.STEditAs.ABSOLUTE, a.getEditAs(),
+                "filtro que esconde linhas não pode achatar o gráfico");
+        }
         for (var g : graficos) {
             assertFalse(g.getTitleOverlay(), "título não sobrepõe");
             assertFalse(g.getCTChart().getLegend().getOverlay().getVal(), "legenda não sobrepõe");

@@ -19,3 +19,4 @@ decisão de ser desfeita por engano.
 | [0008](0008-baixa-de-estoque-por-update-condicional.md) | Baixa de estoque por `UPDATE` condicional, não read-check-write |
 | [0009](0009-produto-desativa-nao-apaga.md) | Produto desativa, não apaga |
 | [0010](0010-nginx-re-resolve-o-backend.md) | O nginx re-resolve o backend a cada requisição |
+| [0011](0011-excel-do-relatorio.md) | O Excel do relatório e as armadilhas que ele carrega |
