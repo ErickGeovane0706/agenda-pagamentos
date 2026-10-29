@@ -80,15 +80,17 @@ public class RelatorioExcelService {
     private final LojaRepository lojaRepository;
 
     record Lancamento(LocalDate vencimento, String loja, String tipo, String fornecedor, String situacao, BigDecimal valor,
-                      String documento, String notaFiscal) {}
+                      String documento, String notaFiscal, String banco, String agencia, String conta) {}
 
     /**
      * Onde fica cada coluna. Nº documento e NF/Pedido só entram quando algum
-     * lançamento do arquivo tem um deles — e aí Situação e Valor andam duas
-     * casas. Toda fórmula pega a letra daqui, nunca escrita à mão.
+     * boleto do arquivo tem um deles; Banco, quando algum cheque tem banco — e
+     * aí Situação e Valor andam. Toda fórmula pega a letra daqui, nunca escrita
+     * à mão.
      */
-    record Colunas(boolean comDocumento) {
-        int situacao() { return comDocumento ? 6 : 4; }
+    record Colunas(boolean comDocumento, boolean comBanco) {
+        int banco() { return comDocumento ? 6 : 4; }
+        int situacao() { return 4 + (comDocumento ? 2 : 0) + (comBanco ? 1 : 0); }
         int valor() { return situacao() + 1; }
         /** Uma coluna estreita de folga, e os gráficos à direita. */
         int grafico() { return valor() + 2; }
@@ -97,12 +99,18 @@ public class RelatorioExcelService {
         String letraSituacao() { return CellReference.convertNumToColString(situacao()); }
         String letraValor() { return CellReference.convertNumToColString(valor()); }
         List<String> nomes() {
-            return comDocumento
-                ? List.of("Vencimento", "Loja", "Tipo", "Fornecedor", "Nº documento", "NF/Pedido", "Situação", "Valor")
-                : List.of("Vencimento", "Loja", "Tipo", "Fornecedor", "Situação", "Valor");
+            var n = new ArrayList<>(List.of("Vencimento", "Loja", "Tipo", "Fornecedor"));
+            if (comDocumento) n.addAll(List.of("Nº documento", "NF/Pedido"));
+            if (comBanco) n.add("Banco");
+            n.addAll(List.of("Situação", "Valor"));
+            return n;
         }
         int[] larguras() {
-            return comDocumento ? new int[]{14, 21, 13, 27, 16, 18, 15, 18, 3} : new int[]{14, 21, 13, 27, 15, 18, 3};
+            var l = new ArrayList<>(List.of(14, 21, 13, 27));
+            if (comDocumento) l.addAll(List.of(16, 18));
+            if (comBanco) l.add(30);
+            l.addAll(List.of(15, 18, 3));
+            return l.stream().mapToInt(Integer::intValue).toArray();
         }
     }
 
@@ -121,8 +129,10 @@ public class RelatorioExcelService {
             var e = new Estilos(wb);
             var aba = wb.createSheet(ABA);
             aba.setDisplayGridlines(false);
-            var col = new Colunas(Stream.concat(ativos.stream(), cancelados.stream())
-                .anyMatch(l -> l.documento() != null || l.notaFiscal() != null));
+            var todasAsLinhas = Stream.concat(ativos.stream(), cancelados.stream()).toList();
+            var col = new Colunas(
+                todasAsLinhas.stream().anyMatch(l -> l.documento() != null || l.notaFiscal() != null),
+                todasAsLinhas.stream().anyMatch(l -> l.banco() != null));
             int[] larguras = col.larguras();
             for (int i = 0; i < larguras.length; i++) aba.setColumnWidth(i, larguras[i] * 256);
 
@@ -162,10 +172,14 @@ public class RelatorioExcelService {
         for (var r : rows) {
             var valor = r[1] != null ? (BigDecimal) r[1] : BigDecimal.ZERO;
             var venc = r[2] instanceof LocalDate d ? d : LocalDate.parse(r[2].toString());
-            // Só o boleto traz número do documento e NF/pedido (colunas 5 e 6).
-            String doc = r.length > 5 ? (String) r[5] : null;
-            String nf = r.length > 6 ? (String) r[6] : null;
-            lista.add(new Lancamento(venc, str(r[4]), tipo, str(r[0]), situacao(r[3].toString()), valor, doc, nf));
+            // Da coluna 5 em diante cada tipo traz o seu: o boleto, documento e
+            // NF/pedido; o cheque, banco, agência e conta. Ler pelo tipo, nunca
+            // pela posição — senão o banco do cheque vira "documento".
+            boolean boleto = tipo.equals("Boleto") && r.length > 6;
+            boolean cheque = tipo.equals("Cheque") && r.length > 7;
+            lista.add(new Lancamento(venc, str(r[4]), tipo, str(r[0]), situacao(r[3].toString()), valor,
+                boleto ? (String) r[5] : null, boleto ? (String) r[6] : null,
+                cheque ? (String) r[5] : null, cheque ? (String) r[6] : null, cheque ? (String) r[7] : null));
         }
     }
 
@@ -263,6 +277,7 @@ public class RelatorioExcelService {
                 celula(aba, row.getRowNum(), 4, l.documento() != null ? l.documento() : "", e.texto);
                 celula(aba, row.getRowNum(), 5, l.notaFiscal() != null ? l.notaFiscal() : "", e.texto);
             }
+            if (col.comBanco()) celulaBanco(row.createCell(col.banco()), l, e.texto, e.bancoNome, e.bancoDetalhe);
             celula(aba, row.getRowNum(), col.situacao(), l.situacao(), e.situacao.get(l.situacao()));
             var valor = row.createCell(col.valor());
             valor.setCellValue(l.valor().doubleValue());
@@ -322,11 +337,32 @@ public class RelatorioExcelService {
                 celula(aba, r, 4, l.documento() != null ? l.documento() : "", e.cancelado);
                 celula(aba, r, 5, l.notaFiscal() != null ? l.notaFiscal() : "", e.cancelado);
             }
+            if (col.comBanco()) celulaBanco(row.createCell(col.banco()), l, e.cancelado, e.canceladoFonte, e.canceladoFonte);
             celula(aba, r, col.situacao(), CANCELADO, e.cancelado);
             var valor = row.createCell(col.valor());
             valor.setCellValue(l.valor().doubleValue());
             valor.setCellStyle(e.canceladoValor);
         }
+    }
+
+    /**
+     * "Itaú · Ag 1234 · Conta 56789-0" numa linha só, em dois tons — o nome
+     * escuro, agência e conta em cinza, como na tela. Uma linha, e não duas
+     * dentro da célula: só as linhas de cheque ficariam mais altas.
+     */
+    private static void celulaBanco(Cell c, Lancamento l, CellStyle estilo, XSSFFont nome, XSSFFont detalhe) {
+        c.setCellStyle(estilo);
+        if (l.banco() == null) {
+            c.setCellValue("");
+            return;
+        }
+        var resto = new StringBuilder();
+        if (l.agencia() != null && !l.agencia().isBlank()) resto.append(" · Ag ").append(l.agencia());
+        if (l.conta() != null && !l.conta().isBlank()) resto.append(" · Conta ").append(l.conta());
+        var texto = new XSSFRichTextString(l.banco() + resto);
+        texto.applyFont(0, l.banco().length(), nome);
+        if (resto.length() > 0) texto.applyFont(l.banco().length(), texto.length(), detalhe);
+        c.setCellValue(texto);
     }
 
     /**
@@ -576,6 +612,7 @@ public class RelatorioExcelService {
     /** Um estilo por tipo de célula — criar um por célula estoura o limite do Excel. */
     private static final class Estilos {
         final XSSFCellStyle titulo, legenda, faixa, aPagarRotulo, aPagarValor, aviso;
+        final XSSFFont bancoNome, bancoDetalhe, canceladoFonte;
         final XSSFCellStyle cabEsquerda, cabCentro, cabDireita, texto, data, valor;
         final XSSFCellStyle totalRotulo, totalValor, canceladoTitulo, cancelado, canceladoData, canceladoValor;
         final Map<String, XSSFCellStyle> situacao = new HashMap<>();
@@ -629,6 +666,10 @@ public class RelatorioExcelService {
             canceladoData = estilo(fonte(9, false, "9AA3B2"), null, HorizontalAlignment.CENTER, null); canceladoData.setDataFormat(dma);
             canceladoValor = estilo(fonte(9, false, "9AA3B2"), null, HorizontalAlignment.RIGHT, null);
             canceladoValor.setDataFormat(brl); canceladoValor.setIndention((short) 1);
+
+            bancoNome = fonte(10, false, TEXTO);
+            bancoDetalhe = fonte(10, false, "7A8499");
+            canceladoFonte = fonte(9, false, "9AA3B2");
         }
 
         private XSSFFont fonte(double tamanho, boolean negrito, String cor) {

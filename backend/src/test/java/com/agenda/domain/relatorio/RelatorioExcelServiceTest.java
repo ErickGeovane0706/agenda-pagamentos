@@ -254,6 +254,44 @@ class RelatorioExcelServiceTest {
     }
 
     @Test
+    void chequeComBanco_ganhaColunaBanco_numaLinhaSoEmDoisTons() throws Exception {
+        when(chequeRepository.listarParaCsv(any(), any(), any(), any())).thenReturn(linhas(
+            new Object[]{"BRF", bd("50.00"), LocalDate.of(2026, 10, 15), "DEVOLVIDO", "Centro", "Itaú", "1234", "56789-0"},
+            new Object[]{"JBS", bd("80.00"), LocalDate.of(2026, 10, 25), "COMPENSADO", "Centro", "Caixa", null, null},
+            new Object[]{"Seara", bd("10.00"), LocalDate.of(2026, 10, 26), "PENDENTE", "Norte", null, null, null}));
+        var wb = gerar(null, null, null);
+        var aba = wb.getSheet(RelatorioExcelService.ABA);
+
+        assertEquals(List.of("Vencimento", "Loja", "Tipo", "Fornecedor", "Banco", "Situação", "Valor"), textos(aba.getRow(8), 7));
+        var tabela = linhasDaTabela(aba);
+        var brf = linha(tabela, "BRF");
+        assertEquals("Itaú · Ag 1234 · Conta 56789-0", brf.getCell(4).getStringCellValue());
+        var rico = (org.apache.poi.xssf.usermodel.XSSFRichTextString) brf.getCell(4).getRichStringCellValue();
+        assertEquals(2, rico.numFormattingRuns(), "nome do banco num tom, agência e conta em outro");
+        assertEquals("Caixa", linha(tabela, "JBS").getCell(4).getStringCellValue(), "só o que o banco tiver");
+        assertEquals("", linha(tabela, "Seara").getCell(4).getStringCellValue(), "cheque sem banco");
+        assertEquals("", linha(tabela, "Ambev").getCell(4).getStringCellValue(), "boleto não tem banco");
+
+        // situação e valor andaram uma coluna: as fórmulas têm de ir junto
+        confere(wb, aba.getRow(4).getCell(0), 1280.0);  // pago: 1000 + 200 + 80
+        confere(wb, aba.getRow(4).getCell(4), 350.0);   // vencido: 300 + 50
+    }
+
+    @Test
+    void documentoEBanco_juntos_naOrdemCerta() throws Exception {
+        when(boletoRepository.listarParaCsv(any(), any(), any(), any())).thenReturn(linhas(
+            new Object[]{"Ambev", bd("1000.00"), LocalDate.of(2026, 10, 5), "PAGO", "Centro", "000123", "NF 1"}));
+        when(chequeRepository.listarParaCsv(any(), any(), any(), any())).thenReturn(linhas(
+            new Object[]{"BRF", bd("50.00"), LocalDate.of(2026, 10, 15), "DEVOLVIDO", "Centro", "Itaú", "1234", "5"}));
+        var wb = gerar(null, null, null);
+        var aba = wb.getSheet(RelatorioExcelService.ABA);
+
+        assertEquals(List.of("Vencimento", "Loja", "Tipo", "Fornecedor", "Nº documento", "NF/Pedido", "Banco", "Situação", "Valor"),
+            textos(aba.getRow(8), 9));
+        confere(wb, aba.getRow(4).getCell(4), 50.0);  // vencido: cheque devolvido, valor na coluna I
+    }
+
+    @Test
     void semLancamento_naoQuebra_eAvisa() throws Exception {
         when(boletoRepository.listarParaCsv(any(), any(), any(), any())).thenReturn(List.of());
         when(pixRepository.listarParaCsv(any(), any(), any(), any())).thenReturn(List.of());
@@ -292,6 +330,10 @@ class RelatorioExcelServiceTest {
         var rs = new ArrayList<Row>();
         for (int i = 9; aba.getRow(i) != null && aba.getRow(i).getCell(0).getCellType() == CellType.NUMERIC; i++) rs.add(aba.getRow(i));
         return rs;
+    }
+
+    private static Row linha(List<Row> tabela, String fornecedor) {
+        return tabela.stream().filter(r -> r.getCell(3).getStringCellValue().equals(fornecedor)).findFirst().orElseThrow();
     }
 
     private static List<String> textos(Row r, int n) {

@@ -64,10 +64,14 @@ public interface ChequeRepository extends JpaRepository<Cheque, UUID>, JpaSpecif
     List<Cheque> findPendentesEntre(@Param("empresaId") UUID empresaId, @Param("de") LocalDate de, @Param("ate") LocalDate ate);
 
     /**
-     * Projeção enxuta para CSV (sem joins em loja/banco).
+     * Projeção enxuta para CSV e Excel (fornecedor, valor, vencimento, status,
+     * loja, banco, agência, conta). O banco é opcional no cheque: {@code LEFT JOIN},
+     * nunca {@code c.banco.nome} direto — isso vira join comum e o cheque sem banco
+     * some do relatório sem erro nenhum.
      */
     @Query("""
-        SELECT c.fornecedor, c.valor, c.vencimento, c.status, c.loja.nome FROM Cheque c
+        SELECT c.fornecedor, c.valor, c.vencimento, c.status, c.loja.nome, b.nome, b.agencia, b.conta
+        FROM Cheque c LEFT JOIN c.banco b
         WHERE c.empresa.id = :empresaId
         AND (:lojaId IS NULL OR c.loja.id = :lojaId)
         AND c.vencimento BETWEEN :de AND :ate
