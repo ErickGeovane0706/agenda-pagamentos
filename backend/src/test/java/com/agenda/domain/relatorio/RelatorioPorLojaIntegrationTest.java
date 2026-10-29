@@ -50,6 +50,7 @@ class RelatorioPorLojaIntegrationTest {
     @Autowired private EmpresaRepository empresaRepository;
     @Autowired private LojaRepository lojaRepository;
     @Autowired private JdbcTemplate jdbc;
+    @Autowired private com.agenda.domain.cheque.ChequeRepository chequeRepository;
 
     private UUID empresa;
     private Loja centro;
@@ -119,6 +120,24 @@ class RelatorioPorLojaIntegrationTest {
 
         assertNull(r.get("porLoja"));
         assertEquals(0, new BigDecimal("1000.00").compareTo((BigDecimal) r.get("totalGeral")));
+    }
+
+    @Test
+    void excel_chequeTrazBancoAgenciaEConta_eChequeSemBancoNaoSome() {
+        UUID banco = jdbc.queryForObject(
+            "INSERT INTO bancos (empresa_id, nome, agencia, conta) VALUES (?, 'Itaú', '1234', '56789-0') RETURNING id",
+            UUID.class, empresa);
+        jdbc.update("INSERT INTO cheques (empresa_id, loja_id, banco_id, fornecedor, valor, vencimento, status) VALUES (?, ?, ?, 'Com banco', 10, ?, 'PENDENTE')",
+            empresa, centro.getId(), banco, DENTRO);
+
+        var linhas = chequeRepository.listarParaCsv(empresa, centro.getId(), DE, ATE);
+
+        // os 4 cheques do setUp não têm banco: um join comum os descartaria em silêncio
+        assertEquals(5, linhas.size(), "cheque sem banco continua no Excel");
+        var comBanco = linhas.stream().filter(r -> "Com banco".equals(r[0])).findFirst().orElseThrow();
+        assertEquals(List.of("Itaú", "1234", "56789-0"), List.of(comBanco[5], comBanco[6], comBanco[7]));
+        var semBanco = linhas.stream().filter(r -> "F".equals(r[0])).findFirst().orElseThrow();
+        assertNull(semBanco[5]);
     }
 
     private void boleto(Loja loja, String status, String valor, LocalDate venc) {
