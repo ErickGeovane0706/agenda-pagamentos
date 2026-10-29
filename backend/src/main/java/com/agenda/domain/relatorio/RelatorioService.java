@@ -223,8 +223,11 @@ public class RelatorioService {
             String s = row[0].toString();
             long count = (long) row[1];
             var valor = (BigDecimal) row[2];
-            total += count;
-            if (valor != null) valorTotal = valorTotal.add(valor);
+            // Cancelado não foi nem vai ser pago: fica só na contagem de cancelados.
+            if (!s.equals("CANCELADO")) {
+                total += count;
+                if (valor != null) valorTotal = valorTotal.add(valor);
+            }
             switch (s) {
                 case "PAGO" -> { pago = count; valorPago = valor != null ? valor : BigDecimal.ZERO; }
                 case "PENDENTE" -> { pendente = count; valorPendente = valor != null ? valor : BigDecimal.ZERO; }
@@ -251,8 +254,11 @@ public class RelatorioService {
             String s = row[0].toString();
             long count = (long) row[1];
             var valor = (BigDecimal) row[2];
-            total += count;
-            if (valor != null) valorTotal = valorTotal.add(valor);
+            // Cancelado não foi nem vai ser pago: fica só na contagem de cancelados.
+            if (!s.equals("CANCELADO")) {
+                total += count;
+                if (valor != null) valorTotal = valorTotal.add(valor);
+            }
             switch (s) {
                 case "PAGO" -> { pago = count; valorPago = valor != null ? valor : BigDecimal.ZERO; }
                 case "PENDENTE" -> { pendente = count; valorPendente = valor != null ? valor : BigDecimal.ZERO; }
@@ -279,8 +285,11 @@ public class RelatorioService {
             String s = row[0].toString();
             long count = (long) row[1];
             var valor = (BigDecimal) row[2];
-            total += count;
-            if (valor != null) valorTotal = valorTotal.add(valor);
+            // Cancelado não foi nem vai ser pago: fica só na contagem de cancelados.
+            if (!s.equals("CANCELADO")) {
+                total += count;
+                if (valor != null) valorTotal = valorTotal.add(valor);
+            }
             switch (s) {
                 case "COMPENSADO" -> { compensado = count; valorCompensado = valor != null ? valor : BigDecimal.ZERO; }
                 case "PENDENTE" -> { pendente = count; valorPendente = valor != null ? valor : BigDecimal.ZERO; }

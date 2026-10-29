@@ -10,18 +10,31 @@ const porLoja = [
 const lojas = [{ id: 'c', nome: 'Centro' }, { id: 'n', nome: 'Norte' }, { id: 's', nome: 'Sul' }];
 
 describe('TabelaPorLoja', () => {
-  it('uma linha por loja na ordem que veio, atraso em destaque, total no pé e as lojas zeradas citadas', () => {
-    const { container } = render(<TabelaPorLoja porLoja={porLoja} lojas={lojas} onEscolher={() => {}} />);
+  it('um cartão por loja na ordem que veio, com situação, quanto já pagou, a pagar e os três valores', () => {
+    render(<TabelaPorLoja porLoja={porLoja} lojas={lojas} onEscolher={() => {}} />);
 
     const linhas = screen.getAllByRole('listitem');
     expect(linhas[0].textContent).toContain('Norte');
-    expect(linhas[0].textContent).toMatch(/800,00/);
-    expect(linhas[0].textContent).toMatch(/300,00 em atraso/);
-    expect(linhas[1].textContent).toContain('Centro');
-    expect(linhas[1].textContent).not.toContain('em atraso');
-    expect(linhas[1].textContent).toMatch(/pago R\$\s1\.000,00/);
+    expect(linhas[0].textContent).toContain('Tem vencido');
+    expect(linhas[0].textContent).toContain('0%');
+    expect(linhas[0].textContent).toMatch(/A pagar\s*R\$\s800,00/);
+    expect(linhas[0].textContent).toMatch(/Pendente\s*R\$\s500,00/);
+    expect(linhas[0].textContent).toMatch(/Vencido\s*R\$\s300,00/);
+    expect(linhas[0].textContent).toMatch(/Pago\s*—/);
 
-    expect(container.textContent).toMatch(/Total.*1\.050,00/);
+    expect(linhas[1].textContent).toContain('Centro');
+    expect(linhas[1].textContent).toContain('Pendente');
+    expect(linhas[1].textContent).toContain('80%');
+    expect(linhas[1].textContent).toMatch(/Vencido\s*—/);
+  });
+
+  it('total de todas as lojas no pé e as lojas zeradas citadas', () => {
+    render(<TabelaPorLoja porLoja={porLoja} lojas={lojas} onEscolher={() => {}} />);
+
+    const total = screen.getByText('Total de todas as lojas').parentElement!;
+    expect(total.textContent).toMatch(/Pago\s*R\$\s1\.000,00/);
+    expect(total.textContent).toMatch(/Pendente\s*R\$\s750,00/);
+    expect(total.textContent).toMatch(/Vencido\s*R\$\s300,00/);
     expect(screen.getByText(/Sem lançamento no período: Sul/)).toBeTruthy();
   });
 
