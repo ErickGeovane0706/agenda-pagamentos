@@ -41,8 +41,11 @@ export default function RelatoriosPage() {
     setBaixando(true);
     try {
       const token = localStorage.getItem('token');
+      // O arquivo sai com os mesmos filtros da tela.
       const params = new URLSearchParams({ de, ate });
       if (lojaId) params.set('lojaId', lojaId);
+      if (tipo !== 'TODOS') params.set('tipo', tipo);
+      if (status !== 'TODOS') params.set('status', status);
       const res = await fetch(`/api/relatorios/exportar?${params}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
@@ -51,8 +54,11 @@ export default function RelatoriosPage() {
       const a = document.createElement('a');
       a.href = url;
       a.download = `relatorio-${de}-a-${ate}.xlsx`;
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
+      a.remove();
+      // O Safari do iPhone cancela o download se a URL some no mesmo instante do clique.
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
     } finally {
       setBaixando(false);
     }

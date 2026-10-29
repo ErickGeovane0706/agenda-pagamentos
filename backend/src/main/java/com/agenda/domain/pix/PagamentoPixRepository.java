@@ -68,7 +68,7 @@ public interface PagamentoPixRepository extends JpaRepository<PagamentoPix, UUID
      * Retorna apenas fornecedor, valor, vencimento e status.
      */
     @Query("""
-        SELECT p.fornecedor, p.valor, p.vencimento, p.status FROM PagamentoPix p
+        SELECT p.fornecedor, p.valor, p.vencimento, p.status, p.loja.nome FROM PagamentoPix p
         WHERE p.empresa.id = :empresaId
         AND (:lojaId IS NULL OR p.loja.id = :lojaId)
         AND p.vencimento BETWEEN :de AND :ate
