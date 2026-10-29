@@ -73,6 +73,12 @@ public class Boleto {
     @Column(columnDefinition = "TEXT")
     private String observacoes;
 
+    @Column(name = "numero_documento", length = 30)
+    private String numeroDocumento;
+
+    @Column(name = "nota_fiscal_pedido", length = 50)
+    private String notaFiscalPedido;
+
     /** Seta quando status muda para PAGO; limpa quando sai de PAGO. */
     @Column(name = "pago_em")
     private LocalDateTime pagoEm;

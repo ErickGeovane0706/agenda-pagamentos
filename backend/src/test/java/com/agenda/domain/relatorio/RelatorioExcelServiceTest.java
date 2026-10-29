@@ -228,6 +228,32 @@ class RelatorioExcelServiceTest {
     }
 
     @Test
+    void comDocumentoOuNotaFiscal_ganhaDuasColunas_eAsFormulasAcompanham() throws Exception {
+        when(boletoRepository.listarParaCsv(any(), any(), any(), any())).thenReturn(linhas(
+            new Object[]{"Ambev", bd("1000.00"), LocalDate.of(2026, 10, 5), "PAGO", "Centro", "000123", "NF 4521/1"},
+            new Object[]{"Vivo", bd("300.00"), LocalDate.of(2026, 10, 2), "VENCIDO", "Norte", null, null}));
+        var wb = gerar(null, null, null);
+        var aba = wb.getSheet(RelatorioExcelService.ABA);
+
+        assertEquals(List.of("Vencimento", "Loja", "Tipo", "Fornecedor", "Nº documento", "NF/Pedido", "Situação", "Valor"),
+            textos(aba.getRow(8), 8));
+        var ambev = linhasDaTabela(aba).stream().filter(r -> r.getCell(3).getStringCellValue().equals("Ambev")).findFirst().orElseThrow();
+        assertEquals("000123", ambev.getCell(4).getStringCellValue(), "zero à esquerda fica: é texto");
+        assertEquals("NF 4521/1", ambev.getCell(5).getStringCellValue());
+        assertEquals(1000.0, ambev.getCell(7).getNumericCellValue());
+        assertEquals("A9:H14", aba.getCTWorksheet().getAutoFilter().getRef());
+
+        // situação e valor andaram duas colunas: as fórmulas têm de ir junto
+        confere(wb, aba.getRow(4).getCell(0), 1280.0);  // pago: 1000 + 200 + 80
+        confere(wb, aba.getRow(4).getCell(4), 350.0);   // vencido: 300 + 50
+        confere(wb, aba.getRow(9 + 5).getCell(7), 1630.0);  // 1000 + 300 + 200 + 50 + 80
+        confere(wb, wb.getSheet(RelatorioExcelService.ABA_DADOS).getRow(1).getCell(1), 1280.0);
+        for (var a : aba.getDrawingPatriarch().getCTDrawing().getTwoCellAnchorList()) {
+            assertTrue(a.getFrom().getCol() >= 9, "gráficos à direita das colunas novas");
+        }
+    }
+
+    @Test
     void semLancamento_naoQuebra_eAvisa() throws Exception {
         when(boletoRepository.listarParaCsv(any(), any(), any(), any())).thenReturn(List.of());
         when(pixRepository.listarParaCsv(any(), any(), any(), any())).thenReturn(List.of());

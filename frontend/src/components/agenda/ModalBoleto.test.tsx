@@ -83,3 +83,59 @@ describe('ModalBoleto — boleto duplicado', () => {
     expect(confirmar).not.toHaveBeenCalled();
   });
 });
+
+describe('ModalBoleto — número do documento e nota fiscal/pedido', () => {
+  beforeEach(() => {
+    post.mockReset();
+    vi.mocked(api.put).mockReset();
+  });
+
+  function abrir(boleto: Parameters<typeof ModalBoleto>[0]['boleto'] = null) {
+    const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <ModalBoleto boleto={boleto} lojaId="loja-1" onFechar={() => {}} onSalvo={() => {}} />
+      </QueryClientProvider>,
+    );
+    return userEvent.setup();
+  }
+
+  async function preencherObrigatorios(user: ReturnType<typeof userEvent.setup>) {
+    await user.type(screen.getByPlaceholderText('Nome do fornecedor'), 'Ambev');
+    await user.type(screen.getByPlaceholderText('0,00'), '100');
+    await user.type(document.querySelector('input[type="date"]') as HTMLInputElement, '2026-10-05');
+  }
+
+  it('são opcionais: o boleto sai sem eles', async () => {
+    post.mockResolvedValueOnce({ data: {} });
+    const user = abrir();
+    await preencherObrigatorios(user);
+    await user.click(screen.getByRole('button', { name: 'Criar boleto' }));
+
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    expect(post.mock.calls[0][1]).toMatchObject({ numeroDocumento: null, notaFiscalPedido: null });
+  });
+
+  it('vão no boleto como texto, com zero à esquerda', async () => {
+    post.mockResolvedValueOnce({ data: {} });
+    const user = abrir();
+    await preencherObrigatorios(user);
+    await user.type(screen.getByLabelText(/Nº do documento/), '000123');
+    await user.type(screen.getByLabelText(/Nota fiscal \/ pedido/), 'NF 4521/1');
+    await user.click(screen.getByRole('button', { name: 'Criar boleto' }));
+
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    expect(post.mock.calls[0][1]).toMatchObject({ numeroDocumento: '000123', notaFiscalPedido: 'NF 4521/1' });
+  });
+
+  it('na edição, vêm preenchidos com o que o boleto já tem', () => {
+    abrir({
+      id: 'b-1', lojaId: 'loja-1', lojaNome: 'Centro', lojaCor: '#000', fornecedor: 'Ambev', valor: 100,
+      vencimento: '2026-10-05', status: 'PENDENTE', qtdAnexos: 0, criadoEm: '2026-10-01',
+      numeroDocumento: '000123', notaFiscalPedido: 'NF 4521/1',
+    });
+
+    expect((screen.getByLabelText(/Nº do documento/) as HTMLInputElement).value).toBe('000123');
+    expect((screen.getByLabelText(/Nota fiscal \/ pedido/) as HTMLInputElement).value).toBe('NF 4521/1');
+  });
+});

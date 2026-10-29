@@ -18,7 +18,8 @@ public class BoletoSpecification {
 
     /**
      * Monta predicados dinâmicos: empresa (obrigatório), loja, status,
-     * intervalo de vencimento {@code [de, ate]} e busca textual por fornecedor
+     * intervalo de vencimento {@code [de, ate]} e busca textual por fornecedor,
+     * número do documento ou nota fiscal/pedido
      * (case‑insensitive, LIKE %termo%).
      */
     public static Specification<Boleto> comFiltros(
@@ -43,7 +44,12 @@ public class BoletoSpecification {
                 predicates.add(cb.lessThanOrEqualTo(root.get("vencimento"), ate));
             }
             if (fornecedor != null && !fornecedor.isBlank()) {
-                predicates.add(cb.like(cb.lower(root.get("fornecedor")), "%" + fornecedor.toLowerCase() + "%"));
+                // O mesmo campo de busca acha pelo número do documento e pela NF/pedido.
+                String termo = "%" + fornecedor.toLowerCase() + "%";
+                predicates.add(cb.or(
+                    cb.like(cb.lower(root.get("fornecedor")), termo),
+                    cb.like(cb.lower(root.get("numeroDocumento")), termo),
+                    cb.like(cb.lower(root.get("notaFiscalPedido")), termo)));
             }
 
             return cb.and(predicates.toArray(new Predicate[0]));

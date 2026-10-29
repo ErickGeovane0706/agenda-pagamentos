@@ -63,7 +63,7 @@ class BoletoServiceTest {
     @Test
     void criar_DeveSalvarBoleto() {
         var req = new CriarBoletoRequest(loja.getId(), "Fornecedor X",
-            new BigDecimal("150.00"), LocalDate.now().plusDays(30), null, null, null);
+            new BigDecimal("150.00"), LocalDate.now().plusDays(30), null, null, null, null, null);
 
         when(lojaRepository.findById(loja.getId())).thenReturn(Optional.of(loja));
         when(boletoRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -82,7 +82,7 @@ class BoletoServiceTest {
         var outraEmpresa = Empresa.builder().id(UUID.randomUUID()).build();
         var lojaOutra = Loja.builder().id(UUID.randomUUID()).empresa(outraEmpresa).build();
         var req = new CriarBoletoRequest(lojaOutra.getId(), "Fornecedor X",
-            new BigDecimal("100"), LocalDate.now(), null, null, null);
+            new BigDecimal("100"), LocalDate.now(), null, null, null, null, null);
 
         when(lojaRepository.findById(lojaOutra.getId())).thenReturn(Optional.of(lojaOutra));
 
@@ -113,7 +113,7 @@ class BoletoServiceTest {
             .fornecedor("Antigo").valor(new BigDecimal("100"))
             .vencimento(LocalDate.now()).build();
         var req = new EditarBoletoRequest(loja.getId(), "Novo Fornecedor",
-            new BigDecimal("200"), LocalDate.now().plusDays(10), "12345678901", null);
+            new BigDecimal("200"), LocalDate.now().plusDays(10), "12345678901", null, null, null);
 
         when(boletoRepository.findById(boleto.getId())).thenReturn(Optional.of(boleto));
         when(lojaRepository.findById(loja.getId())).thenReturn(Optional.of(loja));
@@ -124,6 +124,39 @@ class BoletoServiceTest {
         assertEquals("Novo Fornecedor", result.fornecedor());
         assertEquals(0, new BigDecimal("200").compareTo(result.valor()));
         verify(auditoriaService).registrar(eq("EDITAR"), eq("BOLETO"), eq(boleto.getId()), anyString());
+    }
+
+    // ─── Número do documento e NF/pedido (opcionais) ──────────────────────────
+
+    @Test
+    void criar_GuardaNumeroDoDocumentoENotaFiscal_semEspacoSobrandoEVazioViraNada() {
+        var req = new CriarBoletoRequest(loja.getId(), "Fornecedor X", new BigDecimal("150.00"),
+            LocalDate.now().plusDays(30), null, null, null, "  000123 ", "   ");
+        when(lojaRepository.findById(loja.getId())).thenReturn(Optional.of(loja));
+        when(boletoRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        var result = boletoService.criar(req);
+
+        assertEquals("000123", result.numeroDocumento(), "zero à esquerda fica: é texto");
+        assertNull(result.notaFiscalPedido(), "só espaço é campo vazio");
+    }
+
+    @Test
+    void editar_TrocaEApagaNumeroDoDocumentoENotaFiscal() {
+        var boleto = Boleto.builder()
+            .id(UUID.randomUUID()).empresa(empresa).loja(loja)
+            .fornecedor("F").valor(new BigDecimal("100")).vencimento(LocalDate.now())
+            .numeroDocumento("111").notaFiscalPedido("NF 1").build();
+        var req = new EditarBoletoRequest(loja.getId(), "F", new BigDecimal("100"), LocalDate.now(),
+            null, null, null, "NF 4521/1");
+        when(boletoRepository.findById(boleto.getId())).thenReturn(Optional.of(boleto));
+        when(lojaRepository.findById(loja.getId())).thenReturn(Optional.of(loja));
+        when(boletoRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        var result = boletoService.editar(boleto.getId(), req);
+
+        assertNull(result.numeroDocumento(), "apagar o campo na edição apaga no boleto");
+        assertEquals("NF 4521/1", result.notaFiscalPedido());
     }
 
     // ─── Boleto duplicado ────────────────────────────────────────────────────
@@ -141,7 +174,7 @@ class BoletoServiceTest {
             .criadoEm(java.time.LocalDateTime.of(2026, 9, 12, 10, 0))
             .build();
         var req = new CriarBoletoRequest(loja.getId(), "Fornecedor X",
-            new BigDecimal("100"), LocalDate.of(2026, 10, 5), LINHA, null, null);
+            new BigDecimal("100"), LocalDate.of(2026, 10, 5), LINHA, null, null, null, null);
 
         when(lojaRepository.findById(loja.getId())).thenReturn(Optional.of(loja));
         when(boletoRepository.findFirstByEmpresa_IdAndCodigoNormalizadoOrderByCriadoEmAsc(empresa.getId(), BARRAS))
@@ -157,7 +190,7 @@ class BoletoServiceTest {
     @Test
     void criar_DuplicadoConfirmadoPeloUsuario_Salva() {
         var req = new CriarBoletoRequest(loja.getId(), "Fornecedor X",
-            new BigDecimal("100"), LocalDate.of(2026, 10, 5), LINHA, null, true);
+            new BigDecimal("100"), LocalDate.of(2026, 10, 5), LINHA, null, true, null, null);
 
         when(lojaRepository.findById(loja.getId())).thenReturn(Optional.of(loja));
         when(boletoRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -171,7 +204,7 @@ class BoletoServiceTest {
     @Test
     void criar_ComCodigoInedito_Salva() {
         var req = new CriarBoletoRequest(loja.getId(), "Fornecedor X",
-            new BigDecimal("100"), LocalDate.of(2026, 10, 5), LINHA, null, null);
+            new BigDecimal("100"), LocalDate.of(2026, 10, 5), LINHA, null, null, null, null);
 
         when(lojaRepository.findById(loja.getId())).thenReturn(Optional.of(loja));
         when(boletoRepository.findFirstByEmpresa_IdAndCodigoNormalizadoOrderByCriadoEmAsc(empresa.getId(), BARRAS))

@@ -7,6 +7,7 @@ import com.agenda.domain.pix.PagamentoPixRepository;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.ss.util.CellReference;
 import org.apache.poi.xddf.usermodel.XDDFColor;
 import org.apache.poi.xddf.usermodel.XDDFLineProperties;
 import org.apache.poi.xddf.usermodel.XDDFNoFillProperties;
@@ -28,6 +29,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.stream.Stream;
 
 /**
  * Excel do relatório de pagamentos, no modelo aprovado com o cliente
@@ -60,9 +62,6 @@ public class RelatorioExcelService {
 
     /** Linha 10 do Excel (base 0): as nove de cima ficam fixas. */
     private static final int INI = 9;
-    /** A faixa do cabeçalho vai até a coluna O, cobrindo a área dos gráficos. */
-    private static final int ULTIMA_COL_FAIXA = 14;
-    private static final int COL_GRAFICO = 7;
     private static final String BRL = "\"R$ \"#,##0.00";
     private static final DateTimeFormatter DATA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter DIA_MES = DateTimeFormatter.ofPattern("dd/MM");
@@ -80,7 +79,32 @@ public class RelatorioExcelService {
     private final ChequeRepository chequeRepository;
     private final LojaRepository lojaRepository;
 
-    record Lancamento(LocalDate vencimento, String loja, String tipo, String fornecedor, String situacao, BigDecimal valor) {}
+    record Lancamento(LocalDate vencimento, String loja, String tipo, String fornecedor, String situacao, BigDecimal valor,
+                      String documento, String notaFiscal) {}
+
+    /**
+     * Onde fica cada coluna. Nº documento e NF/Pedido só entram quando algum
+     * lançamento do arquivo tem um deles — e aí Situação e Valor andam duas
+     * casas. Toda fórmula pega a letra daqui, nunca escrita à mão.
+     */
+    record Colunas(boolean comDocumento) {
+        int situacao() { return comDocumento ? 6 : 4; }
+        int valor() { return situacao() + 1; }
+        /** Uma coluna estreita de folga, e os gráficos à direita. */
+        int grafico() { return valor() + 2; }
+        /** A faixa do cabeçalho cobre também a área dos gráficos. */
+        int ultimaDaFaixa() { return grafico() + 7; }
+        String letraSituacao() { return CellReference.convertNumToColString(situacao()); }
+        String letraValor() { return CellReference.convertNumToColString(valor()); }
+        List<String> nomes() {
+            return comDocumento
+                ? List.of("Vencimento", "Loja", "Tipo", "Fornecedor", "Nº documento", "NF/Pedido", "Situação", "Valor")
+                : List.of("Vencimento", "Loja", "Tipo", "Fornecedor", "Situação", "Valor");
+        }
+        int[] larguras() {
+            return comDocumento ? new int[]{14, 21, 13, 27, 16, 18, 15, 18, 3} : new int[]{14, 21, 13, 27, 15, 18, 3};
+        }
+    }
 
     @Transactional(readOnly = true)
     public byte[] gerarExcel(UUID empresaId, UUID lojaId, LocalDate de, LocalDate ate, String tipo, String status) throws IOException {
@@ -97,15 +121,17 @@ public class RelatorioExcelService {
             var e = new Estilos(wb);
             var aba = wb.createSheet(ABA);
             aba.setDisplayGridlines(false);
-            int[] larguras = {14, 21, 13, 27, 15, 18, 3};
+            var col = new Colunas(Stream.concat(ativos.stream(), cancelados.stream())
+                .anyMatch(l -> l.documento() != null || l.notaFiscal() != null));
+            int[] larguras = col.larguras();
             for (int i = 0; i < larguras.length; i++) aba.setColumnWidth(i, larguras[i] * 256);
 
-            cabecalho(aba, e, legenda(empresaId, lojaId, de, ate, tipo, status));
-            int fim = tabela(aba, e, ativos);
-            cartoes(aba, e, fim, ativos);
-            int linha = total(aba, e, fim, ativos);
-            blocoCancelados(aba, e, cancelados, linha + 3);
-            if (!ativos.isEmpty()) graficos(wb, aba, ativos, de, ate, fim);
+            cabecalho(aba, e, col, legenda(empresaId, lojaId, de, ate, tipo, status));
+            int fim = tabela(aba, e, col, ativos);
+            cartoes(aba, e, col, fim, ativos);
+            int linha = total(aba, e, col, fim, ativos);
+            blocoCancelados(aba, e, col, cancelados, linha + 3);
+            if (!ativos.isEmpty()) graficos(wb, aba, col, ativos, de, ate, fim);
 
             var ps = aba.getPrintSetup();
             ps.setLandscape(true);
@@ -136,7 +162,10 @@ public class RelatorioExcelService {
         for (var r : rows) {
             var valor = r[1] != null ? (BigDecimal) r[1] : BigDecimal.ZERO;
             var venc = r[2] instanceof LocalDate d ? d : LocalDate.parse(r[2].toString());
-            lista.add(new Lancamento(venc, str(r[4]), tipo, str(r[0]), situacao(r[3].toString()), valor));
+            // Só o boleto traz número do documento e NF/pedido (colunas 5 e 6).
+            String doc = r.length > 5 ? (String) r[5] : null;
+            String nf = r.length > 6 ? (String) r[6] : null;
+            lista.add(new Lancamento(venc, str(r[4]), tipo, str(r[0]), situacao(r[3].toString()), valor, doc, nf));
         }
     }
 
@@ -189,15 +218,15 @@ public class RelatorioExcelService {
 
     // ── Planilha ─────────────────────────────────────────────────────────────
 
-    private void cabecalho(XSSFSheet aba, Estilos e, String legenda) {
+    private void cabecalho(XSSFSheet aba, Estilos e, Colunas col, String legenda) {
         float[] alturas = {33.75f, 19.5f, 7.5f, 18f, 30f, 4.5f, 27.75f, 9.75f, 25.5f};
         for (int i = 0; i < alturas.length; i++) aba.createRow(i).setHeightInPoints(alturas[i]);
 
         celula(aba, 0, 0, "Relatório de Pagamentos", e.titulo);
         celula(aba, 1, 0, legenda, e.legenda);
         for (int r = 0; r <= 1; r++) {
-            for (int c = 1; c <= ULTIMA_COL_FAIXA; c++) aba.getRow(r).createCell(c).setCellStyle(e.faixa);
-            aba.addMergedRegion(new CellRangeAddress(r, r, 0, ULTIMA_COL_FAIXA));
+            for (int c = 1; c <= col.ultimaDaFaixa(); c++) aba.getRow(r).createCell(c).setCellStyle(e.faixa);
+            aba.addMergedRegion(new CellRangeAddress(r, r, 0, col.ultimaDaFaixa()));
         }
 
         celula(aba, 6, 0, "A pagar  (pendente + vencido)", e.aPagarRotulo);
@@ -207,14 +236,14 @@ public class RelatorioExcelService {
         aba.addMergedRegion(new CellRangeAddress(6, 6, 3, 5));
         celula(aba, 7, 0, "Os números acima e os gráficos seguem o filtro da tabela.", e.aviso);
 
-        String[] colunas = {"Vencimento", "Loja", "Tipo", "Fornecedor", "Situação", "Valor"};
-        for (int i = 0; i < colunas.length; i++) {
-            celula(aba, 8, i, colunas[i], i == 0 || i == 4 ? e.cabCentro : i == 5 ? e.cabDireita : e.cabEsquerda);
+        var nomes = col.nomes();
+        for (int i = 0; i < nomes.size(); i++) {
+            celula(aba, 8, i, nomes.get(i), i == 0 || i == col.situacao() ? e.cabCentro : i == col.valor() ? e.cabDireita : e.cabEsquerda);
         }
     }
 
     /** Devolve a última linha (base 0) da tabela. */
-    private int tabela(XSSFSheet aba, Estilos e, List<Lancamento> ativos) {
+    private int tabela(XSSFSheet aba, Estilos e, Colunas col, List<Lancamento> ativos) {
         if (ativos.isEmpty()) {
             celula(aba, INI, 0, "Nenhum lançamento no período.", e.aviso);
             aba.createFreezePane(0, INI);
@@ -230,18 +259,22 @@ public class RelatorioExcelService {
             celula(aba, row.getRowNum(), 1, l.loja(), e.texto);
             celula(aba, row.getRowNum(), 2, l.tipo(), e.texto);
             celula(aba, row.getRowNum(), 3, l.fornecedor(), e.texto);
-            celula(aba, row.getRowNum(), 4, l.situacao(), e.situacao.get(l.situacao()));
-            var valor = row.createCell(5);
+            if (col.comDocumento()) {
+                celula(aba, row.getRowNum(), 4, l.documento() != null ? l.documento() : "", e.texto);
+                celula(aba, row.getRowNum(), 5, l.notaFiscal() != null ? l.notaFiscal() : "", e.texto);
+            }
+            celula(aba, row.getRowNum(), col.situacao(), l.situacao(), e.situacao.get(l.situacao()));
+            var valor = row.createCell(col.valor());
             valor.setCellValue(l.valor().doubleValue());
             valor.setCellStyle(e.valor);
         }
         int fim = r - 1;
-        aba.setAutoFilter(new CellRangeAddress(8, fim, 0, 5));
+        aba.setAutoFilter(new CellRangeAddress(8, fim, 0, col.valor()));
         aba.createFreezePane(0, INI);
         return fim;
     }
 
-    private void cartoes(XSSFSheet aba, Estilos e, int fim, List<Lancamento> ativos) {
+    private void cartoes(XSSFSheet aba, Estilos e, Colunas col, int fim, List<Lancamento> ativos) {
         formula(aba.getRow(6).getCell(3), "C5+E5", soma(ativos, l -> !l.situacao().equals(PAGO)));
         for (int i = 0; i < SITUACOES.size(); i++) {
             var s = SITUACOES.get(i);
@@ -251,7 +284,8 @@ public class RelatorioExcelService {
             rotulo.setCellStyle(e.cartaoRotulo.get(s));
             aba.getRow(3).createCell(c + 1).setCellStyle(e.cartaoRotulo.get(s));
             var valor = aba.getRow(4).createCell(c);
-            formula(valor, somaVisivel("", fim, "$E$" + (INI + 1) + ":$E$" + (fim + 1) + "=\"" + s + "\""),
+            String sit = "$" + col.letraSituacao() + "$";
+            formula(valor, somaVisivel("", col, fim, sit + (INI + 1) + ":" + sit + (fim + 1) + "=\"" + s + "\""),
                 soma(ativos, l -> l.situacao().equals(s)));
             valor.setCellStyle(e.cartaoValor.get(s));
             aba.getRow(4).createCell(c + 1).setCellStyle(e.cartaoValor.get(s));
@@ -260,21 +294,22 @@ public class RelatorioExcelService {
         }
     }
 
-    private int total(XSSFSheet aba, Estilos e, int fim, List<Lancamento> ativos) {
+    private int total(XSSFSheet aba, Estilos e, Colunas col, int fim, List<Lancamento> ativos) {
         int t = fim + 1;
         var row = aba.createRow(t);
         row.setHeightInPoints(25.5f);
-        for (int c = 0; c <= 5; c++) row.createCell(c).setCellStyle(c == 5 ? e.totalValor : e.totalRotulo);
+        for (int c = 0; c <= col.valor(); c++) row.createCell(c).setCellStyle(c == col.valor() ? e.totalValor : e.totalRotulo);
         row.getCell(0).setCellValue("Total (só as linhas visíveis no filtro)");
-        formula(row.getCell(5), "SUBTOTAL(109,F" + (INI + 1) + ":F" + (fim + 1) + ")", soma(ativos, l -> true));
+        String v = col.letraValor();
+        formula(row.getCell(col.valor()), "SUBTOTAL(109," + v + (INI + 1) + ":" + v + (fim + 1) + ")", soma(ativos, l -> true));
         return t;
     }
 
-    private void blocoCancelados(XSSFSheet aba, Estilos e, List<Lancamento> cancelados, int r) {
+    private void blocoCancelados(XSSFSheet aba, Estilos e, Colunas col, List<Lancamento> cancelados, int r) {
         if (cancelados.isEmpty()) return;
         int n = cancelados.size();
         celula(aba, r, 0, "Cancelados — não entram em nenhum total (" + n + (n == 1 ? " lançamento)" : " lançamentos)"), e.canceladoTitulo);
-        aba.addMergedRegion(new CellRangeAddress(r, r, 0, 5));
+        aba.addMergedRegion(new CellRangeAddress(r, r, 0, col.valor()));
         for (var l : cancelados) {
             var row = aba.createRow(++r);
             var data = row.createCell(0);
@@ -283,8 +318,12 @@ public class RelatorioExcelService {
             celula(aba, r, 1, l.loja(), e.cancelado);
             celula(aba, r, 2, l.tipo(), e.cancelado);
             celula(aba, r, 3, l.fornecedor(), e.cancelado);
-            celula(aba, r, 4, CANCELADO, e.cancelado);
-            var valor = row.createCell(5);
+            if (col.comDocumento()) {
+                celula(aba, r, 4, l.documento() != null ? l.documento() : "", e.cancelado);
+                celula(aba, r, 5, l.notaFiscal() != null ? l.notaFiscal() : "", e.cancelado);
+            }
+            celula(aba, r, col.situacao(), CANCELADO, e.cancelado);
+            var valor = row.createCell(col.valor());
             valor.setCellValue(l.valor().doubleValue());
             valor.setCellStyle(e.canceladoValor);
         }
@@ -295,19 +334,21 @@ public class RelatorioExcelService {
      * {@code SUBTOTAL(109, OFFSET(...))} devolve, linha a linha, o valor se ela
      * está visível e 0 se o filtro a escondeu.
      */
-    private static String somaVisivel(String prefixoAba, int fim, String condicao) {
-        String f1 = prefixoAba + "$F$" + (INI + 1);
-        String faixa = prefixoAba + "$F$" + (INI + 1) + ":$F$" + (fim + 1);
+    private static String somaVisivel(String prefixoAba, Colunas col, int fim, String condicao) {
+        String v = "$" + col.letraValor() + "$";
+        String f1 = prefixoAba + v + (INI + 1);
+        String faixa = prefixoAba + v + (INI + 1) + ":" + v + (fim + 1);
         return "SUMPRODUCT(SUBTOTAL(109,OFFSET(" + f1 + ",ROW(" + faixa + ")-ROW(" + f1 + "),0))*(" + condicao + "))";
     }
 
     // ── Gráficos ─────────────────────────────────────────────────────────────
 
-    private void graficos(XSSFWorkbook wb, XSSFSheet aba, List<Lancamento> ativos, LocalDate de, LocalDate ate, int fim) {
+    private void graficos(XSSFWorkbook wb, XSSFSheet aba, Colunas col, List<Lancamento> ativos, LocalDate de, LocalDate ate, int fim) {
         var dados = wb.createSheet(ABA_DADOS);
         wb.setSheetHidden(wb.getSheetIndex(dados), true);
         String L = "'" + ABA + "'!";
-        String colE = L + "$E$" + (INI + 1) + ":$E$" + (fim + 1);
+        String sit = "$" + col.letraSituacao() + "$";
+        String colE = L + sit + (INI + 1) + ":" + sit + (fim + 1);
         String colB = L + "$B$" + (INI + 1) + ":$B$" + (fim + 1);
         String colA = L + "$A$" + (INI + 1) + ":$A$" + (fim + 1);
         var desenho = aba.createDrawingPatriarch();
@@ -322,9 +363,9 @@ public class RelatorioExcelService {
             var row = dados.createRow(i + 1);
             row.createCell(0).setCellValue(s);
             porSituacao[i] = soma(ativos, l -> l.situacao().equals(s));
-            formula(row.createCell(1), somaVisivel(L, fim, colE + "=\"" + s + "\""), porSituacao[i]);
+            formula(row.createCell(1), somaVisivel(L, col, fim, colE + "=\"" + s + "\""), porSituacao[i]);
         }
-        rosca(novoGrafico(desenho, linha, linha + 11, "Para onde foi o dinheiro"), dados, porSituacao);
+        rosca(novoGrafico(desenho, col, linha, linha + 11, "Para onde foi o dinheiro"), dados, porSituacao);
         linha += 11;
 
         // 2. Barras: a pagar por loja, a que mais deve em cima (só faz sentido com mais de uma loja)
@@ -351,10 +392,10 @@ public class RelatorioExcelService {
                 for (int j = 0; j < series.size(); j++) {
                     var s = series.get(j);
                     valores.get(j)[i] = soma(ativos, l -> l.loja().equals(loja) && l.situacao().equals(s));
-                    formula(row.createCell(j + 1), somaVisivel(L, fim, daLoja + "*(" + colE + "=\"" + s + "\")"), valores.get(j)[i]);
+                    formula(row.createCell(j + 1), somaVisivel(L, col, fim, daLoja + "*(" + colE + "=\"" + s + "\")"), valores.get(j)[i]);
                 }
             }
-            barras(novoGrafico(desenho, linha, linha + 14, "A pagar por loja"), dados,
+            barras(novoGrafico(desenho, col, linha, linha + 14, "A pagar por loja"), dados,
                 r0, lojas.toArray(String[]::new), series, valores, true, null);
             linha += 14;
         }
@@ -382,10 +423,10 @@ public class RelatorioExcelService {
             for (int j = 0; j < SITUACOES.size(); j++) {
                 var s = SITUACOES.get(j);
                 valores.get(j)[i] = soma(ativos, l -> !l.vencimento().isBefore(f[0]) && !l.vencimento().isAfter(f[1]) && l.situacao().equals(s));
-                formula(row.createCell(j + 1), somaVisivel(L, fim, naFaixa + "*(" + colE + "=\"" + s + "\")"), valores.get(j)[i]);
+                formula(row.createCell(j + 1), somaVisivel(L, col, fim, naFaixa + "*(" + colE + "=\"" + s + "\")"), valores.get(j)[i]);
             }
         }
-        barras(novoGrafico(desenho, linha, linha + 11, porSemana ? "Vencimentos por semana" : "Vencimentos por mês"), dados,
+        barras(novoGrafico(desenho, col, linha, linha + 11, porSemana ? "Vencimentos por semana" : "Vencimentos por mês"), dados,
             r0, rotulos, SITUACOES, valores, false, "Vencimento");
     }
 
@@ -439,8 +480,8 @@ public class RelatorioExcelService {
         return "DATE(" + d.getYear() + "," + d.getMonthValue() + "," + d.getDayOfMonth() + ")";
     }
 
-    private XSSFChart novoGrafico(XSSFDrawing desenho, int linhaIni, int linhaFim, String titulo) {
-        var ancora = desenho.createAnchor(0, 0, 0, 0, COL_GRAFICO, linhaIni, COL_GRAFICO + 8, linhaFim);
+    private XSSFChart novoGrafico(XSSFDrawing desenho, Colunas col, int linhaIni, int linhaFim, String titulo) {
+        var ancora = desenho.createAnchor(0, 0, 0, 0, col.grafico(), linhaIni, col.grafico() + 8, linhaFim);
         // Preso às células, o gráfico encolhe quando o filtro esconde as linhas que ele cobre.
         ancora.setAnchorType(ClientAnchor.AnchorType.DONT_MOVE_AND_RESIZE);
         var grafico = desenho.createChart(ancora);
