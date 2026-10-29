@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { BarChart3, Download, Loader2, Filter } from 'lucide-react';
+import { BarChart3, ChevronLeft, Download, Loader2, Filter } from 'lucide-react';
 import api from '../api/client';
 import { ValorMonetario } from '../components/ValorMonetario';
 import GraficosRelatorio from '../components/GraficosRelatorio';
+import { TabelaPorLoja } from '../components/TabelaPorLoja';
 import { useAuthStore } from '../store/authStore';
 import type { Loja } from '../types';
 
@@ -143,6 +144,14 @@ export default function RelatoriosPage() {
           </div>
         ) : relatorio ? (
           <div className="space-y-4">
+            {lojaId && (
+              <button onClick={() => setLojaId('')}
+                className="inline-flex items-center gap-1.5 border border-[#eceff4] bg-white hover:bg-[#f6f7fa] text-[#14213d]
+                           text-[12.5px] font-semibold pl-2 pr-3 py-2 rounded-full">
+                <ChevronLeft className="w-3.5 h-3.5" strokeWidth={2.5} />
+                Todas as lojas
+              </button>
+            )}
             <div className="text-2xl font-bold text-slate-900">
               Total: <ValorMonetario valor={relatorio.totalGeral || 0} />
             </div>
@@ -181,6 +190,10 @@ export default function RelatoriosPage() {
             </div>
 
             <GraficosRelatorio relatorio={relatorio} tipo={tipo} />
+
+            {!lojaId && relatorio.porLoja && (
+              <TabelaPorLoja porLoja={relatorio.porLoja} lojas={lojas} onEscolher={setLojaId} />
+            )}
           </div>
         ) : (
           <p className="text-slate-400 text-center py-8">Selecione um período para gerar o relatório</p>

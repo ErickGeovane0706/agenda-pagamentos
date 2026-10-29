@@ -42,6 +42,19 @@ public interface BoletoRepository extends JpaRepository<Boleto, UUID>, JpaSpecif
             @Param("ate") LocalDate ate
     );
 
+    /** Mesmo resumo de {@link #resumo}, quebrado por loja — relatório com "Todas as lojas". */
+    @Query("""
+        SELECT b.status, b.loja.id, b.loja.nome, SUM(b.valor) FROM Boleto b
+        WHERE b.empresa.id = :empresaId
+        AND b.vencimento BETWEEN :de AND :ate
+        GROUP BY b.status, b.loja.id, b.loja.nome
+    """)
+    List<Object[]> resumoPorLoja(
+            @Param("empresaId") UUID empresaId,
+            @Param("de") LocalDate de,
+            @Param("ate") LocalDate ate
+    );
+
     /** Boletos PENDENTE com vencimento exato {@code data} → job de notificação. */
     @Query("SELECT b FROM Boleto b WHERE b.empresa.id = :empresaId AND b.status = 'PENDENTE' AND b.vencimento = :data")
     List<Boleto> findPendentesVencendoEm(@Param("empresaId") UUID empresaId, @Param("data") LocalDate data);
