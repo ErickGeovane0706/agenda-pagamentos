@@ -25,4 +25,9 @@ describe('CardCheque', () => {
     expect(texto).toContain('Banco do Brasil');
     expect(texto).not.toMatch(/Ag |Conta/);
   });
+
+  it('mostra a NF/pedido quando há, e nada quando não há', () => {
+    expect(cartao({ ...CHEQUE, notaFiscalPedido: 'NF 4521/1' }).textContent).toContain('NF/Pedido NF 4521/1');
+    expect(cartao(CHEQUE).textContent).not.toContain('NF/Pedido');
+  });
 });

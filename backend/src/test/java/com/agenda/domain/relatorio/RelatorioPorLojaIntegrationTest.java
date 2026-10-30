@@ -140,6 +140,21 @@ class RelatorioPorLojaIntegrationTest {
         assertNull(semBanco[5]);
     }
 
+    @Test
+    void excel_chequeTrazNotaFiscal_comESemBanco() {
+        UUID banco = jdbc.queryForObject(
+            "INSERT INTO bancos (empresa_id, nome) VALUES (?, 'Itaú') RETURNING id", UUID.class, empresa);
+        jdbc.update("INSERT INTO cheques (empresa_id, loja_id, banco_id, fornecedor, valor, vencimento, status, nota_fiscal_pedido) VALUES (?, ?, ?, 'Com banco', 10, ?, 'PENDENTE', 'NF 1')",
+            empresa, centro.getId(), banco, DENTRO);
+        jdbc.update("INSERT INTO cheques (empresa_id, loja_id, fornecedor, valor, vencimento, status, nota_fiscal_pedido) VALUES (?, ?, 'Sem banco', 10, ?, 'PENDENTE', 'NF 2')",
+            empresa, centro.getId(), DENTRO);
+
+        var linhas = chequeRepository.listarParaCsv(empresa, centro.getId(), DE, ATE);
+
+        assertEquals("NF 1", linhas.stream().filter(r -> "Com banco".equals(r[0])).findFirst().orElseThrow()[8]);
+        assertEquals("NF 2", linhas.stream().filter(r -> "Sem banco".equals(r[0])).findFirst().orElseThrow()[8]);
+    }
+
     private void boleto(Loja loja, String status, String valor, LocalDate venc) {
         jdbc.update("INSERT INTO boletos (empresa_id, loja_id, fornecedor, valor, vencimento, status) VALUES (?, ?, 'F', ?, ?, ?)",
             loja.getEmpresa().getId(), loja.getId(), new BigDecimal(valor), venc, status);

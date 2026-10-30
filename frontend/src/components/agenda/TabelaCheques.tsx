@@ -12,6 +12,7 @@ import { ValorMonetario } from '../ValorMonetario';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { ModalCheque } from './ModalCheque';
 import { CardCheque } from './CardCheque';
+import { LinhaDocumento } from './CardBoleto';
 import { ModalAnexos, BotaoAnexos } from './ModalAnexos';
 import { Pagination } from '../Pagination';
 import { SkeletonTable } from '../Skeleton';
@@ -174,6 +175,7 @@ export function TabelaCheques({
                         >
                           <td className="px-4 py-3">
                             <span className="font-medium text-slate-800">{cheque.fornecedor}</span>
+                            <LinhaDocumento notaFiscalPedido={cheque.notaFiscalPedido} />
                             {cheque.observacoes && (
                               <p className="text-xs text-slate-400 truncate max-w-[200px]">
                                 {cheque.observacoes}

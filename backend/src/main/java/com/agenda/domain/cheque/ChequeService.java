@@ -114,7 +114,8 @@ public class ChequeService {
                 .empresa(loja.getEmpresa()).loja(loja).banco(banco)
                 .fornecedor(req.fornecedor()).valor(req.valor())
                 .vencimento(req.vencimento()).numeroCheque(req.numeroCheque())
-                .observacoes(req.observacoes()).build();
+                .observacoes(req.observacoes())
+                .notaFiscalPedido(textoOuNulo(req.notaFiscalPedido())).build();
         cheque = chequeRepository.save(cheque);
         auditoriaService.registrar("CRIAR", "CHEQUE", cheque.getId(), "Fornecedor: " + req.fornecedor());
         return ChequeDTO.from(cheque);
@@ -141,6 +142,7 @@ public class ChequeService {
         cheque.setVencimento(req.vencimento());
         cheque.setNumeroCheque(req.numeroCheque());
         cheque.setObservacoes(req.observacoes());
+        cheque.setNotaFiscalPedido(textoOuNulo(req.notaFiscalPedido()));
         cheque = chequeRepository.save(cheque);
         auditoriaService.registrar("EDITAR", "CHEQUE", cheque.getId(), "Fornecedor: " + req.fornecedor());
         return ChequeDTO.from(cheque);
@@ -178,5 +180,10 @@ public class ChequeService {
         anexoService.removerArquivosDo(TipoDocumento.CHEQUE, id);
         chequeRepository.delete(cheque);
         auditoriaService.registrar("EXCLUIR", "CHEQUE", id, "Fornecedor: " + cheque.getFornecedor());
+    }
+
+    /** Campo opcional digitado: sem espaço sobrando, e vazio vira nada. */
+    private static String textoOuNulo(String v) {
+        return v == null || v.isBlank() ? null : v.strip();
     }
 }

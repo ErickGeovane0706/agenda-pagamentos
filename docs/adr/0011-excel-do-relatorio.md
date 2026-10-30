@@ -40,7 +40,8 @@ só que errado. É o tipo de coisa que uma "limpeza" desfaz sem perceber.
    integração que exige topo = soma das lojas). Fica num bloco à parte.
 
 8. **Nenhuma letra de coluna escrita à mão.** As colunas Nº documento e
-   NF/Pedido só entram quando algum boleto do arquivo tem um deles, e aí
+   NF/Pedido só entram quando algum boleto ou cheque do arquivo tem um deles
+   (o cheque só tem NF/pedido; o Nº documento dele fica em branco), e aí
    Situação e Valor andam duas casas. Cartões, total, filtro, dados dos gráficos
    e posição dos gráficos pegam a coluna do `record Colunas`. Um `"$F$"` fixo
    passa nos testes sem documento e zera os cartões com documento. A coluna
@@ -52,6 +53,12 @@ só que errado. É o tipo de coisa que uma "limpeza" desfaz sem perceber.
    boleto, banco no cheque) chegam nas mesmas posições: são lidas pelo tipo,
    nunca pela posição.
 
+10. **Nada coberto nem cortado.** As colunas de texto crescem até caber o mais
+    longo, com teto de 70 para um nome enorme não empurrar os gráficos para longe.
+    O botão do filtro cobre o cabeçalho: as colunas fixas têm folga e Valor tem
+    recuo. Só o Excel mostra isso: `Cell.Text` não acusou o `###` que aparecia na
+    tela no zoom de 70%.
+
 ## Consequência
 
 Testes que seguram cada item, em `RelatorioExcelServiceTest`:
@@ -61,8 +68,9 @@ Testes que seguram cada item, em `RelatorioExcelServiceTest`:
 | 1, 2, 3, 4 (aba oculta) | `graficos_abaixoDaLinhaFixa_semTextoPorCimaDasBarras_eDadosNumaAbaOculta` |
 | 4, 5 | `cartoesETotal_somamSoAsLinhasVisiveis_eBatemComOsValores`, `dadosDosGraficos_porLojaEPorSemana_batemComOsLancamentos` |
 | 7 | `tabela_temLoja_...`, `cancelados_ficamNumBlocoAParte_...` |
-| 8 | `comDocumentoOuNotaFiscal_ganhaDuasColunas_eAsFormulasAcompanham`, `documentoEBanco_juntos_naOrdemCerta` |
+| 8 | `comDocumentoOuNotaFiscal_ganhaDuasColunas_eAsFormulasAcompanham`, `documentoEBanco_juntos_naOrdemCerta`, `chequeComNotaFiscal_usaAMesmaColunaDoBoleto_eASituacaoNaoVaiParaOLugarErrado`, `soChequeComNotaFiscal_jaFazAColunaAparecer` |
 | 9 | `RelatorioPorLojaIntegrationTest.excel_chequeTrazBancoAgenciaEConta_eChequeSemBancoNaoSome`, `chequeComBanco_ganhaColunaBanco_numaLinhaSoEmDoisTons` |
+| 10 | `largura_acompanhaOTextoMaisLongo_comTeto`, `cabecalho_naoFicaEmbaixoDoBotaoDoFiltro_eValorGrandeCabe` |
 
 O POI não calcula `SUBTOTAL(OFFSET(...))` dentro de `SUMPRODUCT`. O teste confere
 o valor gravado e calcula a mesma fórmula sem a parte das linhas visíveis, como

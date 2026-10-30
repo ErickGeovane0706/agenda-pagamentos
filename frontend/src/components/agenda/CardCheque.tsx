@@ -5,6 +5,7 @@ import { BadgeStatus } from '../BadgeStatus';
 import { ValorMonetario } from '../ValorMonetario';
 import { clsx } from 'clsx';
 import { BotaoAnexos } from './ModalAnexos';
+import { LinhaDocumento } from './CardBoleto';
 import { detalheConta } from '../../utils/banco';
 
 export function CardCheque({
@@ -45,6 +46,7 @@ export function CardCheque({
       </div>
 
       <div className="px-4 py-3 space-y-2">
+        <LinhaDocumento notaFiscalPedido={cheque.notaFiscalPedido} />
         <div className="flex items-center justify-between">
           <ValorMonetario valor={cheque.valor} className="text-lg font-bold text-[#0c4a6e]" />
           <span className={clsx(
