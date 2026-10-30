@@ -40,7 +40,11 @@ public class ChequeSpecification {
                 predicates.add(cb.lessThanOrEqualTo(root.get("vencimento"), ate));
             }
             if (fornecedor != null && !fornecedor.isBlank()) {
-                predicates.add(cb.like(cb.lower(root.get("fornecedor")), "%" + fornecedor.toLowerCase() + "%"));
+                // O mesmo campo de busca acha pela NF/pedido.
+                String termo = "%" + fornecedor.toLowerCase() + "%";
+                predicates.add(cb.or(
+                    cb.like(cb.lower(root.get("fornecedor")), termo),
+                    cb.like(cb.lower(root.get("notaFiscalPedido")), termo)));
             }
 
             return cb.and(predicates.toArray(new Predicate[0]));

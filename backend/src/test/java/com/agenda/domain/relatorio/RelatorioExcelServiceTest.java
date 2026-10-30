@@ -292,6 +292,94 @@ class RelatorioExcelServiceTest {
     }
 
     @Test
+    void chequeComNotaFiscal_usaAMesmaColunaDoBoleto_eASituacaoNaoVaiParaOLugarErrado() throws Exception {
+        when(boletoRepository.listarParaCsv(any(), any(), any(), any())).thenReturn(linhas(
+            new Object[]{"Ambev", bd("1000.00"), LocalDate.of(2026, 10, 5), "PAGO", "Centro", "000123", "NF 1"}));
+        when(chequeRepository.listarParaCsv(any(), any(), any(), any())).thenReturn(linhas(
+            new Object[]{"BRF", bd("50.00"), LocalDate.of(2026, 10, 15), "DEVOLVIDO", "Centro", "Itaú", "1234", "5", "NF 4521/1"},
+            new Object[]{"JBS", bd("80.00"), LocalDate.of(2026, 10, 25), "COMPENSADO", "Centro", "Caixa", null, null, null}));
+        var aba = gerar(null, null, null).getSheet(RelatorioExcelService.ABA);
+
+        assertEquals(List.of("Vencimento", "Loja", "Tipo", "Fornecedor", "Nº documento", "NF/Pedido", "Banco", "Situação", "Valor"),
+            textos(aba.getRow(8), 9));
+        var tabela = linhasDaTabela(aba);
+        assertEquals("NF 1", linha(tabela, "Ambev").getCell(5).getStringCellValue());
+        var brf = linha(tabela, "BRF");
+        assertEquals("NF 4521/1", brf.getCell(5).getStringCellValue());
+        assertEquals("", brf.getCell(4).getStringCellValue(), "cheque não tem nº de documento");
+        assertEquals("Itaú · Ag 1234 · Conta 5", brf.getCell(6).getStringCellValue());
+        assertEquals("", linha(tabela, "JBS").getCell(5).getStringCellValue(), "cheque sem NF");
+    }
+
+    @Test
+    void soChequeComNotaFiscal_jaFazAColunaAparecer() throws Exception {
+        when(chequeRepository.listarParaCsv(any(), any(), any(), any())).thenReturn(linhas(
+            new Object[]{"BRF", bd("50.00"), LocalDate.of(2026, 10, 15), "DEVOLVIDO", "Centro", null, null, null, "Pedido 88"}));
+        var wb = gerar(null, null, null);
+        var aba = wb.getSheet(RelatorioExcelService.ABA);
+
+        assertEquals(List.of("Vencimento", "Loja", "Tipo", "Fornecedor", "Nº documento", "NF/Pedido", "Situação", "Valor"),
+            textos(aba.getRow(8), 8));
+        assertEquals("Pedido 88", linha(linhasDaTabela(aba), "BRF").getCell(5).getStringCellValue());
+        confere(wb, aba.getRow(4).getCell(4), 350.0);  // vencido: 300 + 50, com Situação e Valor deslocados
+    }
+
+    @Test
+    void largura_acompanhaOTextoMaisLongo_comTeto() throws Exception {
+        String loja = "Supermercado Monteiro Filial Zona Leste";
+        String fornecedor = "Distribuidora de Bebidas e Alimentos Nordeste Comércio Atacadista Ltda";
+        String nf = "NF 12345678901234567890123456789012345678901234567";
+        when(boletoRepository.listarParaCsv(any(), any(), any(), any())).thenReturn(linhas(
+            new Object[]{fornecedor, bd("1000.00"), LocalDate.of(2026, 10, 5), "PAGO", loja, "000123", nf},
+            new Object[]{"F".repeat(300), bd("1.00"), LocalDate.of(2026, 10, 6), "PAGO", "Centro", null, null}));
+        when(chequeRepository.listarParaCsv(any(), any(), any(), any())).thenReturn(linhas(
+            new Object[]{"BRF", bd("50.00"), LocalDate.of(2026, 10, 15), "PENDENTE", "Centro", "Banco do Estado do Rio Grande do Sul", "12345", "1234567890-1"}));
+        var aba = gerar(null, null, null).getSheet(RelatorioExcelService.ABA);
+
+        assertTrue(largura(aba, 1) > loja.length(), "loja longa inteira");
+        assertTrue(largura(aba, 5) > nf.length(), "NF longa inteira");
+        assertTrue(largura(aba, 6) > "Banco do Estado do Rio Grande do Sul · Ag 12345 · Conta 1234567890-1".length(), "banco inteiro");
+        assertEquals(70, largura(aba, 3), "texto de 300 letras não empurra os gráficos para longe");
+    }
+
+    @Test
+    void cabecalho_naoFicaEmbaixoDoBotaoDoFiltro_eValorGrandeCabe() throws Exception {
+        when(boletoRepository.listarParaCsv(any(), any(), any(), any())).thenReturn(linhas(
+            new Object[]{"Ambev", bd("1234567.89"), LocalDate.of(2026, 10, 5), "PAGO", "Centro", "000123", "NF 1"}));
+        var aba = gerar(null, null, null).getSheet(RelatorioExcelService.ABA);
+
+        assertTrue(largura(aba, 0) >= 19, "Vencimento");
+        assertTrue(largura(aba, 4) >= 21, "Nº documento");
+        assertTrue(largura(aba, 6) >= 17, "Situação");
+        assertTrue(largura(aba, 7) >= 22, "R$ 1.234.567,89 em negrito, com folga para o zoom de 70%");
+        assertEquals(3, aba.getRow(8).getCell(7).getCellStyle().getIndention(), "Valor alinhado à direita sai de baixo do botão");
+    }
+
+    @Test
+    void documentoComZeroAEsquerda_semTrianguloVerde() throws Exception {
+        when(boletoRepository.listarParaCsv(any(), any(), any(), any())).thenReturn(linhas(
+            new Object[]{"Ambev", bd("1.00"), LocalDate.of(2026, 10, 5), "PAGO", "Centro", "00066", "4521"}));
+        var aba = gerar(null, null, null).getSheet(RelatorioExcelService.ABA);
+
+        var ignorados = aba.getCTWorksheet().getIgnoredErrors().getIgnoredErrorArray(0);
+        assertTrue(ignorados.getNumberStoredAsText());
+        assertEquals("E10:F14", ignorados.getSqref().get(0).toString());
+    }
+
+    @Test
+    void rosca_naoRotulaFatiaZerada() throws Exception {
+        var graficos = gerar(null, null, null).getSheet(RelatorioExcelService.ABA).getDrawingPatriarch().getCharts();
+        var rotulos = graficos.get(0).getCTChart().getPlotArea().getDoughnutChartArray(0).getSerArray(0).getDLbls();
+
+        assertEquals("0%;;;", rotulos.getNumFmt().getFormatCode());
+        assertFalse(rotulos.getNumFmt().getSourceLinked());
+    }
+
+    private static int largura(org.apache.poi.ss.usermodel.Sheet aba, int coluna) {
+        return aba.getColumnWidth(coluna) / 256;
+    }
+
+    @Test
     void semLancamento_naoQuebra_eAvisa() throws Exception {
         when(boletoRepository.listarParaCsv(any(), any(), any(), any())).thenReturn(List.of());
         when(pixRepository.listarParaCsv(any(), any(), any(), any())).thenReturn(List.of());

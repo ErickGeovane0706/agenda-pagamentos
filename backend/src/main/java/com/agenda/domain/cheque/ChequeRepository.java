@@ -65,12 +65,12 @@ public interface ChequeRepository extends JpaRepository<Cheque, UUID>, JpaSpecif
 
     /**
      * Projeção enxuta para CSV e Excel (fornecedor, valor, vencimento, status,
-     * loja, banco, agência, conta). O banco é opcional no cheque: {@code LEFT JOIN},
+     * loja, banco, agência, conta, NF/pedido). O banco é opcional no cheque: {@code LEFT JOIN},
      * nunca {@code c.banco.nome} direto — isso vira join comum e o cheque sem banco
      * some do relatório sem erro nenhum.
      */
     @Query("""
-        SELECT c.fornecedor, c.valor, c.vencimento, c.status, c.loja.nome, b.nome, b.agencia, b.conta
+        SELECT c.fornecedor, c.valor, c.vencimento, c.status, c.loja.nome, b.nome, b.agencia, b.conta, c.notaFiscalPedido
         FROM Cheque c LEFT JOIN c.banco b
         WHERE c.empresa.id = :empresaId
         AND (:lojaId IS NULL OR c.loja.id = :lojaId)

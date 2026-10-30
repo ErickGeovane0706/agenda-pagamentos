@@ -79,6 +79,7 @@ export interface Cheque {
   vencimento: string;
   status: StatusCheque;
   numeroCheque?: string;
+  notaFiscalPedido?: string;
   observacoes?: string;
   qtdAnexos: number;
   compensadoEm?: string;

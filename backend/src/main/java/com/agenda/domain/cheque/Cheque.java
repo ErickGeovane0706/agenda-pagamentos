@@ -65,6 +65,9 @@ public class Cheque {
     @Column(columnDefinition = "TEXT")
     private String observacoes;
 
+    @Column(name = "nota_fiscal_pedido", length = 50)
+    private String notaFiscalPedido;
+
     /** Quantos arquivos estão anexados. Calculado na mesma consulta da listagem. */
     @Formula("(select count(*) from anexos a where a.cheque_id = id)")
     private int qtdAnexos;

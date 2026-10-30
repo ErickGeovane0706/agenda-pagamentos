@@ -74,6 +74,8 @@ public class RelatorioExcelService {
         PENDENTE, new String[]{"F5A04A", "FFF4E7", "B86A12"},
         VENCIDO, new String[]{"EC5D5D", "FDEEEE", "C23A3A"});
 
+    private static final int LARGURA_MAXIMA = 70;
+
     private final BoletoRepository boletoRepository;
     private final PagamentoPixRepository pagamentoPixRepository;
     private final ChequeRepository chequeRepository;
@@ -84,7 +86,7 @@ public class RelatorioExcelService {
 
     /**
      * Onde fica cada coluna. Nº documento e NF/Pedido só entram quando algum
-     * boleto do arquivo tem um deles; Banco, quando algum cheque tem banco — e
+     * boleto ou cheque do arquivo tem um deles; Banco, quando algum cheque tem banco — e
      * aí Situação e Valor andam. Toda fórmula pega a letra daqui, nunca escrita
      * à mão.
      */
@@ -105,12 +107,21 @@ public class RelatorioExcelService {
             n.addAll(List.of("Situação", "Valor"));
             return n;
         }
-        int[] larguras() {
-            var l = new ArrayList<>(List.of(14, 21, 13, 27));
-            if (comDocumento) l.addAll(List.of(16, 18));
-            if (comBanco) l.add(30);
-            l.addAll(List.of(15, 18, 3));
+        /**
+         * Colunas de texto crescem até caber o mais longo, com teto: nome de 300
+         * letras não empurra os gráficos para longe. As fixas deixam o cabeçalho
+         * fora do botão do filtro e cabem R$ 1.234.567,89 em negrito no zoom de 70%.
+         */
+        int[] larguras(List<Lancamento> linhas) {
+            var l = new ArrayList<>(List.of(19, ajustada(21, linhas, Lancamento::loja), 13, ajustada(27, linhas, Lancamento::fornecedor)));
+            if (comDocumento) l.addAll(List.of(ajustada(21, linhas, Lancamento::documento), ajustada(18, linhas, Lancamento::notaFiscal)));
+            if (comBanco) l.add(ajustada(30, linhas, x -> x.banco() == null ? null : x.banco() + detalheBanco(x)));
+            l.addAll(List.of(17, 22, 3));
             return l.stream().mapToInt(Integer::intValue).toArray();
+        }
+        private static int ajustada(int minima, List<Lancamento> linhas, java.util.function.Function<Lancamento, String> texto) {
+            int maior = linhas.stream().map(texto).filter(Objects::nonNull).mapToInt(String::length).max().orElse(0);
+            return Math.min(Math.max(minima, maior + 4), LARGURA_MAXIMA);
         }
     }
 
@@ -133,7 +144,7 @@ public class RelatorioExcelService {
             var col = new Colunas(
                 todasAsLinhas.stream().anyMatch(l -> l.documento() != null || l.notaFiscal() != null),
                 todasAsLinhas.stream().anyMatch(l -> l.banco() != null));
-            int[] larguras = col.larguras();
+            int[] larguras = col.larguras(todasAsLinhas);
             for (int i = 0; i < larguras.length; i++) aba.setColumnWidth(i, larguras[i] * 256);
 
             cabecalho(aba, e, col, legenda(empresaId, lojaId, de, ate, tipo, status));
@@ -141,6 +152,8 @@ public class RelatorioExcelService {
             cartoes(aba, e, col, fim, ativos);
             int linha = total(aba, e, col, fim, ativos);
             blocoCancelados(aba, e, col, cancelados, linha + 3);
+            // Documento e NF são texto de propósito (zero à esquerda): sem o triângulo verde do Excel.
+            if (col.comDocumento()) aba.addIgnoredErrors(new CellRangeAddress(INI, aba.getLastRowNum(), 4, 5), IgnoredErrorType.NUMBER_STORED_AS_TEXT);
             if (!ativos.isEmpty()) graficos(wb, aba, col, ativos, de, ate, fim);
 
             var ps = aba.getPrintSetup();
@@ -173,12 +186,14 @@ public class RelatorioExcelService {
             var valor = r[1] != null ? (BigDecimal) r[1] : BigDecimal.ZERO;
             var venc = r[2] instanceof LocalDate d ? d : LocalDate.parse(r[2].toString());
             // Da coluna 5 em diante cada tipo traz o seu: o boleto, documento e
-            // NF/pedido; o cheque, banco, agência e conta. Ler pelo tipo, nunca
-            // pela posição — senão o banco do cheque vira "documento".
+            // NF/pedido; o cheque, banco, agência, conta e NF/pedido. Ler pelo tipo,
+            // nunca pela posição — senão o banco do cheque vira "documento".
             boolean boleto = tipo.equals("Boleto") && r.length > 6;
             boolean cheque = tipo.equals("Cheque") && r.length > 7;
+            String notaFiscal = boleto ? (String) r[6]
+                : tipo.equals("Cheque") && r.length > 8 ? (String) r[8] : null;
             lista.add(new Lancamento(venc, str(r[4]), tipo, str(r[0]), situacao(r[3].toString()), valor,
-                boleto ? (String) r[5] : null, boleto ? (String) r[6] : null,
+                boleto ? (String) r[5] : null, notaFiscal,
                 cheque ? (String) r[5] : null, cheque ? (String) r[6] : null, cheque ? (String) r[7] : null));
         }
     }
@@ -356,13 +371,18 @@ public class RelatorioExcelService {
             c.setCellValue("");
             return;
         }
+        var resto = detalheBanco(l);
+        var texto = new XSSFRichTextString(l.banco() + resto);
+        texto.applyFont(0, l.banco().length(), nome);
+        if (!resto.isEmpty()) texto.applyFont(l.banco().length(), texto.length(), detalhe);
+        c.setCellValue(texto);
+    }
+
+    private static String detalheBanco(Lancamento l) {
         var resto = new StringBuilder();
         if (l.agencia() != null && !l.agencia().isBlank()) resto.append(" · Ag ").append(l.agencia());
         if (l.conta() != null && !l.conta().isBlank()) resto.append(" · Conta ").append(l.conta());
-        var texto = new XSSFRichTextString(l.banco() + resto);
-        texto.applyFont(0, l.banco().length(), nome);
-        if (resto.length() > 0) texto.applyFont(l.banco().length(), texto.length(), detalhe);
-        c.setCellValue(texto);
+        return resto.toString();
     }
 
     /**
@@ -554,6 +574,10 @@ public class RelatorioExcelService {
             sp.addNewLn().addNewSolidFill().addNewSrgbClr().setVal(rgb("FFFFFF"));
         }
         CTDLbls rotulos = ser.isSetDLbls() ? ser.getDLbls() : ser.addNewDLbls();
+        // Fatia zerada sem rótulo: senão os "0%" ficam um em cima do outro.
+        var formato = rotulos.addNewNumFmt();
+        formato.setFormatCode("0%;;;");
+        formato.setSourceLinked(false);
         rotulos.addNewShowLegendKey().setVal(false);
         rotulos.addNewShowVal().setVal(false);
         rotulos.addNewShowCatName().setVal(false);
@@ -636,7 +660,7 @@ public class RelatorioExcelService {
 
             cabEsquerda = estilo(fonte(10, true, "FFFFFF"), NAVY, HorizontalAlignment.LEFT, null); cabEsquerda.setIndention((short) 1);
             cabCentro = estilo(fonte(10, true, "FFFFFF"), NAVY, HorizontalAlignment.CENTER, null);
-            cabDireita = estilo(fonte(10, true, "FFFFFF"), NAVY, HorizontalAlignment.RIGHT, null); cabDireita.setIndention((short) 1);
+            cabDireita = estilo(fonte(10, true, "FFFFFF"), NAVY, HorizontalAlignment.RIGHT, null); cabDireita.setIndention((short) 3);
 
             texto = estilo(fonte(10, false, TEXTO), null, HorizontalAlignment.LEFT, linhaFina); texto.setIndention((short) 1);
             data = estilo(fonte(10, false, TEXTO), null, HorizontalAlignment.CENTER, linhaFina); data.setDataFormat(dma);

@@ -20,5 +20,6 @@ public record CriarChequeRequest(
     @NotNull LocalDate vencimento,
     UUID bancoId,
     String numeroCheque,
-    String observacoes
+    String observacoes,
+    @Size(max = 50) String notaFiscalPedido
 ) {}

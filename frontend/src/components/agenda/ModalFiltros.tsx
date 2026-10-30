@@ -80,7 +80,7 @@ export function ModalFiltros({ abertos, filtros, onFechar, onAplicar }: Props) {
 
           <div>
             <label className="block text-xs font-medium text-slate-500 mb-1">Buscar</label>
-            {/* Nos boletos, acha também pelo nº do documento e pela NF/pedido. */}
+            {/* Nos boletos, acha também pelo nº do documento e pela NF/pedido; nos cheques, pela NF/pedido. */}
             <input type="text" value={nome} onChange={e => setNome(e.target.value)}
               placeholder="Fornecedor, nº do documento ou NF"
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" />

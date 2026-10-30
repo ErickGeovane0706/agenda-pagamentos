@@ -15,6 +15,7 @@ const schema = z.object({
   vencimento: z.string().min(1, 'Informe o vencimento'),
   bancoId: z.string().min(1, 'Selecione o banco'),
   numeroCheque: z.string().min(1, 'Informe o número do cheque'),
+  notaFiscalPedido: z.string().max(50, 'Máximo 50 caracteres').optional(),
   observacoes: z.string().optional(),
 });
 
@@ -45,6 +46,7 @@ export function ModalCheque({
       vencimento: cheque.vencimento,
       bancoId: cheque.bancoId,
       numeroCheque: cheque.numeroCheque,
+      notaFiscalPedido: cheque.notaFiscalPedido || '',
       observacoes: cheque.observacoes || '',
     } : {
       lojaId,
@@ -53,6 +55,7 @@ export function ModalCheque({
       vencimento: '',
       bancoId: '',
       numeroCheque: '',
+      notaFiscalPedido: '',
       observacoes: '',
     },
   });
@@ -66,6 +69,7 @@ export function ModalCheque({
         vencimento: data.vencimento,
         bancoId: data.bancoId,
         numeroCheque: data.numeroCheque,
+        notaFiscalPedido: data.notaFiscalPedido?.trim() || null,
         observacoes: data.observacoes || null,
       };
       return cheque
@@ -109,6 +113,14 @@ export function ModalCheque({
                 <input {...register('fornecedor')} placeholder="Nome do fornecedor"
                        className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9]" />
                 {errors.fornecedor && <p className="text-red-500 text-xs mt-1">{errors.fornecedor.message}</p>}
+              </div>
+
+              {/* Pedido do cliente: conferir o cheque com a NF, como no boleto. */}
+              <div>
+                <label htmlFor="cheque-nf" className="block text-sm font-medium text-slate-700 mb-1">Nota fiscal / pedido <span className="font-normal text-slate-400">(opcional)</span></label>
+                <input id="cheque-nf" {...register('notaFiscalPedido')} maxLength={50} placeholder="Ex.: NF 4521"
+                       className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9]" />
+                {errors.notaFiscalPedido && <p className="text-red-500 text-xs mt-1">{errors.notaFiscalPedido.message}</p>}
               </div>
 
               <div className="grid grid-cols-2 gap-4">

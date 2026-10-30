@@ -65,7 +65,7 @@ class ChequeServiceTest {
     @Test
     void criar_DeveSalvarCheque() {
         var req = new CriarChequeRequest(loja.getId(), "Fornecedor X",
-            new BigDecimal("500.00"), LocalDate.now().plusDays(30), null, "12345", null);
+            new BigDecimal("500.00"), LocalDate.now().plusDays(30), null, "12345", null, null);
 
         when(lojaRepository.findById(loja.getId())).thenReturn(Optional.of(loja));
         when(chequeRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -83,7 +83,7 @@ class ChequeServiceTest {
         var banco = Banco.builder().id(UUID.randomUUID()).empresa(empresa)
             .nome("Banco do Brasil").agencia("4321").conta("11111-2").build();
         var req = new CriarChequeRequest(loja.getId(), "Fornecedor X",
-            new BigDecimal("500.00"), LocalDate.now().plusDays(30), banco.getId(), "12345", null);
+            new BigDecimal("500.00"), LocalDate.now().plusDays(30), banco.getId(), "12345", null, null);
 
         when(lojaRepository.findById(loja.getId())).thenReturn(Optional.of(loja));
         when(bancoRepository.findById(banco.getId())).thenReturn(Optional.of(banco));
@@ -136,7 +136,7 @@ class ChequeServiceTest {
             .fornecedor("Antigo").valor(new BigDecimal("100"))
             .vencimento(LocalDate.now()).build();
         var req = new EditarChequeRequest(loja.getId(), "Novo Fornecedor",
-            new BigDecimal("200"), LocalDate.now().plusDays(10), null, "99999", null);
+            new BigDecimal("200"), LocalDate.now().plusDays(10), null, "99999", null, null);
 
         when(chequeRepository.findById(cheque.getId())).thenReturn(Optional.of(cheque));
         when(lojaRepository.findById(loja.getId())).thenReturn(Optional.of(loja));
@@ -147,6 +147,42 @@ class ChequeServiceTest {
         assertEquals("Novo Fornecedor", result.fornecedor());
         assertEquals(0, new BigDecimal("200").compareTo(result.valor()));
         verify(auditoriaService).registrar(eq("EDITAR"), eq("CHEQUE"), eq(cheque.getId()), anyString());
+    }
+
+    // ─── NF/pedido (opcional) ─────────────────────────────────────────────────
+
+    @Test
+    void criar_GuardaNotaFiscalSemEspacoSobrando_eSoEspacoViraVazio() {
+        when(lojaRepository.findById(loja.getId())).thenReturn(Optional.of(loja));
+        when(chequeRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        var comNota = chequeService.criar(new CriarChequeRequest(loja.getId(), "Fornecedor X",
+            new BigDecimal("500.00"), LocalDate.now().plusDays(30), null, "12345", null, "  NF 4521/1 "));
+        var soEspaco = chequeService.criar(new CriarChequeRequest(loja.getId(), "Fornecedor X",
+            new BigDecimal("500.00"), LocalDate.now().plusDays(30), null, "12345", null, "   "));
+
+        assertEquals("NF 4521/1", comNota.notaFiscalPedido());
+        assertNull(soEspaco.notaFiscalPedido(), "só espaço é campo vazio");
+    }
+
+    @Test
+    void editar_TrocaEApagaNotaFiscal() {
+        var cheque = Cheque.builder()
+            .id(UUID.randomUUID()).empresa(empresa).loja(loja)
+            .fornecedor("Antigo").valor(new BigDecimal("100"))
+            .vencimento(LocalDate.now()).notaFiscalPedido("NF 1").build();
+
+        when(chequeRepository.findById(cheque.getId())).thenReturn(Optional.of(cheque));
+        when(lojaRepository.findById(loja.getId())).thenReturn(Optional.of(loja));
+        when(chequeRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        var trocada = chequeService.editar(cheque.getId(), new EditarChequeRequest(loja.getId(), "Antigo",
+            new BigDecimal("100"), LocalDate.now(), null, "1", null, "Pedido 88"));
+        assertEquals("Pedido 88", trocada.notaFiscalPedido());
+
+        var apagada = chequeService.editar(cheque.getId(), new EditarChequeRequest(loja.getId(), "Antigo",
+            new BigDecimal("100"), LocalDate.now(), null, "1", null, null));
+        assertNull(apagada.notaFiscalPedido(), "apagar o campo na edição apaga no cheque");
     }
 
     @Test
